@@ -1,13 +1,19 @@
 package main
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gofiber/fiber/v2"
+	"log"
+)
 
 func main() {
-	r := gin.Default()
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"message": "pong",
-		})
-	})
-	_ = r.Run() // listen and serve on 0.0.0.0:8080
+	app := fiber.New()
+
+	spaces := app.Group("spaces")
+	handler := func(c *fiber.Ctx) error {
+		return c.SendStatus(fiber.StatusOK)
+	}
+	alphaV1 := spaces.Group("/alphav1")
+	alphaV1.Get("/list", handler)
+
+	log.Fatal(app.Listen(":3000"))
 }
