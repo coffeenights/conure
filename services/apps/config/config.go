@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"net/url"
 	"os"
@@ -35,7 +36,7 @@ func LoadConfig() *Config {
 		envName, _ := field.Tag.Lookup("env")
 		env, exist := os.LookupEnv(envName)
 		if !exist {
-			panic(fmt.Sprintf("Environment variable not found: %s", envName))
+			log.Fatalf("Environment variable not found: %s", envName)
 		}
 		v.Field(i).SetString(env)
 	}
