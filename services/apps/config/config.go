@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 	"log"
 	"net"
 	"net/url"
@@ -41,4 +43,13 @@ func LoadConfig() *Config {
 		v.Field(i).SetString(env)
 	}
 	return &config
+}
+
+func GetDbConnection(dsn string) *gorm.DB {
+	log.Println("Connecting to the database ...")
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		log.Fatalf("Failed to connect to the database: %s", err)
+	}
+	return db
 }

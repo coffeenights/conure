@@ -11,14 +11,12 @@ import (
 
 // This is a compile-time assertion to ensure that this generated file
 // is compatible with the grpc package it is being compiled against.
-// Requires gRPC-Go v1.32.0 or later.
-const _ = grpc.SupportPackageIsVersion7
+const _ = grpc.SupportPackageIsVersion6
 
 // ApplicationServiceClient is the client API for ApplicationService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ApplicationServiceClient interface {
-	PostApplication(ctx context.Context, in *PostApplicationRequest, opts ...grpc.CallOption) (*PostApplicationResponse, error)
 	GetApplication(ctx context.Context, in *GetApplicationRequest, opts ...grpc.CallOption) (*GetApplicationResponse, error)
 	ListApplications(ctx context.Context, in *ListApplicationsRequest, opts ...grpc.CallOption) (*ListApplicationsResponse, error)
 }
@@ -29,15 +27,6 @@ type applicationServiceClient struct {
 
 func NewApplicationServiceClient(cc grpc.ClientConnInterface) ApplicationServiceClient {
 	return &applicationServiceClient{cc}
-}
-
-func (c *applicationServiceClient) PostApplication(ctx context.Context, in *PostApplicationRequest, opts ...grpc.CallOption) (*PostApplicationResponse, error) {
-	out := new(PostApplicationResponse)
-	err := c.cc.Invoke(ctx, "/ApplicationService/PostApplication", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *applicationServiceClient) GetApplication(ctx context.Context, in *GetApplicationRequest, opts ...grpc.CallOption) (*GetApplicationResponse, error) {
@@ -62,7 +51,6 @@ func (c *applicationServiceClient) ListApplications(ctx context.Context, in *Lis
 // All implementations must embed UnimplementedApplicationServiceServer
 // for forward compatibility
 type ApplicationServiceServer interface {
-	PostApplication(context.Context, *PostApplicationRequest) (*PostApplicationResponse, error)
 	GetApplication(context.Context, *GetApplicationRequest) (*GetApplicationResponse, error)
 	ListApplications(context.Context, *ListApplicationsRequest) (*ListApplicationsResponse, error)
 	mustEmbedUnimplementedApplicationServiceServer()
@@ -72,44 +60,16 @@ type ApplicationServiceServer interface {
 type UnimplementedApplicationServiceServer struct {
 }
 
-func (UnimplementedApplicationServiceServer) PostApplication(context.Context, *PostApplicationRequest) (*PostApplicationResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method PostApplication not implemented")
-}
-func (UnimplementedApplicationServiceServer) GetApplication(context.Context, *GetApplicationRequest) (*GetApplicationResponse, error) {
+func (*UnimplementedApplicationServiceServer) GetApplication(context.Context, *GetApplicationRequest) (*GetApplicationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetApplication not implemented")
 }
-func (UnimplementedApplicationServiceServer) ListApplications(context.Context, *ListApplicationsRequest) (*ListApplicationsResponse, error) {
+func (*UnimplementedApplicationServiceServer) ListApplications(context.Context, *ListApplicationsRequest) (*ListApplicationsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListApplications not implemented")
 }
-func (UnimplementedApplicationServiceServer) mustEmbedUnimplementedApplicationServiceServer() {}
+func (*UnimplementedApplicationServiceServer) mustEmbedUnimplementedApplicationServiceServer() {}
 
-// UnsafeApplicationServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to ApplicationServiceServer will
-// result in compilation errors.
-type UnsafeApplicationServiceServer interface {
-	mustEmbedUnimplementedApplicationServiceServer()
-}
-
-func RegisterApplicationServiceServer(s grpc.ServiceRegistrar, srv ApplicationServiceServer) {
-	s.RegisterService(&ApplicationService_ServiceDesc, srv)
-}
-
-func _ApplicationService_PostApplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PostApplicationRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ApplicationServiceServer).PostApplication(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ApplicationService/PostApplication",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ApplicationServiceServer).PostApplication(ctx, req.(*PostApplicationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
+func RegisterApplicationServiceServer(s *grpc.Server, srv ApplicationServiceServer) {
+	s.RegisterService(&_ApplicationService_serviceDesc, srv)
 }
 
 func _ApplicationService_GetApplication_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -148,17 +108,10 @@ func _ApplicationService_ListApplications_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
-// ApplicationService_ServiceDesc is the grpc.ServiceDesc for ApplicationService service.
-// It's only intended for direct use with grpc.RegisterService,
-// and not to be introspected or modified (even as a copy)
-var ApplicationService_ServiceDesc = grpc.ServiceDesc{
+var _ApplicationService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "ApplicationService",
 	HandlerType: (*ApplicationServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
-		{
-			MethodName: "PostApplication",
-			Handler:    _ApplicationService_PostApplication_Handler,
-		},
 		{
 			MethodName: "GetApplication",
 			Handler:    _ApplicationService_GetApplication_Handler,

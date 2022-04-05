@@ -18,18 +18,6 @@ message Application {
   bool active = 8;
 }
 
-
-message PostApplicationRequest {
-  string name = 2;
-  optional string description = 3;
-  uint64 account_id = 7;
-  bool active = 8;
-}
-
-message PostApplicationResponse {
-  Application application = 1;
-}
-
 message GetApplicationRequest {
   string id = 1;
 }
@@ -49,7 +37,6 @@ message ListApplicationsResponse {
 
 
 service ApplicationService {
-  rpc PostApplication (PostApplicationRequest) returns (PostApplicationResponse) {}
   rpc GetApplication (GetApplicationRequest) returns (GetApplicationResponse) {}
   rpc ListApplications(ListApplicationsRequest) returns (ListApplicationsResponse) {}
 }

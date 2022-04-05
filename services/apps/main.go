@@ -10,28 +10,17 @@ import (
 	"github.com/dapr/go-sdk/service/common"
 	daprd "github.com/dapr/go-sdk/service/grpc"
 	"google.golang.org/grpc"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 	"log"
 	"net"
 	"net/http"
 	"os"
 )
 
-func getDbConnection(dsn string) *gorm.DB {
-	log.Println("Connecting to the database ...")
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Failed to connect to the database: %s", err)
-	}
-	return db
-}
-
 func runServer(port *int) {
 	server := services.Server{Config: config.LoadConfig()}
 
 	// Database connection
-	server.Db = getDbConnection(server.Config.GetDbDSN())
+	server.Db = config.GetDbConnection(server.Config.GetDbDSN())
 
 	// Start GRPC Server
 	log.Println("Starting the server ...")
@@ -49,7 +38,7 @@ func runServer(port *int) {
 
 func migrate() {
 	c := config.LoadConfig()
-	db := getDbConnection(c.GetDbDSN())
+	db := config.GetDbConnection(c.GetDbDSN())
 	log.Println("Starting migration")
 	models.Migrate(db)
 	log.Println("Migration completed")

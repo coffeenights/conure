@@ -8,4 +8,3 @@ spec:
   pubsubname: pubsub
 scopes:
   - conure_apps
-  - orderprocessing
