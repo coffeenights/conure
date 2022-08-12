@@ -20,6 +20,13 @@ type Application struct {
 	AccountId   uint64 `gorm:"index"`
 }
 
+type ApplicationSettings struct {
+	BaseModel
+	// Traits
+	Type string
+	TraitProperties
+}
+
 func Migrate(db *gorm.DB) {
 	err := db.AutoMigrate(&Application{})
 	if err != nil {

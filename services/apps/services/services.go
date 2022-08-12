@@ -14,6 +14,8 @@ import (
 
 func (s *Server) GetApplication(ctx context.Context, in *pb.GetApplicationRequest) (*pb.GetApplicationResponse, error) {
 	log.Printf("Received: %v", in.GetId())
+	app := models.Application{}
+	s.Db.First(&app)
 	return &pb.GetApplicationResponse{}, nil
 }
 
