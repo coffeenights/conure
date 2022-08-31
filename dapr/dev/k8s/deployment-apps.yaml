@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: conure-services-apps
+  labels:
+    app: apps 
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: apps
+  template:
+    metadata:
+      labels:
+        service: apps
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "conure_apps"
+        dapr.io/app-port: "50001"
+        dapr.io/app-protocol: "grpc"
+    spec:
+      containers:
+      - name: add
+        image: yourreponsitory/your-windows-dapr-container:your-tag
+        ports:
+        - containerPort: 6000
+        imagePullPolicy: Always
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: kubernetes.io/os
+                  operator: In
+                  values:
+                  - windows
