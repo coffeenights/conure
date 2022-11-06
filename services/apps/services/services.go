@@ -19,6 +19,30 @@ func (s *Server) GetApplication(ctx context.Context, in *pb.GetApplicationReques
 	return &pb.GetApplicationResponse{}, nil
 }
 
+func (s *Server) ListApplications(ctx context.Context, in *pb.ListApplicationsRequest) (*pb.ListApplicationsResponse, error) {
+	log.Printf("Received: %v", in.GetAccountId())
+	app := models.Application{AccountId: in.GetAccountId()}
+	var apps []models.Application
+	s.Db.Model(app).Find(&apps)
+	var applicationsResult []*pb.Application
+	for _, applicationEntry := range apps {
+		application := &pb.Application{
+			Id:          applicationEntry.ID,
+			Name:        applicationEntry.Name,
+			Description: applicationEntry.Description,
+			Clusters:    nil,
+			Created:     applicationEntry.CreatedAt.String(),
+			Modified:    applicationEntry.UpdatedAt.String(),
+			AccountId:   applicationEntry.AccountId,
+			Active:      true,
+		}
+		applicationsResult = append(applicationsResult, application)
+	}
+	return &pb.ListApplicationsResponse{
+		Applications: applicationsResult,
+	}, nil
+}
+
 func (s *Server) DeployApplication() {}
 
 type PostApplicationRequest struct {

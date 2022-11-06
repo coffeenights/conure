@@ -15,16 +15,17 @@ type BaseModel struct {
 
 type Application struct {
 	BaseModel
-	Name        string
-	Description string
-	AccountId   uint64 `gorm:"index"`
+	Name          string
+	Description   string
+	AccountId     uint64 `gorm:"index"`
+	EnvironmentId string `gorm:"index"`
 }
 
 type ApplicationSettings struct {
 	BaseModel
 	// Traits
 	Type string
-	TraitProperties
+	//TraitProperties
 }
 
 func Migrate(db *gorm.DB) {

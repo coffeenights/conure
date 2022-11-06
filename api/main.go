@@ -1,19 +1,14 @@
 package main
 
 import (
-	"github.com/gofiber/fiber/v2"
+	"github.com/coffeenights/conure/api/routes"
 	"log"
 )
 
 func main() {
-	app := fiber.New()
-
-	spaces := app.Group("spaces")
-	handler := func(c *fiber.Ctx) error {
-		return c.SendStatus(fiber.StatusOK)
+	r := routes.GenerateRouter()
+	err := r.Run()
+	if err != nil {
+		log.Fatal(err)
 	}
-	alphaV1 := spaces.Group("/alphav1")
-	alphaV1.Get("/list", handler)
-
-	log.Fatal(app.Listen(":3000"))
 }

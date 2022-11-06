@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/coffeenights/apps/protos/apps";
+option go_package = "github.com/coffeenights/conure/api/protos/apps";
 
 message Cluster {
   string id = 1;
