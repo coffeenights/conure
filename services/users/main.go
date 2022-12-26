@@ -64,10 +64,11 @@ func main() {
 		migrateCmd       = flag.NewFlagSet("migrate", flag.ExitOnError)
 		runserverCmd     = flag.NewFlagSet("runserver", flag.ExitOnError)
 		runsubscriberCmd = flag.NewFlagSet("runsubscriber", flag.ExitOnError)
-		subcommand       string
+
+		subcommand string
 	)
-	portServer := runserverCmd.Int("port", 50051, "The GRPC server port")
-	portSubscriber := runsubscriberCmd.Int("port", 50001, "The subscriber service port")
+	//portServer := runserverCmd.Int("port", 50051, "The GRPC server port")
+	//portSubscriber := runsubscriberCmd.Int("port", 50001, "The subscriber service port")
 
 	flag.Usage = func() {
 		fmt.Printf("Usage: \n")
@@ -87,7 +88,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to start the server: %v", err)
 		}
-		runServer(portServer)
+		// runServer(portServer)
 	case "migrate":
 		_ = migrateCmd.Parse(os.Args[2:])
 		migrate()
@@ -96,7 +97,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to start the service: %v", err)
 		}
-		runsubscriber(portSubscriber)
+		// runsubscriber(portSubscriber)
 	default:
 		flag.Usage()
 	}
