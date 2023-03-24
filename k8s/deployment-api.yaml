@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+  namespace: services
+  labels:
+    type: app
+    name: api-server
+    protocol: http
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 2
+  selector:
+    matchLabels:
+      name: api-server
+  template:
+    metadata:
+      labels:
+        name: api-server
+      annotations:
+          dapr.io/enabled: "true"
+          dapr.io/app-id: "api-server"
+          # dapr.io/app-protocol: "http"
+          # dapr.io/app-port: "8080"
+    spec:
+      containers:
+        - name: api-server
+          image: coffeenights/conure-api:latest
+          imagePullPolicy: Always
+          command: ["/app/conure_api"]
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          resources:
+            limits:
+              memory: "200Mi"
+          
+
+            

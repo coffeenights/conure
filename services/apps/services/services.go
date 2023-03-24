@@ -46,9 +46,10 @@ func (s *Server) ListApplications(ctx context.Context, in *pb.ListApplicationsRe
 func (s *Server) DeployApplication() {}
 
 type PostApplicationRequest struct {
-	Name        string `mapstructure:"name"`
-	Description string `mapstructure:"description,omitempty"`
-	AccountId   uint64 `mapstructure:"account_id"`
+	Name          string `mapstructure:"name"`
+	Description   string `mapstructure:"description,omitempty"`
+	AccountId     uint64 `mapstructure:"account_id"`
+	EnvironmentId string `mapstructure:"environment_id"`
 }
 
 func PostApplication(ctx context.Context, e *common.TopicEvent) (retry bool, err error) {

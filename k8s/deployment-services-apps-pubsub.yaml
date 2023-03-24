@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: services-apps-pubsub
+  namespace: services
+  labels:
+    type: service
+    name: apps-pubsub
+    protocol: pubsub
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 2
+  selector:
+    matchLabels:
+      name: apps-pubsub
+  template:
+    metadata:
+      labels:
+        name: apps-pubsub
+      annotations:
+        dapr.io/enabled: "true"
+        dapr.io/app-id: "services-apps-pubsub"
+        dapr.io/app-protocol: "grpc"
+        dapr.io/app-port: "50011"
+    spec:
+      containers:
+        - name: apps-pubsub
+          image: coffeenights/conure-services-apps:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/app/conure_services_apps"]
+          args: ["runsubscriber", "--port=50011"]
+          ports:
+            - name: dapr-http-api
+              containerPort: 3500
+              protocol: TCP
+          resources:
+            limits:
+              memory: "200Mi"
+          env:
+            - name: DB_URL
+              value: "postgres://postgres:0yyKiYg0WD@services-apps-postgresql.databases.svc.cluster.local:5432/postgres"
+
+            

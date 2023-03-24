@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: services-apps-api
+  namespace: services
+  labels:
+    type: service
+    name: apps-api
+    protocol: grpc
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 2
+  selector:
+    matchLabels:
+      name: apps-api
+  template:
+    metadata:
+      labels:
+        name: apps-api
+      annotations:
+          dapr.io/enabled: "true"
+          dapr.io/app-id: "services-apps-api"
+          dapr.io/app-protocol: "grpc"
+          dapr.io/app-port: "50011"
+    spec:
+      containers:
+        - name: apps-api
+          image: coffeenights/conure-services-apps:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/app/conure_services_apps"]
+          args: ["runserver", "--port=50011"]
+          ports:
+            - name: grpc
+              containerPort: 50011
+              protocol: TCP
+          resources:
+            limits:
+              memory: "200Mi"
+          env:
+            - name: DB_URL
+              value: "postgres://postgres:0yyKiYg0WD@services-apps-postgresql.databases.svc.cluster.local:5432/postgres"
+
+            
