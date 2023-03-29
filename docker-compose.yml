@@ -9,7 +9,6 @@ services:
       context: api/.
     ports:
       - "8082:8080"
-      - "4000:4000"
     working_dir: /app
     security_opt:
       - "apparmor=unconfined"
@@ -55,22 +54,23 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command:
-      - ./services_apps
-      - runserver
-      - --port=50052
+    command: >-
+      ./services_apps runserver --port=50052
     environment:
       - DB_URL=postgres://conure:test123@db:5432/conure
     networks:
       - conure
   services_apps_api-dapr:
     image: "daprio/daprd:edge"
-    command: [ "./daprd",
-               "--app-id", "services-apps-api",
-               "--app-port", "50052",
-               "--app-protocol", "grpc",
-               "--placement-host-address", "placement:50006",
-               "--components-path", "/components" ]
+    command: >- 
+      ./daprd
+      --app-id services-apps-api
+      --app-port 50052
+      --app-protocol grpc
+      --log-level debug
+      --placement-host-address placement:50006
+      --components-path /components
+
     volumes:
       - "./dapr/dev/components:/components"
     depends_on:
@@ -90,22 +90,23 @@ services:
     depends_on:
       db:
         condition: service_healthy
-    command:
-      - ./services_apps
-      - runsubscriber
-      - --port=50052
+    command: >-
+      ./services_apps runsubscriber --port=50052
     environment:
       - DB_URL=postgres://conure:test123@db:5432/conure
     networks:
       - conure
   services_apps_subscriber-dapr:
     image: "daprio/daprd:edge"
-    command: [ "./daprd",
-               "--app-id", "services-apps-subscriber",
-               "--app-port", "50052",
-               "--app-protocol", "grpc",
-               "--placement-host-address", "placement:50006",
-               "--components-path", "/components" ]
+    command: >-
+      ./daprd
+      --app-id services-apps-subscriber
+      --app-port 50052
+      --app-protocol grpc
+      --log-level debug
+      --placement-host-address placement:50006
+      --components-path /components
+
     volumes:
       - "./dapr/dev/components:/components"
     depends_on:
@@ -158,7 +159,7 @@ services:
   redis:
     image: "redis:alpine"
     ports:
-      - "6380:6379"
+      - "63790:6379"
     networks:
       - conure
 
