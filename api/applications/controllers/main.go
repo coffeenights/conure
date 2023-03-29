@@ -13,9 +13,10 @@ import (
 )
 
 func ListApplications(c *gin.Context) {
-	conn, err := grpc.Dial("localhost:50001", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	log.Println("Dialing ...")
+	conn, err := grpc.Dial("localhost:50007", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatal(err)
+		c.JSON(http.StatusBadRequest, gin.H{"Error": err})
 	}
 
 	applicationClient := apps_pb.NewApplicationServiceClient(conn)

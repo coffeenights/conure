@@ -1,0 +1,166 @@
+version: "3.9"
+services:
+  ############################
+  # API Server + Sidecar
+  ############################
+  api:
+    build:
+      dockerfile: Dockerfile-dev
+      context: api/.
+    ports:
+      - "8082:8080"
+      - "4000:4000"
+    working_dir: /app
+    security_opt:
+      - "apparmor=unconfined"
+    cap_add:
+      - SYS_PTRACE
+    command: >-
+      go run main.go
+    # command to run the remote debugging server
+    # dlv --listen=:4000 --headless=true --api-version=2 --accept-multiclient --log debug main.go
+
+    volumes:
+      - "./api:/app"
+    networks:
+      - conure
+
+  api-dapr:
+    image: "daprio/daprd:edge"
+    command: >-
+      ./daprd 
+        --app-id api 
+        --app-port 8080 
+        --dapr-grpc-port 50007 
+        --app-protocol http 
+        --log-level debug 
+        --placement-host-address placement:50006
+
+    volumes:
+      - "./dapr/dev/components:/components"
+    depends_on:
+      - api
+    network_mode: "service:api"
+    networks:
+      - conure
+
+  ############################
+  # Apps Service GRPC api + Sidecar
+  ############################
+  services_apps_api:
+    build: services/apps/.
+    ports:
+      - "50052:50052"
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - ./services_apps
+      - runserver
+      - --port=50052
+    environment:
+      - DB_URL=postgres://conure:test123@db:5432/conure
+    networks:
+      - conure
+  services_apps_api-dapr:
+    image: "daprio/daprd:edge"
+    command: [ "./daprd",
+               "--app-id", "services-apps-api",
+               "--app-port", "50052",
+               "--app-protocol", "grpc",
+               "--placement-host-address", "placement:50006",
+               "--components-path", "/components" ]
+    volumes:
+      - "./dapr/dev/components:/components"
+    depends_on:
+      - services_apps_api
+    network_mode: "service:services_apps_api"
+    networks:
+      - conure
+
+  ############################
+  # Apps Service Subscriber + Sidecar
+  ############################
+  services_apps_subscriber:
+    build: services/apps/.
+    ports:
+      - "50053:50052"
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - ./services_apps
+      - runsubscriber
+      - --port=50052
+    environment:
+      - DB_URL=postgres://conure:test123@db:5432/conure
+    networks:
+      - conure
+  services_apps_subscriber-dapr:
+    image: "daprio/daprd:edge"
+    command: [ "./daprd",
+               "--app-id", "services-apps-subscriber",
+               "--app-port", "50052",
+               "--app-protocol", "grpc",
+               "--placement-host-address", "placement:50006",
+               "--components-path", "/components" ]
+    volumes:
+      - "./dapr/dev/components:/components"
+    depends_on:
+      - services_apps_subscriber
+      - redis
+    network_mode: "service:services_apps_subscriber"
+    networks:
+      - conure
+
+  ############################
+  # Users Service GRPC api + Sidecar
+  ############################
+  users:
+    build: services/users/.
+
+  db:
+    image: postgres:latest
+    ports:
+      - "54320:5432"
+    volumes:
+      - ./_data:/var/lib/postgresql/data/pgdata
+    environment:
+      - POSTGRES_PASSWORD=test123
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      - POSTGRES_DB=conure
+      - POSTGRES_USER=conure
+      - POSTGRES_HOST_AUTH_METHOD=trust
+      - PGUSER=conure
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready" ]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - conure
+
+  ############################
+  # Dapr placement service
+  ############################
+  placement:
+    image: "daprio/dapr"
+    command: [ "./placement", "-port", "50006" ]
+    ports:
+      - "50006:50006"
+    networks:
+      - conure
+  ############################
+  # Redis state store
+  ############################
+  redis:
+    image: "redis:alpine"
+    ports:
+      - "6380:6379"
+    networks:
+      - conure
+
+networks:
+  conure:

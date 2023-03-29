@@ -17,3 +17,5 @@
 .idea/
 .code/
 _data/
+__debug_bin
+.dapr/
