@@ -8,10 +8,18 @@ apps:
 #    resourcesPath: .dapr/resources
 #    configFilePath: .dapr/config.yaml
     appProtocol: http
+    daprGRPCPort: 50007
     appPort: 8080
 #    appHealthCheckPath: "/healthz"
 #    command: ["python3" "app.py"]
   - appID: services_apps_api
     appDirPath: ./
     appProtocol: grpc
-    appPort: 50002
+    appPort: 50052
+    daprGRPCPort: 50008
+
+  - appID: services_apps_subscriber
+    appDirPath: ./
+    appProtocol: grpc
+    daprGRPCPort: 50009
+    resourcesPath: ./components
