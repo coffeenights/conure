@@ -69,10 +69,6 @@ services:
       --app-protocol grpc
       --log-level debug
       --placement-host-address placement:50006
-      --components-path /components
-
-    volumes:
-      - "./dapr/dev/components:/components"
     depends_on:
       - services_apps_api
     network_mode: "service:services_apps_api"
@@ -108,7 +104,7 @@ services:
       --components-path /components
 
     volumes:
-      - "./dapr/dev/components:/components"
+      - "./dapr/dev/components_docker:/components"
     depends_on:
       - services_apps_subscriber
       - redis
