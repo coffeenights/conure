@@ -2,7 +2,7 @@ package controllers
 
 import (
 	"context"
-	apps_pb "github.com/coffeenights/conure/api/protos/apps"
+	apps_pb "github.com/coffeenights/conure/cmd/api-server/protos/apps"
 	"github.com/gin-gonic/gin"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"

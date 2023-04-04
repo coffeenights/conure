@@ -1,4 +1,4 @@
-module github.com/coffeenights/services/control
+module github.com/coffeenights/cmd/control
 
 go 1.18
 

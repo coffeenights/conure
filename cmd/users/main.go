@@ -3,15 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/coffeenights/conure/services/users/config"
-	"github.com/coffeenights/conure/services/users/models"
+	"github.com/coffeenights/conure/cmd/users/config"
+	"github.com/coffeenights/conure/cmd/users/models"
 
 	"log"
 	"os"
 )
 
 //func runServer(port *int) {
-//	server := services.Server{Config: config.LoadConfig()}
+//	server := cmd.Server{Config: config.LoadConfig()}
 //
 //	// Database connection
 //	server.Db = config.GetDbConnection(server.Config.GetDbDSN())
@@ -50,7 +50,7 @@ func migrate() {
 //	if err != nil {
 //		log.Fatalf("failed to start the server: %v", err)
 //	}
-//	if err := s.AddTopicEventHandler(sub, services.PostApplication); err != nil {
+//	if err := s.AddTopicEventHandler(sub, cmd.PostApplication); err != nil {
 //		log.Fatalf("error adding topic subscription: %v", err)
 //	}
 //	if err := s.Start(); err != nil && err != http.ErrServerClosed {

@@ -1,4 +1,4 @@
-module github.com/coffeenights/conure/api
+module github.com/coffeenights/conure/cmd/api-server
 
 go 1.17
 

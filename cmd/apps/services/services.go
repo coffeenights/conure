@@ -2,12 +2,12 @@ package services
 
 import (
 	"context"
-	"github.com/coffeenights/conure/services/apps/config"
-	"github.com/coffeenights/conure/services/apps/models"
-	pb "github.com/coffeenights/conure/services/apps/protos/apps"
+	"github.com/coffeenights/conure/cmd/apps/config"
+	"github.com/coffeenights/conure/cmd/apps/models"
+	pb "github.com/coffeenights/conure/cmd/apps/protos/apps"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
-	// models "github.com/coffeenights/conure/services/apps/models"
+	// models "github.com/coffeenights/conure/cmd/apps/models"
 	"github.com/dapr/go-sdk/service/common"
 	"log"
 )

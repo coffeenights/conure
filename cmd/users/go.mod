@@ -1,4 +1,4 @@
-module github.com/coffeenights/conure/services/users
+module github.com/coffeenights/conure/cmd/users
 
 go 1.19
 

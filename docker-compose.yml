@@ -6,7 +6,7 @@ services:
   api:
     build:
       dockerfile: Dockerfile-dev
-      context: api/.
+      context: cmd/api-server/.
     ports:
       - "8082:8080"
     working_dir: /app
@@ -20,7 +20,7 @@ services:
     # dlv --listen=:4000 --headless=true --api-version=2 --accept-multiclient --log debug main.go
 
     volumes:
-      - "./api:/app"
+      - "./cmd/api-server:/app"
     networks:
       - conure
 
@@ -47,7 +47,7 @@ services:
   # Apps Service GRPC api + Sidecar
   ############################
   services_apps_api:
-    build: services/apps/.
+    build: cmd/apps/.
     ports:
       - "50052:50052"
     working_dir: /app
@@ -79,7 +79,7 @@ services:
   # Apps Service Subscriber + Sidecar
   ############################
   services_apps_subscriber:
-    build: services/apps/.
+    build: cmd/apps/.
     ports:
       - "50053:50052"
     working_dir: /app
@@ -116,7 +116,7 @@ services:
   # Users Service GRPC api + Sidecar
   ############################
   users:
-    build: services/users/.
+    build: cmd/users/.
 
   db:
     image: postgres:latest

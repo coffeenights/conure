@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/coffeenights/conure/api/routes"
+	"github.com/coffeenights/conure/cmd/api-server/routes"
 	"github.com/gin-gonic/gin"
 	"log"
 )

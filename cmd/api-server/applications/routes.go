@@ -1,7 +1,7 @@
 package applications
 
 import (
-	c "github.com/coffeenights/conure/api/applications/controllers"
+	c "github.com/coffeenights/conure/cmd/api-server/applications/controllers"
 	"github.com/gin-gonic/gin"
 )
 

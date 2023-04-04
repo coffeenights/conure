@@ -1,4 +1,4 @@
-module github.com/coffeenights/conure/services/apps
+module github.com/coffeenights/conure/cmd/apps
 
 go 1.17
 

@@ -1,8 +1,8 @@
 package services
 
 import (
-	"github.com/coffeenights/conure/services/apps/config"
-	pb "github.com/coffeenights/conure/services/apps/protos/apps"
+	"github.com/coffeenights/conure/cmd/apps/config"
+	pb "github.com/coffeenights/conure/cmd/apps/protos/apps"
 	"gorm.io/gorm"
 )
 
