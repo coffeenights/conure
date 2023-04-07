@@ -2,13 +2,13 @@ package services
 
 import (
 	"context"
-	"github.com/coffeenights/conure/cmd/apps/config"
+	apps_config "github.com/coffeenights/conure/cmd/apps/config"
 	"github.com/coffeenights/conure/cmd/apps/models"
 	pb "github.com/coffeenights/conure/cmd/apps/protos/apps"
+	"github.com/coffeenights/conure/internal/config"
+	"github.com/dapr/go-sdk/service/common"
 	"github.com/google/uuid"
 	"github.com/mitchellh/mapstructure"
-	// models "github.com/coffeenights/conure/cmd/apps/models"
-	"github.com/dapr/go-sdk/service/common"
 	"log"
 )
 
@@ -53,8 +53,9 @@ type PostApplicationRequest struct {
 }
 
 func PostApplication(ctx context.Context, e *common.TopicEvent) (retry bool, err error) {
-	c := config.LoadConfig()
-	db := config.GetDbConnection(c.GetDbDSN())
+	c := config.LoadConfig(apps_config.Config{})
+	dsn := config.GetDbDSN(c.DbUrl)
+	db := config.GetDbConnection(dsn)
 	data := e.Data.(map[string]interface{})
 
 	var request PostApplicationRequest

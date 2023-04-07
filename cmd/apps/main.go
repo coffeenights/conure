@@ -3,55 +3,36 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/coffeenights/conure/cmd/apps/config"
+	apps_config "github.com/coffeenights/conure/cmd/apps/config"
 	"github.com/coffeenights/conure/cmd/apps/models"
-	pb "github.com/coffeenights/conure/cmd/apps/protos/apps"
 	"github.com/coffeenights/conure/cmd/apps/services"
+	"github.com/coffeenights/conure/internal/config"
+	"github.com/coffeenights/conure/internal/server"
 	"github.com/dapr/go-sdk/service/common"
 	daprd "github.com/dapr/go-sdk/service/grpc"
-	"google.golang.org/grpc"
+	_ "github.com/joho/godotenv/autoload"
 	"log"
-	"net"
 	"net/http"
 	"os"
 )
 
-func runServer(port *int) {
-	server := services.Server{Config: config.LoadConfig()}
-
-	// Database connection
-	server.Db = config.GetDbConnection(server.Config.GetDbDSN())
-
-	// Start GRPC Server
-	log.Println("Starting the server ...")
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
-	}
-	s := grpc.NewServer()
-	pb.RegisterApplicationServiceServer(s, &server)
-	log.Printf("Server listening at %v", lis.Addr())
-	if err := s.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
-	}
-}
-
 func migrate() {
-	c := config.LoadConfig()
-	db := config.GetDbConnection(c.GetDbDSN())
+	c := config.LoadConfig(apps_config.Config{})
+	dsn := config.GetDbDSN(c.DbUrl)
+	db := config.GetDbConnection(dsn)
 	log.Println("Starting migration")
 	models.Migrate(db)
 	log.Println("Migration completed")
 }
 
-var sub = &common.Subscription{
-	PubsubName: "pubsub",
-	Topic:      "post_application",
-	Route:      "/post_application",
-}
-
 func runsubscriber(port *int) {
 	log.Println("Starting the subscriber ...")
+	var sub = &common.Subscription{
+		PubsubName: "pubsub",
+		Topic:      "post_application",
+		Route:      "/post_application",
+	}
+
 	s, err := daprd.NewService(fmt.Sprintf(":%d", *port))
 	if err != nil {
 		log.Fatalf("failed to start the server: %v", err)
@@ -93,7 +74,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to start the server: %v", err)
 		}
-		runServer(portServer)
+		server.RunGrpcServer(portServer, &services.Server{})
 	case "migrate":
 		_ = migrateCmd.Parse(os.Args[2:])
 		migrate()
