@@ -3,22 +3,19 @@ common:
   env:
     DB_URL: postgres://conure:test123@localhost:54320/conure
 apps:
-  - appID: api
+  - appID: api-server
     appDirPath: ./
-#    resourcesPath: .dapr/resources
-#    configFilePath: .dapr/config.yaml
     appProtocol: http
     daprGRPCPort: 50007
     appPort: 8080
-#    appHealthCheckPath: "/healthz"
-#    command: ["python3" "app.py"]
-  - appID: services_apps_api
+
+  - appID: services-apps-api
     appDirPath: ./
     appProtocol: grpc
     appPort: 50052
     daprGRPCPort: 50008
 
-  - appID: services_apps_subscriber
+  - appID: services-apps-subscriber
     appDirPath: ./
     appProtocol: grpc
     daprGRPCPort: 50009
