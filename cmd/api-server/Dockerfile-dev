@@ -1,7 +1,0 @@
-FROM golang:1.19-alpine3.16
-
-COPY . /app
-WORKDIR /app/
-RUN apk update && apk add build-base
-RUN go install github.com/go-delve/delve/cmd/dlv@latest
-RUN go get -d -v ./...
