@@ -31,8 +31,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	oamconureiov1alpha1 "github.com/coffeenights/conure/api/v1alpha1"
-	"github.com/coffeenights/conure/internal/controller"
+	oamconureiov1alpha1 "github.com/coffeenights/conure/api/oam/v1alpha1"
+	"github.com/coffeenights/conure/internal/controller/oam"
 	//+kubebuilder:scaffold:imports
 )
 
