@@ -1,3 +1,40 @@
 syntax = "proto3";
 
-option go_package = "github.com/coffeenights/conure/users/protos/users";
+option go_package = "github.com/coffeenights/users/protos/users";
+
+message PublicUserResponse{
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string last_login = 8;
+}
+
+message UserRequest {
+  string id = 1;
+  string name = 2;
+  string email = 3;
+  string password = 4;
+  bool is_active = 5;
+  string created = 6;
+  string modified = 7;
+  string last_login = 8;
+}
+
+message CreateUserRequest {
+  string name = 1;
+  string email = 2;
+  string password = 3;
+}
+
+message AuthTokenResponse {
+  string access_token = 1;
+}
+
+message GetUserRequest {
+  string id = 1;
+}
+
+service AuthService {
+  rpc CreateUser (CreateUserRequest) returns (AuthTokenResponse) {}
+  rpc GetUser (GetUserRequest) returns (PublicUserResponse) {}
+}

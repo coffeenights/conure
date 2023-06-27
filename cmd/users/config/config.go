@@ -2,18 +2,20 @@ package config
 
 import (
 	"fmt"
-	"gorm.io/driver/postgres"
-	"gorm.io/gorm"
 	"log"
 	"net"
 	"net/url"
 	"os"
 	"reflect"
 	"strings"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 type Config struct {
-	DbUrl string `env:"DB_URL"`
+	DbUrl     string `env:"DB_URL"`
+	SecretKey string `env:"SECRET_KEY"`
 }
 
 func (c *Config) GetDbDSN() string {

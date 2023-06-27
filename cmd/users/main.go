@@ -3,32 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/coffeenights/conure/cmd/users/config"
-	"github.com/coffeenights/conure/cmd/users/models"
-
 	"log"
 	"os"
-)
 
-//func runServer(port *int) {
-//	server := cmd.Server{Config: config.LoadConfig()}
-//
-//	// Database connection
-//	server.Db = config.GetDbConnection(server.Config.GetDbDSN())
-//
-//	// Start GRPC Server
-//	log.Println("Starting the server ...")
-//	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
-//	if err != nil {
-//		log.Fatalf("Failed to listen: %v", err)
-//	}
-//	s := grpc.NewServer()
-//	pb.RegisterApplicationServiceServer(s, &server)
-//	log.Printf("Server listening at %v", lis.Addr())
-//	if err := s.Serve(lis); err != nil {
-//		log.Fatalf("Failed to serve: %v", err)
-//	}
-//}
+	_ "github.com/joho/godotenv/autoload"
+
+	"github.com/coffeenights/conure/cmd/users/config"
+	"github.com/coffeenights/conure/cmd/users/models"
+	"github.com/coffeenights/conure/cmd/users/services"
+	"github.com/coffeenights/conure/internal/server"
+)
 
 func migrate() {
 	c := config.LoadConfig()
@@ -64,10 +48,9 @@ func main() {
 		migrateCmd       = flag.NewFlagSet("migrate", flag.ExitOnError)
 		runserverCmd     = flag.NewFlagSet("runserver", flag.ExitOnError)
 		runsubscriberCmd = flag.NewFlagSet("runsubscriber", flag.ExitOnError)
-
-		subcommand string
+		subcommand       string
 	)
-	//portServer := runserverCmd.Int("port", 50051, "The GRPC server port")
+	portServer := runserverCmd.Int("port", 50051, "The GRPC server port")
 	//portSubscriber := runsubscriberCmd.Int("port", 50001, "The subscriber service port")
 
 	flag.Usage = func() {
@@ -88,7 +71,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to start the server: %v", err)
 		}
-		// runServer(portServer)
+		server.RunGrpcServer(portServer, &services.Server{})
 	case "migrate":
 		_ = migrateCmd.Parse(os.Args[2:])
 		migrate()
@@ -97,7 +80,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to start the service: %v", err)
 		}
-		// runsubscriber(portSubscriber)
+		//runsubscriber(portSubscriber)
 	default:
 		flag.Usage()
 	}

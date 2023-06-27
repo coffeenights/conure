@@ -4,7 +4,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"golang.org/x/crypto/bcrypt"
 	"log"
 	"regexp"
 	"strconv"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -235,6 +235,11 @@ func Decode(s string) (string, error) {
 
 func Migrate(db *gorm.DB) {
 	err := db.AutoMigrate(&User{})
+
+	if err != nil {
+		log.Fatalf("Error during migration: %s", err)
+	}
+	err = db.AutoMigrate(&EmailVerification{})
 	if err != nil {
 		log.Fatalf("Error during migration: %s", err)
 	}

@@ -2,9 +2,10 @@ package server
 
 import (
 	"fmt"
-	"google.golang.org/grpc"
 	"log"
 	"net"
+
+	"google.golang.org/grpc"
 )
 
 type LocalServer interface {
