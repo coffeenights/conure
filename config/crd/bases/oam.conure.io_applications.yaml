@@ -35,10 +35,25 @@ spec:
           spec:
             description: ApplicationSpec defines the desired state of Application
             properties:
-              foo:
-                description: Foo is an example field of Application. Edit application_types.go
-                  to remove/update
-                type: string
+              components:
+                items:
+                  description: 'Component describe functional units that may be instantiated
+                    as part of a larger distributed application ref: https://github.com/oam-dev/spec/blob/master/3.component_model.md'
+                  properties:
+                    name:
+                      type: string
+                    properties:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    type:
+                      type: string
+                  required:
+                  - name
+                  - type
+                  type: object
+                type: array
+            required:
+            - components
             type: object
           status:
             description: ApplicationStatus defines the observed state of Application
