@@ -25,6 +25,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	oamconureiov1alpha1 "github.com/coffeenights/conure/api/oam/v1alpha1"
+	appsv1 "k8s.io/api/apps/v1"
 )
 
 // ApplicationReconciler reconciles a Application object
@@ -47,15 +48,29 @@ type ApplicationReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.4/pkg/reconcile
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := log.FromContext(ctx)
+	var application oamconureiov1alpha1.Application
+	if err := r.Get(ctx, req.NamespacedName, &application); err != nil {
+		log.Error(err, "unable to fetch Application")
+		// we'll ignore not-found errors, since they can't be fixed by an immediate
+		// requeue (we'll need to wait for a new notification), and we can get them
+		// on deleted requests.
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
 
-	// TODO(user): your logic here
+	var pods appsv1.DeploymentList
+
+	if err := r.List(ctx, &pods, client.InNamespace(req.Namespace), client.MatchingFields{"controller": "user-scheduler"}); err != nil {
+		log.Error(err, "unable to list child Jobs")
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&oamconureiov1alpha1.Application{}).
 		Complete(r)
