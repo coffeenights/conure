@@ -18,6 +18,10 @@ package controller
 
 import (
 	"context"
+	"fmt"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -58,20 +62,98 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	var pods appsv1.DeploymentList
+	var deployments appsv1.DeploymentList
 
-	if err := r.List(ctx, &pods, client.InNamespace(req.Namespace), client.MatchingFields{"controller": "user-scheduler"}); err != nil {
+	if err := r.List(ctx, &deployments, client.InNamespace(req.Namespace), client.MatchingFields{".metadata.controller": req.Name}); err != nil {
 		log.Error(err, "unable to list child Jobs")
 		return ctrl.Result{}, err
 	}
 
+	constructDeployment := func(application *oamconureiov1alpha1.Application) (*appsv1.Deployment, error) {
+		name := fmt.Sprintf("prueba-%d", time.Now().Unix())
+		deployment := &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: application.Namespace,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: int32Ptr(1),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": "prueba",
+					},
+				},
+				Template: v1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": "prueba",
+						},
+					},
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{
+							{
+								Name:  "busybox",
+								Image: "busybox",
+								Command: []string{
+									"/bin/sh",
+									"-c",
+									"sleep 3600",
+								},
+							},
+						},
+					},
+				},
+			},
+			Status: appsv1.DeploymentStatus{},
+		}
+		if err := ctrl.SetControllerReference(application, deployment, r.Scheme); err != nil {
+			return nil, err
+		}
+		return deployment, nil
+	}
+	scheduledResult := ctrl.Result{RequeueAfter: time.Hour}
+	deployment, err := constructDeployment(&application)
+	if err != nil {
+		log.Error(err, "unable to construct deployment from template")
+		// don't bother requeuing until we get a change to the spec
+		return scheduledResult, nil
+	}
+
+	if err := r.Create(ctx, deployment); err != nil {
+		log.Error(err, "Unable to create deployment for application", "deployment", deployment)
+		return ctrl.Result{}, err
+	}
+	log.V(1).Info("created Deployment for Application run", "deployment", deployment)
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &appsv1.Deployment{}, ".metadata.controller", func(rawObj client.Object) []string {
+		// grab the job object, extract the owner...
+		deployment := rawObj.(*appsv1.Deployment)
+		owner := metav1.GetControllerOf(deployment)
+		if owner == nil {
+			return nil
+		}
+		// ...make sure it's a CronJob...
+		apiGVStr := oamconureiov1alpha1.GroupVersion.String()
+		if owner.APIVersion != apiGVStr || owner.Kind != "Application" {
+			return nil
+		}
+
+		// ...and if so, return it
+		r := []string{owner.Name}
+		return r
+	}); err != nil {
+		return err
+	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&oamconureiov1alpha1.Application{}).
+		Owns(&appsv1.Deployment{}).
 		Complete(r)
 }
+
+func int32Ptr(i int32) *int32 { return &i }
