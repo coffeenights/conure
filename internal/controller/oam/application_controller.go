@@ -18,7 +18,6 @@ package controller
 
 import (
 	"context"
-	"fmt"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
@@ -68,63 +67,34 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		log.Error(err, "unable to list child Jobs")
 		return ctrl.Result{}, err
 	}
-
-	constructDeployment := func(application *oamconureiov1alpha1.Application) (*appsv1.Deployment, error) {
-		name := fmt.Sprintf("prueba-%d", time.Now().Unix())
-		deployment := &appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      name,
-				Namespace: application.Namespace,
-			},
-			Spec: appsv1.DeploymentSpec{
-				Replicas: int32Ptr(1),
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"app": "prueba",
-					},
-				},
-				Template: v1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"app": "prueba",
-						},
-					},
-					Spec: v1.PodSpec{
-						Containers: []v1.Container{
-							{
-								Name:  "busybox",
-								Image: "busybox",
-								Command: []string{
-									"/bin/sh",
-									"-c",
-									"sleep 3600",
-								},
-							},
-						},
-					},
-				},
-			},
-			Status: appsv1.DeploymentStatus{},
+	var deployment appsv1.Deployment
+	deploymentExists := false
+	// Check if the deployment already exists
+	for _, deployment = range deployments.Items {
+		if deployment.ObjectMeta.Name == req.Name {
+			deploymentExists = true
+			break
 		}
-		if err := ctrl.SetControllerReference(application, deployment, r.Scheme); err != nil {
-			return nil, err
-		}
-		return deployment, nil
-	}
-	scheduledResult := ctrl.Result{RequeueAfter: time.Hour}
-	deployment, err := constructDeployment(&application)
-	if err != nil {
-		log.Error(err, "unable to construct deployment from template")
-		// don't bother requeuing until we get a change to the spec
-		return scheduledResult, nil
 	}
 
-	if err := r.Create(ctx, deployment); err != nil {
-		log.Error(err, "Unable to create deployment for application", "deployment", deployment)
-		return ctrl.Result{}, err
+	if deploymentExists {
+		log.V(1).Info("Deployment for Application run", "deployment", deployment)
+	} else {
+		scheduledResult := ctrl.Result{RequeueAfter: time.Hour}
+		deployment, err := constructDeployment(&application)
+		if err != nil {
+			log.Error(err, "unable to construct deployment from template")
+			// don't bother requeuing until we get a change to the spec
+			return scheduledResult, nil
+		}
+
+		if err := r.Create(ctx, deployment); err != nil {
+			log.Error(err, "Unable to create deployment for application", "deployment", deployment)
+			return ctrl.Result{}, err
+		}
+		log.V(1).Info("created Deployment for Application run", "deployment", deployment)
 	}
-	log.V(1).Info("created Deployment for Application run", "deployment", deployment)
+
 	return ctrl.Result{}, nil
 }
 
@@ -154,6 +124,55 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&oamconureiov1alpha1.Application{}).
 		Owns(&appsv1.Deployment{}).
 		Complete(r)
+}
+
+func constructDeployments(application *oamconureiov1alpha1.Application) ([]*appsv1.Deployment, error) {
+
+	var deployments []*appsv1.Deployment
+	for _, component := range application.Spec.Components {
+		deployment := &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      req.Name,
+				Namespace: application.Namespace,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: int32Ptr(1),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"application": req.Name,
+					},
+				},
+				Template: v1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"application": req.Name,
+						},
+					},
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{
+							{
+								Name:  component.Name,
+								Image: component.Properties[0].Image,
+								Command: []string{
+									"/bin/sh",
+									"-c",
+									"sleep 3600",
+								},
+							},
+						},
+					},
+				},
+			},
+			Status: appsv1.DeploymentStatus{},
+		}
+		deployments = append(deployments, deployment)
+	}
+
+	if err := ctrl.SetControllerReference(application, deployment, r.Scheme); err != nil {
+		return nil, err
+	}
+	return deployment, nil
 }
 
 func int32Ptr(i int32) *int32 { return &i }
