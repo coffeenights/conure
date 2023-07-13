@@ -37,6 +37,13 @@ type ApplicationReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+func dispatchComponent(component *oamconureiov1alpha1.Component) {
+	switch component.Type {
+	case oamconureiov1alpha1.Service:
+		ServiceDispatcher
+	}
+}
+
 //+kubebuilder:rbac:groups=oam.conure.io,resources=applications,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=oam.conure.io,resources=applications/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=oam.conure.io,resources=applications/finalizers,verbs=update
@@ -61,12 +68,16 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	for _, component := range application.Spec.Components {
+		dispatchComponent(&component)
+	}
 	var deployments appsv1.DeploymentList
 
 	if err := r.List(ctx, &deployments, client.InNamespace(req.Namespace), client.MatchingFields{".metadata.controller": req.Name}); err != nil {
 		log.Error(err, "unable to list child Jobs")
 		return ctrl.Result{}, err
 	}
+
 	var deployment appsv1.Deployment
 	deploymentExists := false
 	// Check if the deployment already exists
@@ -81,7 +92,7 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		log.V(1).Info("Deployment for Application run", "deployment", deployment)
 	} else {
 		scheduledResult := ctrl.Result{RequeueAfter: time.Hour}
-		deployment, err := constructDeployment(&application)
+		deployment, err := constructDeployments(&application)
 		if err != nil {
 			log.Error(err, "unable to construct deployment from template")
 			// don't bother requeuing until we get a change to the spec

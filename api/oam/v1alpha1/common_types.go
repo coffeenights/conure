@@ -7,15 +7,16 @@ import "k8s.io/apimachinery/pkg/runtime"
 
 type Component struct {
 	Name       string                `json:"name"`
-	Type       string                `json:"type"`
+	Type       ComponentType         `json:"type"`
 	Properties *runtime.RawExtension `json:"properties,omitempty"`
 }
 
 type ComponentType string
 
 const (
-	Service         ComponentType = "service"
-	StatefulService ComponentType = "stateful_service"
+	Service  ComponentType = "service"
+	Worker   ComponentType = "worker"
+	CronTask ComponentType = "cron_task"
 )
 
 type Environment struct {
