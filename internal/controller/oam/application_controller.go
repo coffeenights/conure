@@ -69,7 +69,7 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	}
 
 	for _, component := range application.Spec.Components {
-		dispatchComponent(&component)
+
 	}
 	var deployments appsv1.DeploymentList
 
@@ -118,7 +118,6 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		if owner == nil {
 			return nil
 		}
-		// ...make sure it's a CronJob...
 		apiGVStr := oamconureiov1alpha1.GroupVersion.String()
 		if owner.APIVersion != apiGVStr || owner.Kind != "Application" {
 			return nil
@@ -134,6 +133,7 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&oamconureiov1alpha1.Application{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
 }
 
@@ -183,7 +183,7 @@ func constructDeployments(application *oamconureiov1alpha1.Application) ([]*apps
 	if err := ctrl.SetControllerReference(application, deployment, r.Scheme); err != nil {
 		return nil, err
 	}
-	return deployment, nil
+	return deployment, nilv
 }
 
 func int32Ptr(i int32) *int32 { return &i }
