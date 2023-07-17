@@ -37,10 +37,10 @@ type ApplicationReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-func dispatchComponent(component *oamconureiov1alpha1.Component) {
+func parseComponent(component *oamconureiov1alpha1.Component) {
 	switch component.Type {
 	case oamconureiov1alpha1.Service:
-		ServiceDispatcher
+
 	}
 }
 
@@ -68,9 +68,9 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	for _, component := range application.Spec.Components {
-
-	}
+	//for _, component := range application.Spec.Components {
+	//
+	//}
 	var deployments appsv1.DeploymentList
 
 	if err := r.List(ctx, &deployments, client.InNamespace(req.Namespace), client.MatchingFields{".metadata.controller": req.Name}); err != nil {
@@ -78,21 +78,64 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	var deployment appsv1.Deployment
+	constructDeployment := func(application *oamconureiov1alpha1.Application) (*appsv1.Deployment, error) {
+		deployment := &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{},
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      req.Name,
+				Namespace: application.Namespace,
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: int32Ptr(1),
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"application": req.Name,
+					},
+				},
+				Template: v1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"application": req.Name,
+						},
+					},
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{
+							{
+								Name:  "prueba",
+								Image: "busybox",
+								Command: []string{
+									"/bin/sh",
+									"-c",
+									"sleep 3600",
+								},
+							},
+						},
+					},
+				},
+			},
+			Status: appsv1.DeploymentStatus{},
+		}
+
+		if err := ctrl.SetControllerReference(application, deployment, r.Scheme); err != nil {
+			return nil, err
+		}
+		return deployment, nil
+	}
+
 	deploymentExists := false
+	var currentDeployment appsv1.Deployment
 	// Check if the deployment already exists
-	for _, deployment = range deployments.Items {
-		if deployment.ObjectMeta.Name == req.Name {
+	for _, currentDeployment = range deployments.Items {
+		if currentDeployment.ObjectMeta.Name == req.Name {
 			deploymentExists = true
 			break
 		}
 	}
-
 	if deploymentExists {
-		log.V(1).Info("Deployment for Application run", "deployment", deployment)
+		log.V(1).Info("Deployment for Application run", "deployment", currentDeployment)
 	} else {
 		scheduledResult := ctrl.Result{RequeueAfter: time.Hour}
-		deployment, err := constructDeployments(&application)
+		deployment, err := constructDeployment(&application)
 		if err != nil {
 			log.Error(err, "unable to construct deployment from template")
 			// don't bother requeuing until we get a change to the spec
@@ -135,55 +178,6 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
-}
-
-func constructDeployments(application *oamconureiov1alpha1.Application) ([]*appsv1.Deployment, error) {
-
-	var deployments []*appsv1.Deployment
-	for _, component := range application.Spec.Components {
-		deployment := &appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      req.Name,
-				Namespace: application.Namespace,
-			},
-			Spec: appsv1.DeploymentSpec{
-				Replicas: int32Ptr(1),
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"application": req.Name,
-					},
-				},
-				Template: v1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"application": req.Name,
-						},
-					},
-					Spec: v1.PodSpec{
-						Containers: []v1.Container{
-							{
-								Name:  component.Name,
-								Image: component.Properties[0].Image,
-								Command: []string{
-									"/bin/sh",
-									"-c",
-									"sleep 3600",
-								},
-							},
-						},
-					},
-				},
-			},
-			Status: appsv1.DeploymentStatus{},
-		}
-		deployments = append(deployments, deployment)
-	}
-
-	if err := ctrl.SetControllerReference(application, deployment, r.Scheme); err != nil {
-		return nil, err
-	}
-	return deployment, nilv
 }
 
 func int32Ptr(i int32) *int32 { return &i }
