@@ -4,8 +4,8 @@ metadata:
   name: first-app
 spec:
   components:
-    - name: myworker
-      type: worker
+    - name: myservice
+      type: service
       properties:
         image: "busybox"
         cmd:

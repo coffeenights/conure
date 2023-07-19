@@ -68,9 +68,14 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	//for _, component := range application.Spec.Components {
-	//
-	//}
+	var components []*oamconureiov1alpha1.ComponentPropertiesInterface
+	for _, component := range application.Spec.Components {
+		properties, err := component.GetComponentProperties()
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		components = append(components, properties)
+	}
 	var deployments appsv1.DeploymentList
 
 	if err := r.List(ctx, &deployments, client.InNamespace(req.Namespace), client.MatchingFields{".metadata.controller": req.Name}); err != nil {
