@@ -70,7 +70,7 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 	var components []*oamconureiov1alpha1.ComponentPropertiesInterface
 	for _, component := range application.Spec.Components {
-		properties, err := component.GetComponentProperties()
+		properties, err := component.ComponentProperties()
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -87,8 +87,11 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		deployment := &appsv1.Deployment{
 			TypeMeta: metav1.TypeMeta{},
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      req.Name,
-				Namespace: application.Namespace,
+				Name:        req.Name,
+				Namespace:   application.Namespace,
+				Annotations: map[string]string{
+					//TODO: Add annotations to identify the component that is controlling
+				},
 			},
 			Spec: appsv1.DeploymentSpec{
 				Replicas: int32Ptr(1),

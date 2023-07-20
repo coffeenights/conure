@@ -17,7 +17,7 @@ type Component struct {
 	Properties *runtime.RawExtension `json:"properties,omitempty"`
 }
 
-func (c *Component) GetComponentProperties() (*ComponentPropertiesInterface, error) {
+func (c *Component) ComponentProperties() (*ComponentPropertiesInterface, error) {
 	var componentProperties ComponentPropertiesInterface
 	switch c.Type {
 	case Service:
