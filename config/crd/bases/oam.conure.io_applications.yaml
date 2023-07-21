@@ -37,18 +37,20 @@ spec:
             properties:
               components:
                 items:
-                  description: 'Component describe functional units that may be instantiated
-                    as part of a larger distributed application ref: https://github.com/oam-dev/spec/blob/master/3.component_model.md'
                   properties:
                     name:
                       type: string
                     properties:
                       type: object
                       x-kubernetes-preserve-unknown-fields: true
+                    replicas:
+                      format: int32
+                      type: integer
                     type:
                       type: string
                   required:
                   - name
+                  - replicas
                   - type
                   type: object
                 type: array

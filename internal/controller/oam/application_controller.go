@@ -18,7 +18,8 @@ package controller
 
 import (
 	"context"
-	v1 "k8s.io/api/core/v1"
+	"encoding/json"
+	"github.com/coffeenights/conure/internal/workload"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 
@@ -37,26 +38,10 @@ type ApplicationReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-func parseComponent(component *oamconureiov1alpha1.Component) {
-	switch component.Type {
-	case oamconureiov1alpha1.Service:
-
-	}
-}
-
 //+kubebuilder:rbac:groups=oam.conure.io,resources=applications,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=oam.conure.io,resources=applications/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=oam.conure.io,resources=applications/finalizers,verbs=update
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the Application object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.4/pkg/reconcile
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 	var application oamconureiov1alpha1.Application
@@ -68,94 +53,54 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	var components []*oamconureiov1alpha1.ComponentPropertiesInterface
 	for _, component := range application.Spec.Components {
-		properties, err := component.ComponentProperties()
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		components = append(components, properties)
-	}
-	var deployments appsv1.DeploymentList
+		switch component.Type {
+		case oamconureiov1alpha1.Service:
+			componentProperties := oamconureiov1alpha1.ServiceComponentProperties{}
+			err := json.Unmarshal(component.Properties.Raw, &componentProperties)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 
-	if err := r.List(ctx, &deployments, client.InNamespace(req.Namespace), client.MatchingFields{".metadata.controller": req.Name}); err != nil {
-		log.Error(err, "unable to list child Jobs")
-		return ctrl.Result{}, err
-	}
+			deployment, err := workload.ServiceWorkloadBuilder(&application, &component, &componentProperties)
+			if err != nil {
+				log.Error(err, "unable to construct deployment from template")
+				scheduledResult := ctrl.Result{RequeueAfter: time.Hour}
+				return scheduledResult, err
+			}
+			err = ctrl.SetControllerReference(&application, deployment, r.Scheme)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			err = r.Create(ctx, deployment)
+			if err != nil {
+				log.Error(err, "Unable to create deployment for application", "deployment", deployment)
+				return ctrl.Result{}, err
+			}
+			log.V(1).Info("created Deployment for Application run", "deployment", deployment)
 
-	constructDeployment := func(application *oamconureiov1alpha1.Application) (*appsv1.Deployment, error) {
-		deployment := &appsv1.Deployment{
-			TypeMeta: metav1.TypeMeta{},
-			ObjectMeta: metav1.ObjectMeta{
-				Name:        req.Name,
-				Namespace:   application.Namespace,
-				Annotations: map[string]string{
-					//TODO: Add annotations to identify the component that is controlling
-				},
-			},
-			Spec: appsv1.DeploymentSpec{
-				Replicas: int32Ptr(1),
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"application": req.Name,
-					},
-				},
-				Template: v1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"application": req.Name,
-						},
-					},
-					Spec: v1.PodSpec{
-						Containers: []v1.Container{
-							{
-								Name:  "prueba",
-								Image: "busybox",
-								Command: []string{
-									"/bin/sh",
-									"-c",
-									"sleep 3600",
-								},
-							},
-						},
-					},
-				},
-			},
-			Status: appsv1.DeploymentStatus{},
+		case oamconureiov1alpha1.StatefulService:
+		case oamconureiov1alpha1.CronTask:
+		case oamconureiov1alpha1.Worker:
 		}
 
-		if err := ctrl.SetControllerReference(application, deployment, r.Scheme); err != nil {
-			return nil, err
-		}
-		return deployment, nil
 	}
 
-	deploymentExists := false
-	var currentDeployment appsv1.Deployment
-	// Check if the deployment already exists
-	for _, currentDeployment = range deployments.Items {
-		if currentDeployment.ObjectMeta.Name == req.Name {
-			deploymentExists = true
-			break
-		}
-	}
-	if deploymentExists {
-		log.V(1).Info("Deployment for Application run", "deployment", currentDeployment)
-	} else {
-		scheduledResult := ctrl.Result{RequeueAfter: time.Hour}
-		deployment, err := constructDeployment(&application)
-		if err != nil {
-			log.Error(err, "unable to construct deployment from template")
-			// don't bother requeuing until we get a change to the spec
-			return scheduledResult, nil
-		}
+	//var deployments appsv1.DeploymentList
+	//if err := r.List(ctx, &deployments, client.InNamespace(req.Namespace), client.MatchingFields{".metadata.controller": req.Name}); err != nil {
+	//	log.Error(err, "unable to list child Jobs")
+	//	return ctrl.Result{}, err
+	//}
 
-		if err := r.Create(ctx, deployment); err != nil {
-			log.Error(err, "Unable to create deployment for application", "deployment", deployment)
-			return ctrl.Result{}, err
-		}
-		log.V(1).Info("created Deployment for Application run", "deployment", deployment)
-	}
+	//deploymentExists := false
+	//var currentDeployment appsv1.Deployment
+	//// Check if the deployment already exists
+	//for _, currentDeployment = range deployments.Items {
+	//	if currentDeployment.ObjectMeta.Name == req.Name {
+	//		deploymentExists = true
+	//		break
+	//	}
+	//}
 
 	return ctrl.Result{}, nil
 }
@@ -187,5 +132,3 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
 }
-
-func int32Ptr(i int32) *int32 { return &i }
