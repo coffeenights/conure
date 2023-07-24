@@ -30,6 +30,7 @@ import (
 
 	oamconureiov1alpha1 "github.com/coffeenights/conure/api/oam/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // ApplicationReconciler reconciles a Application object
@@ -72,12 +73,34 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			err = r.Create(ctx, deployment)
-			if err != nil {
-				log.Error(err, "Unable to create deployment for application", "deployment", deployment)
-				return ctrl.Result{}, err
+
+			// Check if the deployment exists
+			var existingDeployment appsv1.Deployment
+			objectKey := client.ObjectKeyFromObject(deployment)
+			if err = r.Get(ctx, objectKey, &existingDeployment); err != nil {
+				if apierrors.IsNotFound(err) {
+					err = r.Create(ctx, deployment)
+					if err != nil {
+						log.Error(err, "Unable to create deployment for application", "deployment", deployment)
+						return ctrl.Result{}, err
+					}
+					log.V(1).Info("Created Deployment for Application run", "deployment", deployment)
+				} else {
+					return ctrl.Result{}, err
+				}
+			} else {
+				specHashTarget := GetHashForSpec(deployment.Spec)
+				specHashActual := GetHashFromLabels(existingDeployment.Labels)
+				if specHashActual != specHashTarget {
+					deployment.Labels = SetHashToLabels(deployment.Labels, specHashTarget)
+					err = r.Update(ctx, deployment)
+					if err != nil {
+						log.Error(err, "Unable to create deployment for application", "deployment", deployment)
+						return ctrl.Result{}, err
+					}
+					log.V(1).Info("Updated Deployment for Application run", "deployment", deployment)
+				}
 			}
-			log.V(1).Info("created Deployment for Application run", "deployment", deployment)
 
 		case oamconureiov1alpha1.StatefulService:
 		case oamconureiov1alpha1.CronTask:

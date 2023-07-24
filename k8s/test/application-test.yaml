@@ -6,9 +6,9 @@ spec:
   components:
     - name: myservice
       type: service
-      replicas: 1
+      replicas: 3
       properties:
         image: "busybox"
         cmd:
           - sleep
-          - "1000"
+          - "3000"

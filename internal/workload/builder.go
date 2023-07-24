@@ -1,6 +1,7 @@
 package workload
 
 import (
+	"fmt"
 	oamconureiov1alpha1 "github.com/coffeenights/conure/api/oam/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -11,10 +12,14 @@ func ServiceWorkloadBuilder(application *oamconureiov1alpha1.Application, compon
 	deployment := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        component.Name,
-			Namespace:   application.Namespace,
+			Name:      component.Name,
+			Namespace: application.Namespace,
 			Annotations: map[string]string{
-				//TODO: Add annotations to identify the component that is controlling
+				"oam.conure.io/application.component": fmt.Sprintf("%s.%s", application.Name, component.Name),
+			},
+			Labels: map[string]string{
+				"oam.conure.io/application": application.Name,
+				"oam.conure.io/component":   component.Name,
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
