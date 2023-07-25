@@ -23,7 +23,7 @@ func ServiceWorkloadBuilder(application *oamconureiov1alpha1.Application, compon
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: int32Ptr(component.Replicas),
+			Replicas: &component.Replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"application": application.Name,
@@ -51,5 +51,3 @@ func ServiceWorkloadBuilder(application *oamconureiov1alpha1.Application, compon
 	}
 	return deployment, nil
 }
-
-func int32Ptr(i int32) *int32 { return &i }
