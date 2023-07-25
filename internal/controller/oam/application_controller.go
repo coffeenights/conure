@@ -101,7 +101,6 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 					logger.V(1).Info("Updated Deployment for Application run", "deployment", deployment)
 				}
 			}
-			logger.V(1).Info("created Deployment for Application run", "deployment", deployment)
 
 		case oamconureiov1alpha1.StatefulService:
 		case oamconureiov1alpha1.CronTask:
