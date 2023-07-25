@@ -44,10 +44,10 @@ type ApplicationReconciler struct {
 //+kubebuilder:rbac:groups=oam.conure.io,resources=applications/finalizers,verbs=update
 
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	var application oamconureiov1alpha1.Application
 	if err := r.Get(ctx, req.NamespacedName, &application); err != nil {
-		log.Error(err, "unable to fetch Application")
+		logger.Error(err, "unable to fetch Application")
 		// we'll ignore not-found errors, since they can't be fixed by an immediate
 		// requeue (we'll need to wait for a new notification), and we can get them
 		// on deleted requests.
@@ -65,7 +65,7 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 
 			deployment, err := workload.ServiceWorkloadBuilder(&application, &component, &componentProperties)
 			if err != nil {
-				log.Error(err, "unable to construct deployment from template")
+				logger.Error(err, "unable to construct deployment from template")
 				scheduledResult := ctrl.Result{RequeueAfter: time.Hour}
 				return scheduledResult, err
 			}
@@ -81,10 +81,10 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 				if apierrors.IsNotFound(err) {
 					err = r.Create(ctx, deployment)
 					if err != nil {
-						log.Error(err, "Unable to create deployment for application", "deployment", deployment)
+						logger.Error(err, "Unable to create deployment for application", "deployment", deployment)
 						return ctrl.Result{}, err
 					}
-					log.V(1).Info("Created Deployment for Application run", "deployment", deployment)
+					logger.V(1).Info("Created Deployment for Application run", "deployment", deployment)
 				} else {
 					return ctrl.Result{}, err
 				}
@@ -95,12 +95,13 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 					deployment.Labels = SetHashToLabels(deployment.Labels, specHashTarget)
 					err = r.Update(ctx, deployment)
 					if err != nil {
-						log.Error(err, "Unable to create deployment for application", "deployment", deployment)
+						logger.Error(err, "Unable to create deployment for application", "deployment", deployment)
 						return ctrl.Result{}, err
 					}
-					log.V(1).Info("Updated Deployment for Application run", "deployment", deployment)
+					logger.V(1).Info("Updated Deployment for Application run", "deployment", deployment)
 				}
 			}
+			logger.V(1).Info("created Deployment for Application run", "deployment", deployment)
 
 		case oamconureiov1alpha1.StatefulService:
 		case oamconureiov1alpha1.CronTask:
