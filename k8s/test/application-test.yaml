@@ -12,3 +12,11 @@ spec:
         cmd:
           - sleep
           - "3000"
+    - name: myservice2
+      type: service
+      replicas: 2
+      properties:
+        image: "busybox"
+        cmd:
+          - sleep
+          - "1000"
