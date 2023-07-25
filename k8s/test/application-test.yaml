@@ -1,0 +1,22 @@
+apiVersion: oam.conure.io/v1alpha1
+kind: Application
+metadata:
+  name: first-app
+spec:
+  components:
+    - name: myservice
+      type: service
+      replicas: 3
+      properties:
+        image: "busybox"
+        cmd:
+          - sleep
+          - "3000"
+    - name: myservice2
+      type: service
+      replicas: 2
+      properties:
+        image: "busybox"
+        cmd:
+          - sleep
+          - "1000"

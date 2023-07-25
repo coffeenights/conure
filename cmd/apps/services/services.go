@@ -77,6 +77,6 @@ func PostApplication(ctx context.Context, e *common.TopicEvent) (retry bool, err
 	if result.Error != nil {
 		log.Println(result.Error)
 	}
-	log.Printf("CREATE: %s", app)
+	// log.Printf("CREATE: %s", app)
 	return false, nil
 }

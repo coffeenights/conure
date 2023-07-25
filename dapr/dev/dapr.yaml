@@ -1,5 +1,6 @@
 version: 1
 common:
+  resourcesPath: ./components
   env:
     DB_URL: postgres://conure:test123@localhost:54320/conure
 apps:
@@ -19,4 +20,3 @@ apps:
     appDirPath: ./
     appProtocol: grpc
     daprGRPCPort: 50009
-    resourcesPath: ./components
