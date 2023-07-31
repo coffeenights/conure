@@ -6,7 +6,7 @@ spec:
   components:
     - name: myservice
       type: service
-      replicas: 3
+      replicas: 4
       properties:
         image: "busybox"
         cmd:

@@ -18,11 +18,7 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/coffeenights/conure/internal/workload"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,7 +26,6 @@ import (
 
 	oamconureiov1alpha1 "github.com/coffeenights/conure/api/oam/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
 // ApplicationReconciler reconciles an Application object
@@ -54,77 +49,15 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	for _, component := range application.Spec.Components {
-		switch component.Type {
-		case oamconureiov1alpha1.Service:
-			componentProperties := oamconureiov1alpha1.ServiceComponentProperties{}
-			err := json.Unmarshal(component.Properties.Raw, &componentProperties)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-
-			deployment, err := workload.ServiceWorkloadBuilder(&application, &component, &componentProperties)
-			if err != nil {
-				logger.Error(err, "unable to construct deployment from template")
-				scheduledResult := ctrl.Result{RequeueAfter: time.Hour}
-				return scheduledResult, err
-			}
-			err = ctrl.SetControllerReference(&application, deployment, r.Scheme)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-
-			// Check if the deployment exists
-			var existingDeployment appsv1.Deployment
-			objectKey := client.ObjectKeyFromObject(deployment)
-			if err = r.Get(ctx, objectKey, &existingDeployment); err != nil {
-				if apierrors.IsNotFound(err) {
-					err = r.Create(ctx, deployment)
-					if err != nil {
-						logger.Error(err, "Unable to create deployment for application", "deployment", deployment)
-						return ctrl.Result{}, err
-					}
-					logger.V(1).Info("Created Deployment for Application run", "deployment", deployment)
-				} else {
-					return ctrl.Result{}, err
-				}
-			} else {
-				specHashTarget := GetHashForSpec(deployment.Spec)
-				specHashActual := GetHashFromLabels(existingDeployment.Labels)
-				if specHashActual != specHashTarget {
-					deployment.Labels = SetHashToLabels(deployment.Labels, specHashTarget)
-					err = r.Update(ctx, deployment)
-					if err != nil {
-						logger.Error(err, "Unable to create deployment for application", "deployment", deployment)
-						return ctrl.Result{}, err
-					}
-					logger.V(1).Info("Updated Deployment for Application run", "deployment", deployment)
-				}
-			}
-
-		case oamconureiov1alpha1.StatefulService:
-		case oamconureiov1alpha1.CronTask:
-		case oamconureiov1alpha1.Worker:
-		}
-
+	handler, err := NewApplicationHandler(ctx, &application, r)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
-	//var deployments appsv1.DeploymentList
-	//if err := r.List(ctx, &deployments, client.InNamespace(req.Namespace), client.MatchingFields{".metadata.controller": req.Name}); err != nil {
-	//	log.Error(err, "unable to list child Jobs")
-	//	return ctrl.Result{}, err
-	//}
-
-	//deploymentExists := false
-	//var currentDeployment appsv1.Deployment
-	//// Check if the deployment already exists
-	//for _, currentDeployment = range deployments.Items {
-	//	if currentDeployment.ObjectMeta.Name == req.Name {
-	//		deploymentExists = true
-	//		break
-	//	}
-	//}
-
+	err = handler.ReconcileWorkloads()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 

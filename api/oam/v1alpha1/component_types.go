@@ -25,8 +25,10 @@ const (
 )
 
 type ServiceComponentProperties struct {
-	Image   string   `json:"image"`
-	Command []string `json:"cmd,omitempty"`
+	Image      string   `json:"image"`
+	Command    []string `json:"cmd,omitempty"`
+	Port       int32    `json:"port"`
+	TargetPort int32    `json:"targetPort"`
 }
 
 type Environment struct {
