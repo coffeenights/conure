@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	oamconureiov1alpha1 "github.com/coffeenights/conure/api/oam/v1alpha1"
 	"github.com/coffeenights/conure/internal/workload"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -33,7 +32,7 @@ func NewApplicationHandler(ctx context.Context, application *oamconureiov1alpha1
 		switch component.Type {
 		case oamconureiov1alpha1.Service:
 			componentProperties := oamconureiov1alpha1.ServiceComponentProperties{}
-			err := json.Unmarshal(component.Properties.Raw, &componentProperties)
+			err := componentProperties.Parse(component.Properties.Raw)
 			if err != nil {
 				return &handler, err
 			}

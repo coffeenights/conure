@@ -9,6 +9,8 @@ spec:
       replicas: 4
       properties:
         image: "busybox"
+        port: 8000
+        targetPort: 8000
         cmd:
           - sleep
           - "3000"
@@ -17,6 +19,8 @@ spec:
       replicas: 2
       properties:
         image: "busybox"
+        port: 8000
+        targetPort: 8000
         cmd:
           - sleep
           - "1000"
