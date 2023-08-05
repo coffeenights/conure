@@ -6,21 +6,15 @@ spec:
   components:
     - name: myservice
       type: service
-      replicas: 4
+      replicas: 2
       properties:
-        image: "busybox"
+        image: "nginx"
         port: 8000
-        targetPort: 8000
-        cmd:
-          - sleep
-          - "3000"
+        targetPort: 80
     - name: myservice2
       type: service
       replicas: 2
       properties:
-        image: "busybox"
-        port: 8000
-        targetPort: 8000
-        cmd:
-          - sleep
-          - "1000"
+        image: "nginx"
+        port: 8001
+        targetPort: 80
