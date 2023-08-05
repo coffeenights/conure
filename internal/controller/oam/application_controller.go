@@ -26,10 +26,7 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	logger := log.FromContext(ctx)
 	var application oamconureiov1alpha1.Application
 	if err := r.Get(ctx, req.NamespacedName, &application); err != nil {
-		logger.Error(err, "unable to fetch Application")
-		// we'll ignore not-found errors, since they can't be fixed by an immediate
-		// requeue (we'll need to wait for a new notification), and we can get them
-		// on deleted requests.
+		logger.Info("Application resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 

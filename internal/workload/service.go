@@ -60,14 +60,14 @@ func (s *ServiceWorkload) buildDeployment() *appsv1.Deployment {
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"application": s.Application.Name,
+					"oam.conure.io/application": s.Application.Name,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"application": s.Application.Name,
-						"component":   s.Component.Name,
+						"oam.conure.io/application": s.Application.Name,
+						"oam.conure.io/component":   s.Component.Name,
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -104,6 +104,10 @@ func (s *ServiceWorkload) buildService() *corev1.Service {
 					IntVal: s.Properties.TargetPort,
 				},
 			}},
+			Type: "LoadBalancer",
+			Selector: map[string]string{
+				"oam.conure.io/component": s.Component.Name,
+			},
 		},
 		Status: corev1.ServiceStatus{},
 	}
