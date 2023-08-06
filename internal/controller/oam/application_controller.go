@@ -1,28 +1,8 @@
-/*
-Copyright 2023.
-
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 package controller
 
 import (
 	"context"
-	"encoding/json"
-	"github.com/coffeenights/conure/internal/workload"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"time"
-
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,10 +10,9 @@ import (
 
 	oamconureiov1alpha1 "github.com/coffeenights/conure/api/oam/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
-// ApplicationReconciler reconciles a Application object
+// ApplicationReconciler reconciles an Application object
 type ApplicationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -44,87 +23,22 @@ type ApplicationReconciler struct {
 //+kubebuilder:rbac:groups=oam.conure.io,resources=applications/finalizers,verbs=update
 
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
+	logger := log.FromContext(ctx)
 	var application oamconureiov1alpha1.Application
 	if err := r.Get(ctx, req.NamespacedName, &application); err != nil {
-		log.Error(err, "unable to fetch Application")
-		// we'll ignore not-found errors, since they can't be fixed by an immediate
-		// requeue (we'll need to wait for a new notification), and we can get them
-		// on deleted requests.
+		logger.Info("Application resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	for _, component := range application.Spec.Components {
-		switch component.Type {
-		case oamconureiov1alpha1.Service:
-			componentProperties := oamconureiov1alpha1.ServiceComponentProperties{}
-			err := json.Unmarshal(component.Properties.Raw, &componentProperties)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-
-			deployment, err := workload.ServiceWorkloadBuilder(&application, &component, &componentProperties)
-			if err != nil {
-				log.Error(err, "unable to construct deployment from template")
-				scheduledResult := ctrl.Result{RequeueAfter: time.Hour}
-				return scheduledResult, err
-			}
-			err = ctrl.SetControllerReference(&application, deployment, r.Scheme)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-
-			// Check if the deployment exists
-			var existingDeployment appsv1.Deployment
-			objectKey := client.ObjectKeyFromObject(deployment)
-			if err = r.Get(ctx, objectKey, &existingDeployment); err != nil {
-				if apierrors.IsNotFound(err) {
-					err = r.Create(ctx, deployment)
-					if err != nil {
-						log.Error(err, "Unable to create deployment for application", "deployment", deployment)
-						return ctrl.Result{}, err
-					}
-					log.V(1).Info("Created Deployment for Application run", "deployment", deployment)
-				} else {
-					return ctrl.Result{}, err
-				}
-			} else {
-				specHashTarget := GetHashForSpec(deployment.Spec)
-				specHashActual := GetHashFromLabels(existingDeployment.Labels)
-				if specHashActual != specHashTarget {
-					deployment.Labels = SetHashToLabels(deployment.Labels, specHashTarget)
-					err = r.Update(ctx, deployment)
-					if err != nil {
-						log.Error(err, "Unable to create deployment for application", "deployment", deployment)
-						return ctrl.Result{}, err
-					}
-					log.V(1).Info("Updated Deployment for Application run", "deployment", deployment)
-				}
-			}
-
-		case oamconureiov1alpha1.StatefulService:
-		case oamconureiov1alpha1.CronTask:
-		case oamconureiov1alpha1.Worker:
-		}
-
+	handler, err := NewApplicationHandler(ctx, &application, r)
+	if err != nil {
+		return ctrl.Result{}, err
 	}
 
-	//var deployments appsv1.DeploymentList
-	//if err := r.List(ctx, &deployments, client.InNamespace(req.Namespace), client.MatchingFields{".metadata.controller": req.Name}); err != nil {
-	//	log.Error(err, "unable to list child Jobs")
-	//	return ctrl.Result{}, err
-	//}
-
-	//deploymentExists := false
-	//var currentDeployment appsv1.Deployment
-	//// Check if the deployment already exists
-	//for _, currentDeployment = range deployments.Items {
-	//	if currentDeployment.ObjectMeta.Name == req.Name {
-	//		deploymentExists = true
-	//		break
-	//	}
-	//}
-
+	err = handler.ReconcileWorkloads()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 

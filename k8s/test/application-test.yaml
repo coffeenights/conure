@@ -6,17 +6,29 @@ spec:
   components:
     - name: myservice
       type: service
-      replicas: 3
+      replicas: 2
       properties:
-        image: "busybox"
-        cmd:
-          - sleep
-          - "3000"
+        image: "nginx"
+        port: 8000
+        targetPort: 80
     - name: myservice2
       type: service
       replicas: 2
       properties:
-        image: "busybox"
-        cmd:
-          - sleep
-          - "1000"
+        image: "nginx"
+        port: 8001
+        targetPort: 80
+      traits:
+        - type: "gateway"
+          properties:
+            - rules:
+                - host: test.conure.io
+                  http:
+                    paths:
+                      - path: /
+                        pathType: Prefix
+                        backend:
+                          service:
+                            name: myservice2
+                            port:
+                              number: 8001
