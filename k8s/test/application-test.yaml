@@ -18,3 +18,17 @@ spec:
         image: "nginx"
         port: 8001
         targetPort: 80
+      traits:
+        - type: "gateway"
+          properties:
+            - rules:
+                - host: test.conure.io
+                  http:
+                    paths:
+                      - path: /
+                        pathType: Prefix
+                        backend:
+                          service:
+                            name: myservice2
+                            port:
+                              number: 8001

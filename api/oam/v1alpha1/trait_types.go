@@ -5,7 +5,7 @@ import "k8s.io/apimachinery/pkg/runtime"
 type TraitType string
 
 const (
-	LoadBalancer TraitType = "load_balancer"
+	Gateway TraitType = "gateway"
 )
 
 type Trait struct {
@@ -13,5 +13,6 @@ type Trait struct {
 	Properties *runtime.RawExtension `json:"properties"`
 }
 
-type LoadBalancerTraitProperties struct {
+type GatewayTraitProperties struct {
+	Rules []map[string]string `json:"rules"`
 }
