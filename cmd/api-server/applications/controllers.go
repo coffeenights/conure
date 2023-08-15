@@ -1,4 +1,4 @@
-package controllers
+package applications
 
 import (
 	"github.com/coffeenights/conure/pkg/client/oam_conure"
@@ -36,5 +36,16 @@ func ListApplications(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	c.JSON(http.StatusOK, applications)
+
+	var response []ApplicationResponse
+	for _, app := range applications.Items {
+		r := ApplicationResponse{
+			Name:          app.ObjectMeta.Name,
+			Description:   app.ObjectMeta.Namespace,
+			EnvironmentId: "",
+			AccountId:     0,
+		}
+		response = append(response, r)
+	}
+	c.JSON(http.StatusOK, response)
 }
