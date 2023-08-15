@@ -1,38 +1,40 @@
 package controllers
 
 import (
-	"context"
-	"fmt"
-	api_config "github.com/coffeenights/conure/cmd/api-server/config"
-	apps_pb "github.com/coffeenights/conure/cmd/api-server/protos/apps"
-	"github.com/coffeenights/conure/internal/config"
+	"github.com/coffeenights/conure/pkg/client/oam_conure"
 	"github.com/gin-gonic/gin"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/metadata"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/clientcmd"
 	"log"
 	"net/http"
-	"time"
 )
 
-func ListApplications(c *gin.Context) {
-	apiConfig := config.LoadConfig(api_config.Config{})
-	log.Println("Dialing ...")
-	conn, err := grpc.Dial(fmt.Sprintf("localhost:%s", apiConfig.DaprGrpcPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+func getClientset() (*oam_conure.Clientset, error) {
+	config, err := rest.InClusterConfig()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"Error": err})
+		kubeconfig :=
+			clientcmd.NewDefaultClientConfigLoadingRules().GetDefaultFilename()
+		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
+		if err != nil {
+			return nil, err
+		}
 	}
+	return oam_conure.NewForConfig(config)
+}
 
-	applicationClient := apps_pb.NewApplicationServiceClient(conn)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
-	defer cancel()
-	ctx = metadata.AppendToOutgoingContext(ctx, "dapr-app-id", "services-apps-api")
-	response, err := applicationClient.ListApplications(ctx, &apps_pb.ListApplicationsRequest{
-		AccountId: 0,
-	})
+func ListApplications(c *gin.Context) {
+	// apiConfig := config.LoadConfig(api_config.Config{})
+	log.Println("Dialing ...")
+
+	// creates the clientset
+	clientset, err := getClientset()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal(err.Error())
 	}
-	c.JSON(http.StatusOK, response)
-	defer conn.Close()
+	applications, err := clientset.OamV1alpha1().Applications("default").List(c, metav1.ListOptions{})
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	c.JSON(http.StatusOK, applications)
 }
