@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 	"log"
 	"net/http"
+	"strings"
 )
 
 func getClientset() (*oam_conure.Clientset, error) {
@@ -27,6 +28,9 @@ func ListApplications(c *gin.Context) {
 	// apiConfig := config.LoadConfig(api_config.Config{})
 	log.Println("Dialing ...")
 
+	// q is the query param that represents the search term
+	q := c.DefaultQuery("q", "")
+
 	// creates the clientset
 	clientset, err := getClientset()
 	if err != nil {
@@ -39,6 +43,12 @@ func ListApplications(c *gin.Context) {
 
 	var response []ApplicationResponse
 	for _, app := range applications.Items {
+
+		// Apply filtering based on the query parameter
+		if q != "" && !strings.Contains(app.ObjectMeta.Name, q) {
+			continue
+		}
+
 		r := ApplicationResponse{
 			Name:          app.ObjectMeta.Name,
 			Description:   app.ObjectMeta.Namespace,
