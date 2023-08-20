@@ -49,13 +49,31 @@ func ListApplications(c *gin.Context) {
 			continue
 		}
 
-		r := ApplicationResponse{
-			Name:          app.ObjectMeta.Name,
-			Description:   app.ObjectMeta.Namespace,
-			EnvironmentId: "",
-			AccountId:     0,
-		}
+		var r ApplicationResponse
+		r.FromClientsetToResponse(&app)
 		response = append(response, r)
 	}
+	c.JSON(http.StatusOK, response)
+}
+
+func DetailApplications(c *gin.Context) {
+	// apiConfig := config.LoadConfig(api_config.Config{})
+	log.Println("Dialing ...")
+
+	// q is the query param that represents the search term
+	applicationName := c.Param("applicationName")
+
+	// creates the clientset
+	clientset, err := getClientset()
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	application, err := clientset.OamV1alpha1().Applications("default").Get(c, applicationName, metav1.GetOptions{})
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+
+	var response ApplicationResponse
+	response.FromClientsetToResponse(application)
 	c.JSON(http.StatusOK, response)
 }
