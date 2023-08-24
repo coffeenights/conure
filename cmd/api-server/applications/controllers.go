@@ -1,19 +1,28 @@
 package applications
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	k8sV1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/coffeenights/conure/pkg/client/oam_conure"
 )
 
-func getClientset() (*oam_conure.Clientset, error) {
+type genericClientset struct {
+	Conure *oam_conure.Clientset
+	K8s    *kubernetes.Clientset
+}
+
+func getClientset() (*genericClientset, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		kubeconfig :=
@@ -23,7 +32,15 @@ func getClientset() (*oam_conure.Clientset, error) {
 			return nil, err
 		}
 	}
-	return oam_conure.NewForConfig(config)
+	k8s, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	conure, err := oam_conure.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return &genericClientset{Conure: conure, K8s: k8s}, nil
 }
 
 func ListApplications(c *gin.Context) {
@@ -38,7 +55,7 @@ func ListApplications(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	applications, err := clientset.OamV1alpha1().Applications("default").List(c, metav1.ListOptions{})
+	applications, err := clientset.Conure.OamV1alpha1().Applications("default").List(c, metav1.ListOptions{})
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -53,6 +70,22 @@ func ListApplications(c *gin.Context) {
 
 		var r ApplicationResponse
 		r.FromClientsetToResponse(&app)
+		labels := map[string]string{
+			"app.kubernetes.io/managed-by": "Conure",
+			"oam.conure.io/application":    app.Name,
+		}
+
+		deployments, err := getDeploymentByLabels(clientset.K8s, "default", labels)
+		if err != nil {
+			fmt.Printf("Error getting deployment: %v\n", err)
+		}
+
+		for _, deployment := range *deployments {
+			var c ServiceComponentResponse
+			c.FromClientsetToResponse(&deployment)
+			r.Components = append(r.Components, c)
+		}
+
 		response = append(response, r)
 	}
 	c.JSON(http.StatusOK, response)
@@ -70,12 +103,51 @@ func DetailApplications(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	application, err := clientset.OamV1alpha1().Applications("default").Get(c, applicationName, metav1.GetOptions{})
+	application, err := clientset.Conure.OamV1alpha1().Applications("default").Get(c, applicationName, metav1.GetOptions{})
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	var response ApplicationResponse
 	response.FromClientsetToResponse(application)
+
+	labels := map[string]string{
+		"app.kubernetes.io/managed-by": "Conure",
+		"oam.conure.io/application":    application.Name,
+	}
+	deployments, err := getDeploymentByLabels(clientset.K8s, "default", labels)
+	if err != nil {
+		fmt.Printf("Error getting deployment: %v\n", err)
+	}
+
+	for _, deployment := range *deployments {
+		var c ServiceComponentResponse
+		c.FromClientsetToResponse(&deployment)
+		response.Components = append(response.Components, c)
+	}
+
 	c.JSON(http.StatusOK, response)
+}
+
+func getDeploymentByLabels(clientset *kubernetes.Clientset, namespace string, labels map[string]string) (*[]k8sV1.Deployment, error) {
+	deploymentsClient := clientset.AppsV1().Deployments(namespace)
+	var labelSelector []string
+	for key, value := range labels {
+		labelSelector = append(labelSelector, fmt.Sprintf("%s=%s", key, value))
+	}
+
+	listOptions := metav1.ListOptions{
+		LabelSelector: strings.Join(labelSelector, ","),
+	}
+
+	deployments, err := deploymentsClient.List(context.TODO(), listOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(deployments.Items) == 0 {
+		return nil, fmt.Errorf("no deployment found with label selector: %s", labelSelector)
+	}
+
+	return &deployments.Items, nil
 }
