@@ -46,14 +46,17 @@ func (s *ServiceWorkload) buildDeployment() *appsv1.Deployment {
 	deployment := appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      s.Component.Name,
+			Name:      fmt.Sprintf("%s-%s", s.Application.Name, s.Component.Name),
 			Namespace: s.Application.Namespace,
 			Annotations: map[string]string{
 				"oam.conure.io/application.component": fmt.Sprintf("%s.%s", s.Application.Name, s.Component.Name),
 			},
 			Labels: map[string]string{
-				"oam.conure.io/application": s.Application.Name,
-				"oam.conure.io/component":   s.Component.Name,
+				"oam.conure.io/application":    s.Application.Name,
+				"oam.conure.io/component":      s.Component.Name,
+				"app.kubernetes.io/name":       s.Component.Name,
+				"app.kubernetes.io/part-of":    s.Application.Name,
+				"app.kubernetes.io/managed-by": "Conure",
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
@@ -66,8 +69,11 @@ func (s *ServiceWorkload) buildDeployment() *appsv1.Deployment {
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"oam.conure.io/application": s.Application.Name,
-						"oam.conure.io/component":   s.Component.Name,
+						"oam.conure.io/application":    s.Application.Name,
+						"oam.conure.io/component":      s.Component.Name,
+						"app.kubernetes.io/name":       s.Component.Name,
+						"app.kubernetes.io/part-of":    s.Application.Name,
+						"app.kubernetes.io/managed-by": "Conure",
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -93,8 +99,18 @@ func (s *ServiceWorkload) buildService() *corev1.Service {
 			Kind:       "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      s.Component.Name,
+			Name:      fmt.Sprintf("%s-%s", s.Application.Name, s.Component.Name),
 			Namespace: s.Application.Namespace,
+			Annotations: map[string]string{
+				"oam.conure.io/application.component": fmt.Sprintf("%s.%s", s.Application.Name, s.Component.Name),
+			},
+			Labels: map[string]string{
+				"oam.conure.io/application":    s.Application.Name,
+				"oam.conure.io/component":      s.Component.Name,
+				"app.kubernetes.io/name":       s.Component.Name,
+				"app.kubernetes.io/part-of":    s.Application.Name,
+				"app.kubernetes.io/managed-by": "Conure",
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{{
@@ -106,7 +122,8 @@ func (s *ServiceWorkload) buildService() *corev1.Service {
 			}},
 			Type: "LoadBalancer",
 			Selector: map[string]string{
-				"oam.conure.io/component": s.Component.Name,
+				"oam.conure.io/application": s.Application.Name,
+				"oam.conure.io/component":   s.Component.Name,
 			},
 		},
 		Status: corev1.ServiceStatus{},
