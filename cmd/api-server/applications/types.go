@@ -5,7 +5,7 @@ import (
 
 	"github.com/coffeenights/conure/api/oam/v1alpha1"
 	appsV1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
+	coreV1 "k8s.io/api/core/v1"
 )
 
 type ApplicationResponse struct {
@@ -35,7 +35,7 @@ type ServiceComponentResponse struct {
 	ExternalIPs    []string `json:"external_ips"`
 }
 
-func (r *ServiceComponentResponse) FromClientsetToResponse(deployment appsV1.Deployment, services []corev1.Service) {
+func (r *ServiceComponentResponse) FromClientsetToResponse(deployment appsV1.Deployment, services []coreV1.Service) {
 	var externalIPs []string
 
 	r.Name = deployment.ObjectMeta.Name
