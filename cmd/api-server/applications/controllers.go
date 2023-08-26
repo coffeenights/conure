@@ -9,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	k8sV1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -80,9 +81,19 @@ func ListApplications(c *gin.Context) {
 			fmt.Printf("Error getting deployment: %v\n", err)
 		}
 
-		for _, deployment := range *deployments {
+		for _, deployment := range deployments {
 			var c ServiceComponentResponse
-			c.FromClientsetToResponse(&deployment)
+			serviceLabels := map[string]string{
+				"app.kubernetes.io/managed-by": "Conure",
+				"oam.conure.io/application":    app.Name,
+				"oam.conure.io/component":      deployment.Labels["oam.conure.io/component"],
+			}
+
+			services, err := getServicesByLabels(clientset.K8s, "default", serviceLabels)
+			if err != nil {
+				fmt.Printf("Error getting services: %v\n", err)
+			}
+			c.FromClientsetToResponse(deployment, services)
 			r.Components = append(r.Components, c)
 		}
 
@@ -120,16 +131,16 @@ func DetailApplications(c *gin.Context) {
 		fmt.Printf("Error getting deployment: %v\n", err)
 	}
 
-	for _, deployment := range *deployments {
+	for _, deployment := range deployments {
 		var c ServiceComponentResponse
-		c.FromClientsetToResponse(&deployment)
+		c.FromClientsetToResponse(deployment, nil)
 		response.Components = append(response.Components, c)
 	}
 
 	c.JSON(http.StatusOK, response)
 }
 
-func getDeploymentByLabels(clientset *kubernetes.Clientset, namespace string, labels map[string]string) (*[]k8sV1.Deployment, error) {
+func getDeploymentByLabels(clientset *kubernetes.Clientset, namespace string, labels map[string]string) ([]k8sV1.Deployment, error) {
 	deploymentsClient := clientset.AppsV1().Deployments(namespace)
 	var labelSelector []string
 	for key, value := range labels {
@@ -149,5 +160,25 @@ func getDeploymentByLabels(clientset *kubernetes.Clientset, namespace string, la
 		return nil, fmt.Errorf("no deployment found with label selector: %s", labelSelector)
 	}
 
-	return &deployments.Items, nil
+	return deployments.Items, nil
+}
+
+func getServicesByLabels(clientset *kubernetes.Clientset, namespace string, labels map[string]string) ([]corev1.Service, error) {
+	servicesClient := clientset.CoreV1().Services(namespace)
+
+	var labelSelector []string
+	for key, value := range labels {
+		labelSelector = append(labelSelector, fmt.Sprintf("%s=%s", key, value))
+	}
+
+	listOptions := metav1.ListOptions{
+		LabelSelector: strings.Join(labelSelector, ","),
+	}
+
+	services, err := servicesClient.List(context.TODO(), listOptions)
+	if err != nil {
+		return nil, err
+	}
+
+	return services.Items, nil
 }
