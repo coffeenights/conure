@@ -96,6 +96,8 @@ func ListApplications(c *gin.Context) {
 			c.FromClientsetToResponse(deployment, services)
 			r.Components = append(r.Components, c)
 		}
+		r.TotalComponents = len(r.Components)
+		setAppStatus(&r)
 
 		response = append(response, r)
 	}
@@ -136,6 +138,8 @@ func DetailApplications(c *gin.Context) {
 		c.FromClientsetToResponse(deployment, nil)
 		response.Components = append(response.Components, c)
 	}
+	response.TotalComponents = len(response.Components)
+	setAppStatus(&response)
 
 	c.JSON(http.StatusOK, response)
 }
@@ -181,4 +185,15 @@ func getServicesByLabels(clientset *kubernetes.Clientset, namespace string, labe
 	}
 
 	return services.Items, nil
+}
+
+func setAppStatus(r *ApplicationResponse) {
+	// if any component is not ready, the entire app is marked as NotReady
+	r.Status = AppReady
+	for _, c := range r.Components {
+		if c.Status != r.Status {
+			r.Status = AppNotReady
+			break
+		}
+	}
 }
