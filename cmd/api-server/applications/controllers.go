@@ -46,7 +46,6 @@ func getClientset() (*genericClientset, error) {
 
 func ListApplications(c *gin.Context) {
 	// apiConfig := config.LoadConfig(api_config.Config{})
-	log.Println("Dialing ...")
 
 	// q is the query param that represents the search term
 	q := c.DefaultQuery("q", "")
@@ -106,7 +105,6 @@ func ListApplications(c *gin.Context) {
 
 func DetailApplications(c *gin.Context) {
 	// apiConfig := config.LoadConfig(api_config.Config{})
-	log.Println("Dialing ...")
 
 	// q is the query param that represents the search term
 	applicationName := c.Param("applicationName")
