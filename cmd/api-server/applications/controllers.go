@@ -15,6 +15,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"github.com/coffeenights/conure/api/oam/v1alpha1"
 	"github.com/coffeenights/conure/pkg/client/oam_conure"
 )
 
@@ -82,12 +83,7 @@ func ListApplications(c *gin.Context) {
 
 		for _, deployment := range deployments {
 			var c ServiceComponentResponse
-			serviceLabels := map[string]string{
-				"app.kubernetes.io/managed-by": "Conure",
-				"oam.conure.io/application":    app.Name,
-				"oam.conure.io/component":      deployment.Labels["oam.conure.io/component"],
-			}
-
+			serviceLabels := getServiceLabels(&app, deployment)
 			services, err := getServicesByLabels(clientset.K8s, "default", serviceLabels)
 			if err != nil {
 				fmt.Printf("Error getting services: %v\n", err)
@@ -132,14 +128,29 @@ func DetailApplications(c *gin.Context) {
 	}
 
 	for _, deployment := range deployments {
+		serviceLabels := getServiceLabels(application, deployment)
+		services, err := getServicesByLabels(clientset.K8s, "default", serviceLabels)
+		if err != nil {
+			fmt.Printf("Error getting services: %v\n", err)
+		}
+
 		var c ServiceComponentResponse
-		c.FromClientsetToResponse(deployment, nil)
+		c.FromClientsetToResponse(deployment, services)
 		response.Components = append(response.Components, c)
 	}
 	response.TotalComponents = len(response.Components)
 	setAppStatus(&response)
 
 	c.JSON(http.StatusOK, response)
+}
+
+func getServiceLabels(application *v1alpha1.Application, deployment k8sV1.Deployment) map[string]string {
+	serviceLabels := map[string]string{
+		"app.kubernetes.io/managed-by": "Conure",
+		"oam.conure.io/application":    application.Name,
+		"oam.conure.io/component":      deployment.Labels["oam.conure.io/component"],
+	}
+	return serviceLabels
 }
 
 func getDeploymentByLabels(clientset *kubernetes.Clientset, namespace string, labels map[string]string) ([]k8sV1.Deployment, error) {
