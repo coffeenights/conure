@@ -1,0 +1,20 @@
+apiVersion: oam.conure.io/v1alpha1
+kind: Application
+metadata:
+  name: second-app
+spec:
+  components:
+    - name: second-app-myservice
+      type: service
+      replicas: 1
+      properties:
+        image: "nginx"
+        port: 8000
+        targetPort: 80
+    - name: second-app-myservice2
+      type: service
+      replicas: 2
+      properties:
+        image: "nginx"
+        port: 8001
+        targetPort: 80
