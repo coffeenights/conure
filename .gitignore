@@ -21,3 +21,4 @@ bin/
 _data/
 __debug_bin
 .dapr/
+.DS_Store
