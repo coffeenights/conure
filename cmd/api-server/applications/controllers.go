@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	core_oam_dev_clientset "github.com/oam-dev/kubevela-core-api/pkg/generated/client/clientset/versioned"
 	k8sV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,6 +23,7 @@ import (
 type genericClientset struct {
 	Conure *oam_conure.Clientset
 	K8s    *kubernetes.Clientset
+	Vela   *core_oam_dev_clientset.Clientset
 }
 
 func getClientset() (*genericClientset, error) {
@@ -38,11 +40,17 @@ func getClientset() (*genericClientset, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	vela, err := core_oam_dev_clientset.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
 	conure, err := oam_conure.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
-	return &genericClientset{Conure: conure, K8s: k8s}, nil
+	return &genericClientset{Conure: conure, K8s: k8s, Vela: vela}, nil
 }
 
 func ListApplications(c *gin.Context) {
@@ -56,7 +64,7 @@ func ListApplications(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	applications, err := clientset.Conure.OamV1alpha1().Applications("default").List(c, metav1.ListOptions{})
+	applications, err := clientset.Vela.CoreV1beta1().Applications("default").List(c, metav1.ListOptions{})
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -70,27 +78,27 @@ func ListApplications(c *gin.Context) {
 		}
 
 		var r ApplicationResponse
-		r.FromClientsetToResponse(&app)
+		r.FromVelaClientsetToResponse(&app)
 		labels := map[string]string{
 			"app.kubernetes.io/managed-by": "Conure",
 			"oam.conure.io/application":    app.Name,
 		}
 
-		deployments, err := getDeploymentByLabels(clientset.K8s, "default", labels)
+		_, err := getDeploymentByLabels(clientset.K8s, "default", labels)
 		if err != nil {
 			fmt.Printf("Error getting deployment: %v\n", err)
 		}
 
-		for _, deployment := range deployments {
-			var c ServiceComponentResponse
-			serviceLabels := getServiceLabels(&app, deployment)
-			services, err := getServicesByLabels(clientset.K8s, "default", serviceLabels)
-			if err != nil {
-				fmt.Printf("Error getting services: %v\n", err)
-			}
-			c.FromClientsetToResponse(deployment, services)
-			r.Components = append(r.Components, c)
-		}
+		//for _, deployment := range deployments {
+		//	var c ServiceComponentResponse
+		//	serviceLabels := getServiceLabels(&app, deployment)
+		//	services, err := getServicesByLabels(clientset.K8s, "default", serviceLabels)
+		//	if err != nil {
+		//		fmt.Printf("Error getting services: %v\n", err)
+		//	}
+		//	c.FromClientsetToResponse(deployment, services)
+		//	r.Components = append(r.Components, c)
+		//}
 		r.TotalComponents = len(r.Components)
 		setAppStatus(&r)
 

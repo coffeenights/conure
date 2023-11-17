@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/coffeenights/conure/api/oam/v1alpha1"
+	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	appsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
 )
@@ -28,6 +29,15 @@ type ApplicationResponse struct {
 }
 
 func (r *ApplicationResponse) FromClientsetToResponse(item *v1alpha1.Application) {
+	r.ResourceID = string(item.ObjectMeta.UID)
+	r.Name = item.ObjectMeta.Name
+	r.Description = item.ObjectMeta.Namespace
+	r.EnvironmentId = ""
+	r.AccountId = 0
+	r.Created = item.ObjectMeta.CreationTimestamp.UTC()
+}
+
+func (r *ApplicationResponse) FromVelaClientsetToResponse(item *v1beta1.Application) {
 	r.ResourceID = string(item.ObjectMeta.UID)
 	r.Name = item.ObjectMeta.Name
 	r.Description = item.ObjectMeta.Namespace
