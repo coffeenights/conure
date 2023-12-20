@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	core_oam_dev_clientset "github.com/oam-dev/kubevela-core-api/pkg/generated/client/clientset/versioned"
+	coreOAMDevClientset "github.com/oam-dev/kubevela-core-api/pkg/generated/client/clientset/versioned"
 	k8sV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,14 +16,13 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/coffeenights/conure/api/oam/v1alpha1"
 	"github.com/coffeenights/conure/pkg/client/oam_conure"
 )
 
 type genericClientset struct {
 	Conure *oam_conure.Clientset
 	K8s    *kubernetes.Clientset
-	Vela   *core_oam_dev_clientset.Clientset
+	Vela   *coreOAMDevClientset.Clientset
 }
 
 func getClientset() (*genericClientset, error) {
@@ -41,7 +40,7 @@ func getClientset() (*genericClientset, error) {
 		return nil, err
 	}
 
-	vela, err := core_oam_dev_clientset.NewForConfig(config)
+	vela, err := coreOAMDevClientset.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +53,6 @@ func getClientset() (*genericClientset, error) {
 }
 
 func ListApplications(c *gin.Context) {
-	// apiConfig := config.LoadConfig(api_config.Config{})
-
 	// q is the query param that represents the search term
 	q := c.DefaultQuery("q", "")
 
@@ -64,6 +61,7 @@ func ListApplications(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
+
 	applications, err := clientset.Vela.CoreV1beta1().Applications("default").List(c, metav1.ListOptions{})
 	if err != nil {
 		log.Fatal(err.Error())
@@ -79,28 +77,30 @@ func ListApplications(c *gin.Context) {
 
 		var r ApplicationResponse
 		r.FromVelaClientsetToResponse(&app)
-		labels := map[string]string{
-			"app.kubernetes.io/managed-by": "Conure",
-			"oam.conure.io/application":    app.Name,
+
+		if err != nil {
+			log.Fatal(err.Error())
 		}
 
-		_, err := getDeploymentByLabels(clientset.K8s, "default", labels)
+		labels := map[string]string{
+			"app.oam.dev/name": app.Name,
+		}
+
+		components, err := getDeploymentByLabels(clientset.K8s, "default", labels)
 		if err != nil {
 			fmt.Printf("Error getting deployment: %v\n", err)
 		}
 
-		//for _, deployment := range deployments {
-		//	var c ServiceComponentResponse
-		//	serviceLabels := getServiceLabels(&app, deployment)
-		//	services, err := getServicesByLabels(clientset.K8s, "default", serviceLabels)
-		//	if err != nil {
-		//		fmt.Printf("Error getting services: %v\n", err)
-		//	}
-		//	c.FromClientsetToResponse(deployment, services)
-		//	r.Components = append(r.Components, c)
-		//}
+		for _, deployment := range components {
+			var c ServiceComponentResponse
+			services, err := getServicesByLabels(clientset.K8s, "default", labels)
+			if err != nil {
+				fmt.Printf("Error getting services: %v\n", err)
+			}
+			c.FromClientsetToResponse(deployment, services)
+			r.Components = append(r.Components, c)
+		}
 		r.TotalComponents = len(r.Components)
-		setAppStatus(&r)
 
 		response = append(response, r)
 	}
@@ -108,8 +108,6 @@ func ListApplications(c *gin.Context) {
 }
 
 func DetailApplications(c *gin.Context) {
-	// apiConfig := config.LoadConfig(api_config.Config{})
-
 	// q is the query param that represents the search term
 	applicationName := c.Param("applicationName")
 
@@ -118,17 +116,17 @@ func DetailApplications(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	application, err := clientset.Conure.OamV1alpha1().Applications("default").Get(c, applicationName, metav1.GetOptions{})
+
+	application, err := clientset.Vela.CoreV1beta1().Applications("default").Get(c, applicationName, metav1.GetOptions{})
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 
 	var response ApplicationResponse
-	response.FromClientsetToResponse(application)
+	response.FromVelaClientsetToResponse(application)
 
 	labels := map[string]string{
-		"app.kubernetes.io/managed-by": "Conure",
-		"oam.conure.io/application":    application.Name,
+		"app.oam.dev/name": application.Name,
 	}
 	deployments, err := getDeploymentByLabels(clientset.K8s, "default", labels)
 	if err != nil {
@@ -136,8 +134,7 @@ func DetailApplications(c *gin.Context) {
 	}
 
 	for _, deployment := range deployments {
-		serviceLabels := getServiceLabels(application, deployment)
-		services, err := getServicesByLabels(clientset.K8s, "default", serviceLabels)
+		services, err := getServicesByLabels(clientset.K8s, "default", labels)
 		if err != nil {
 			fmt.Printf("Error getting services: %v\n", err)
 		}
@@ -147,18 +144,8 @@ func DetailApplications(c *gin.Context) {
 		response.Components = append(response.Components, c)
 	}
 	response.TotalComponents = len(response.Components)
-	setAppStatus(&response)
 
 	c.JSON(http.StatusOK, response)
-}
-
-func getServiceLabels(application *v1alpha1.Application, deployment k8sV1.Deployment) map[string]string {
-	serviceLabels := map[string]string{
-		"app.kubernetes.io/managed-by": "Conure",
-		"oam.conure.io/application":    application.Name,
-		"oam.conure.io/component":      deployment.Labels["oam.conure.io/component"],
-	}
-	return serviceLabels
 }
 
 func getDeploymentByLabels(clientset *kubernetes.Clientset, namespace string, labels map[string]string) ([]k8sV1.Deployment, error) {
@@ -202,15 +189,4 @@ func getServicesByLabels(clientset *kubernetes.Clientset, namespace string, labe
 	}
 
 	return services.Items, nil
-}
-
-func setAppStatus(r *ApplicationResponse) {
-	// if any component is not ready, the entire app is marked as NotReady
-	r.Status = AppReady
-	for _, c := range r.Components {
-		if c.Status != r.Status {
-			r.Status = AppNotReady
-			break
-		}
-	}
 }
