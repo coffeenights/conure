@@ -153,3 +153,29 @@ func getServicesByLabels(clientset *kubernetes.Clientset, namespace string, labe
 
 	return services.Items, nil
 }
+
+func ListEnvironments(c *gin.Context) {
+	// creates the clientset
+	genericClientset, err := k8sUtil.GetClientset()
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	labelSelector := metav1.ListOptions{
+		LabelSelector: "usage.oam.dev/control-plane=env",
+	}
+	// get the k8s namespaces information
+	namespaces, err := genericClientset.K8s.CoreV1().Namespaces().List(c, labelSelector)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	// return the information to the client
+	c.JSON(200, gin.H{
+		"namespaces": namespaces,
+	})
+}
