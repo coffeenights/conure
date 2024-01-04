@@ -12,9 +12,9 @@ type MongoDB struct {
 	Client *mongo.Client
 }
 
-func ConnectToMongoDB() (*MongoDB, error) {
+func ConnectToMongoDB(Uri string) (*MongoDB, error) {
 	// Set client options
-	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+	clientOptions := options.Client().ApplyURI(Uri)
 	ctx := context.Background()
 	// Connect to MongoDB
 	client, err := mongo.Connect(ctx, clientOptions)
