@@ -6,7 +6,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
 )
 
@@ -14,62 +13,57 @@ type Organization struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty"`
 	Status    string             `bson:"status,omitempty"`
 	AccountId string             `bson:"accountId,omitempty"`
+	Name      string             `bson:"name,omitempty"`
 }
 
-func main() {
-	// Set client options
-	clientOptions := options.Client().ApplyURI("mongodb://localhost:27017")
+func (o *Organization) String() string {
+	return fmt.Sprintf("Organization: %s, %s", o.Status, o.AccountId)
+}
 
-	// Connect to MongoDB
-	client, err := mongo.Connect(context.TODO(), clientOptions)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// Check the connection
-	err = client.Ping(context.TODO(), nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println("Connected to MongoDB!")
-
+func (o *Organization) Create(client *mongo.Client) error {
 	collection := client.Database("test").Collection("organizations")
-
-	org := Organization{Status: "Active", AccountId: "12345"}
-
-	// Create
-	insertResult, err := collection.InsertOne(context.TODO(), org)
+	insertResult, err := collection.InsertOne(context.Background(), o)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Inserted a single document: ", insertResult.InsertedID)
+	log.Println("Inserted a single document: ", insertResult.InsertedID)
+	return nil
+}
 
-	// Read
-	var result Organization
-	err = collection.FindOne(context.TODO(), bson.M{"accountid": "12345"}).Decode(&result)
+func (o *Organization) GetById(client *mongo.Client, Id string) *Organization {
+	collection := client.Database("test").Collection("organizations")
+	err := collection.FindOne(context.Background(), bson.M{"accountid": Id}).Decode(o)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Found a single document: ", result)
+	log.Println("Found a single document: ", o)
+	return o
+}
 
-	// Update
-	filter := bson.D{{"accountid", "12345"}}
+func (o *Organization) Update(client *mongo.Client) error {
+	collection := client.Database("test").Collection("organizations")
+	filter := bson.D{{"accountid", o.AccountId}}
 	update := bson.D{
 		{"$set", bson.D{
-			{"status", "Inactive"},
+			{"status", o.Status},
+			{"accountId", o.AccountId},
 		}},
 	}
-	updateResult, err := collection.UpdateOne(context.TODO(), filter, update)
+	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Matched %v documents and updated %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
+	log.Printf("Matched %v documents and updated %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
+	return nil
+}
 
-	// Delete
-	deleteResult, err := collection.DeleteOne(context.TODO(), filter)
+func (o *Organization) Delete(client *mongo.Client) error {
+	collection := client.Database("test").Collection("organizations")
+	filter := bson.D{{"accountid", o.AccountId}}
+	deleteResult, err := collection.DeleteOne(context.Background(), filter)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Deleted %v documents in the organizations collection\n", deleteResult.DeletedCount)
+	log.Printf("Deleted %v documents in the organizations collection\n", deleteResult.DeletedCount)
+	return nil
 }
