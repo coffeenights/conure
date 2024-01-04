@@ -15,10 +15,9 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func ListApplications(c *gin.Context) {
+func (a *AppHandler) ListApplications(c *gin.Context) {
 	// q is the query param that represents the search term
 	q := c.DefaultQuery("q", "")
-
 	// creates the clientset
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
@@ -31,9 +30,7 @@ func ListApplications(c *gin.Context) {
 	}
 
 	var response []ApplicationResponse
-	for _, app := range applications.Items {
-
-		// Apply filtering based on the query parameter
+	for _, app := range applications.Items { // Apply filtering based on the query parameter
 		if q != "" && !strings.Contains(app.ObjectMeta.Name, q) {
 			continue
 		}
@@ -70,7 +67,7 @@ func ListApplications(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func DetailApplications(c *gin.Context) {
+func (a *AppHandler) DetailApplications(c *gin.Context) {
 	// q is the query param that represents the search term
 	applicationName := c.Param("applicationName")
 
@@ -152,30 +149,4 @@ func getServicesByLabels(clientset *kubernetes.Clientset, namespace string, labe
 	}
 
 	return services.Items, nil
-}
-
-func ListEnvironments(c *gin.Context) {
-	// creates the clientset
-	genericClientset, err := k8sUtil.GetClientset()
-	if err != nil {
-		c.JSON(500, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-	labelSelector := metav1.ListOptions{
-		LabelSelector: "usage.oam.dev/control-plane=env",
-	}
-	// get the k8s namespaces information
-	namespaces, err := genericClientset.K8s.CoreV1().Namespaces().List(c, labelSelector)
-	if err != nil {
-		c.JSON(500, gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-	// return the information to the client
-	c.JSON(200, gin.H{
-		"namespaces": namespaces,
-	})
 }
