@@ -35,8 +35,8 @@ services:
     depends_on:
       - api
     network_mode: "service:api"
-    networks:
-      - conure
+#    networks:
+#      - conure
 
   ############################
   # Apps Service GRPC api + Sidecar
@@ -69,8 +69,8 @@ services:
     depends_on:
       - services_apps_api
     network_mode: "service:services_apps_api"
-    networks:
-      - conure
+#    networks:
+#      - conure
 
   ############################
   # Apps Service Subscriber + Sidecar
@@ -108,8 +108,8 @@ services:
       - services_apps_subscriber
       - redis
     network_mode: "service:services_apps_subscriber"
-    networks:
-      - conure
+#    networks:
+#      - conure
 
   ############################
   # Users Service GRPC api + Sidecar
@@ -137,6 +137,15 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
+    networks:
+      - conure
+
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./_data_mongo:/data/db
     networks:
       - conure
 
