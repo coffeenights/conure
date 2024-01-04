@@ -4,12 +4,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func GenerateRoutes(relativePath string, r *gin.Engine) {
+func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *AppHandler) {
 	applications := r.Group(relativePath)
 	{
-		applications.GET("/", ListApplications)
-		applications.GET("/:applicationName/", DetailApplications)
-		applications.GET("/:applicationName/:componentName", DetailApplications)
-		applications.GET("/:applicationName/:componentName/:service", DetailApplications)
+		applications.GET("/", appHandler.ListApplications)
+		applications.GET("/:applicationName/", appHandler.DetailApplications)
+		applications.GET("/:applicationName/:componentName", appHandler.DetailApplications)
+		applications.GET("/:applicationName/:componentName/:service", appHandler.DetailApplications)
 	}
 }
