@@ -14,7 +14,7 @@ type AppHandler struct {
 
 func NewAppHandler() *AppHandler {
 	appConfig := config.LoadConfig(apiConfig.Config{})
-	mongo, err := database.ConnectToMongoDB(appConfig.MongoDBURI)
+	mongo, err := database.ConnectToMongoDB(appConfig.MongoDBURI, appConfig.MongoDBName)
 	if err != nil {
 		log.Fatal(err)
 	}

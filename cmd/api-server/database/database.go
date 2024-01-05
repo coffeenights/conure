@@ -2,7 +2,6 @@ package database
 
 import (
 	"context"
-	"fmt"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"log"
@@ -10,11 +9,12 @@ import (
 
 type MongoDB struct {
 	Client *mongo.Client
+	DBName string
 }
 
-func ConnectToMongoDB(Uri string) (*MongoDB, error) {
+func ConnectToMongoDB(uri string, dbName string) (*MongoDB, error) {
 	// Set client options
-	clientOptions := options.Client().ApplyURI(Uri)
+	clientOptions := options.Client().ApplyURI(uri)
 	ctx := context.Background()
 	// Connect to MongoDB
 	client, err := mongo.Connect(ctx, clientOptions)
@@ -28,6 +28,6 @@ func ConnectToMongoDB(Uri string) (*MongoDB, error) {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Connected to MongoDB!")
-	return &MongoDB{Client: client}, nil
+	log.Println("Connected to MongoDB!")
+	return &MongoDB{Client: client, DBName: dbName}, nil
 }
