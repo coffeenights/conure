@@ -6,6 +6,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func (a *AppHandler) GetOrganization(c *gin.Context) {
+
+}
+
 func (a *AppHandler) ListEnvironments(c *gin.Context) {
 	// creates the clientset
 	genericClientset, err := k8sUtils.GetClientset()
