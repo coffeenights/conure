@@ -32,21 +32,23 @@ func (o *Organization) String() string {
 	return fmt.Sprintf("Organization: %s, %s", o.Status, o.AccountId)
 }
 
-func (o *Organization) Create(mongo *database.MongoDB) error {
+func (o *Organization) Create(mongo *database.MongoDB) (string, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
 	o.CreatedAt = time.Now()
 	o.Status = OrgActive
 	insertResult, err := collection.InsertOne(context.Background(), o)
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
-	log.Println("Inserted a single document: ", insertResult.InsertedID)
-	return nil
+	oID := insertResult.InsertedID.(primitive.ObjectID)
+	log.Println("Inserted a single document: ", oID.Hex())
+	return oID.Hex(), nil
 }
 
 func (o *Organization) GetById(mongo *database.MongoDB, Id string) (*Organization, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
-	filter := bson.M{"accountId": Id, "status": bson.M{"$ne": OrgDeleted}}
+	oID, _ := primitive.ObjectIDFromHex(Id)
+	filter := bson.M{"_id": oID, "status": bson.M{"$ne": OrgDeleted}}
 	err := collection.FindOne(context.Background(), filter).Decode(o)
 	if err != nil {
 		return nil, err
