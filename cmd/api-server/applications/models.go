@@ -22,7 +22,7 @@ type Organization struct {
 type OrganizationStatus string
 
 const (
-	OrganizationCollection                    = "organizations"
+	OrganizationCollection string             = "organizations"
 	OrgActive              OrganizationStatus = "active"
 	OrgDeleted             OrganizationStatus = "deleted"
 	OrgDisabled            OrganizationStatus = "disabled"
