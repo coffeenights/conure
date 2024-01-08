@@ -8,6 +8,6 @@ import (
 func GenerateRouter() *gin.Engine {
 	router := gin.Default()
 	app := apps.NewAppHandler()
-	apps.GenerateRoutes("/applications", router, app)
+	apps.GenerateRoutes("/organizations", router, app)
 	return router
 }

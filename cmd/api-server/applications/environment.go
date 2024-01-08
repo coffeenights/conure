@@ -7,7 +7,16 @@ import (
 )
 
 func (a *AppHandler) GetOrganization(c *gin.Context) {
-
+	organizationID := c.Param("orgId")
+	org := Organization{}
+	_, err := org.GetById(a.MongoDB, organizationID)
+	if err != nil {
+		c.JSON(404, gin.H{})
+		return
+	}
+	response := OrganizationResponse{}
+	response.ParseModelToResponse(&org)
+	c.JSON(200, response)
 }
 
 func (a *AppHandler) ListEnvironments(c *gin.Context) {

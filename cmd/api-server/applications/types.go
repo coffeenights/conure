@@ -137,3 +137,19 @@ func extractMapFromRawExtension(data *runtime.RawExtension) (map[string]interfac
 	}
 	return result, err
 }
+
+type OrganizationResponse struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	AccountId string    `json:"account_id"`
+}
+
+func (r *OrganizationResponse) ParseModelToResponse(organization *Organization) {
+	r.ID = organization.ID.Hex()
+	r.Name = organization.Name
+	r.Status = string(organization.Status)
+	r.CreatedAt = organization.CreatedAt
+	r.AccountId = organization.AccountId
+}
