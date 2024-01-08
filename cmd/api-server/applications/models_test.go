@@ -11,7 +11,7 @@ func TestOrganization_Create(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountId: "12345", Name: "Test Organization"}
+	org := &Organization{Status: OrgActive, AccountID: "12345", Name: "Test Organization"}
 
 	_, err = org.Create(client)
 	if err != nil {
@@ -25,15 +25,15 @@ func TestOrganization_GetById(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountId: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: "12345"}
 	_, err = org.Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, _ := org.GetById(client, org.AccountId)
-	if got.AccountId != org.AccountId {
-		t.Errorf("Got %v, want %v", got.AccountId, org.AccountId)
+	got, _ := org.GetById(client, org.AccountID)
+	if got.AccountID != org.AccountID {
+		t.Errorf("Got %v, want %v", got.AccountID, org.AccountID)
 	}
 }
 
@@ -43,7 +43,7 @@ func TestOrganization_Update(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountId: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: "12345"}
 	_, err = org.Create(client)
 	if err != nil {
 		t.Fatal(err)
@@ -55,7 +55,7 @@ func TestOrganization_Update(t *testing.T) {
 		t.Errorf("Failed to update organization: %v", err)
 	}
 
-	got, err := org.GetById(client, org.AccountId)
+	got, err := org.GetById(client, org.AccountID)
 	if got.Status != OrgDisabled {
 		t.Errorf("Got %v, want %v", got.Status, OrgDisabled)
 	}
@@ -67,7 +67,7 @@ func TestOrganization_Delete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountId: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: "12345"}
 	_, err = org.Create(client)
 	if err != nil {
 		t.Fatal(err)
@@ -90,7 +90,7 @@ func TestOrganization_SoftDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountId: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: "12345"}
 	_, err = org.Create(client)
 	if err != nil {
 		t.Fatal(err)

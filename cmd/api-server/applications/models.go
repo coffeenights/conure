@@ -13,7 +13,7 @@ import (
 type Organization struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty"`
 	Status    OrganizationStatus `bson:"status"`
-	AccountId string             `bson:"accountId"`
+	AccountID string             `bson:"accountId"`
 	Name      string             `bson:"name"`
 	CreatedAt time.Time          `bson:"createdAt"`
 	DeletedAt time.Time          `bson:"deletedAt,omitempty"`
@@ -29,7 +29,7 @@ const (
 )
 
 func (o *Organization) String() string {
-	return fmt.Sprintf("Organization: %s, %s", o.Status, o.AccountId)
+	return fmt.Sprintf("Organization: %s, %s", o.Status, o.AccountID)
 }
 
 func (o *Organization) Create(mongo *database.MongoDB) (string, error) {
@@ -59,11 +59,11 @@ func (o *Organization) GetById(mongo *database.MongoDB, Id string) (*Organizatio
 
 func (o *Organization) Update(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
-	filter := bson.M{"accountId": o.AccountId, "status": bson.M{"$ne": OrgDeleted}}
+	filter := bson.M{"accountId": o.AccountID, "status": bson.M{"$ne": OrgDeleted}}
 	update := bson.D{
 		{"$set", bson.D{
 			{"status", o.Status},
-			{"accountId", o.AccountId},
+			{"accountId", o.AccountID},
 			{"name", o.Name},
 		}},
 	}
@@ -77,7 +77,7 @@ func (o *Organization) Update(mongo *database.MongoDB) error {
 
 func (o *Organization) Delete(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
-	filter := bson.D{{"accountId", o.AccountId}}
+	filter := bson.D{{"accountId", o.AccountID}}
 	deleteResult, err := collection.DeleteOne(context.Background(), filter)
 	if err != nil {
 		log.Fatal(err)
@@ -88,7 +88,7 @@ func (o *Organization) Delete(mongo *database.MongoDB) error {
 
 func (o *Organization) SoftDelete(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
-	filter := bson.D{{"accountId", o.AccountId}}
+	filter := bson.D{{"accountId", o.AccountID}}
 	update := bson.D{
 		{"$set", bson.D{
 			{"status", OrgDeleted},
