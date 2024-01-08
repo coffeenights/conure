@@ -7,11 +7,32 @@ import (
 )
 
 func (a *AppHandler) GetOrganization(c *gin.Context) {
-	organizationID := c.Param("orgId")
+	organizationID := c.Param("organizationId")
 	org := Organization{}
 	_, err := org.GetById(a.MongoDB, organizationID)
 	if err != nil {
 		c.JSON(404, gin.H{})
+		return
+	}
+	response := OrganizationResponse{}
+	response.ParseModelToResponse(&org)
+	c.JSON(200, response)
+}
+
+func (a *AppHandler) CreateOrganization(c *gin.Context) {
+	org := Organization{}
+	err := c.BindJSON(&org)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	_, err = org.Create(a.MongoDB)
+	if err != nil {
+		c.JSON(500, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 	response := OrganizationResponse{}
