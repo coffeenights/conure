@@ -26,12 +26,12 @@ func TestOrganization_GetById(t *testing.T) {
 	}
 
 	org := &Organization{Status: OrgActive, AccountID: "12345"}
-	_, err = org.Create(client)
+	id, err := org.Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, _ := org.GetById(client, org.AccountID)
+	got, _ := org.GetById(client, id)
 	if got.AccountID != org.AccountID {
 		t.Errorf("Got %v, want %v", got.AccountID, org.AccountID)
 	}
@@ -44,7 +44,7 @@ func TestOrganization_Update(t *testing.T) {
 	}
 
 	org := &Organization{Status: OrgActive, AccountID: "12345"}
-	_, err = org.Create(client)
+	id, err := org.Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,7 +55,7 @@ func TestOrganization_Update(t *testing.T) {
 		t.Errorf("Failed to update organization: %v", err)
 	}
 
-	got, err := org.GetById(client, org.AccountID)
+	got, err := org.GetById(client, id)
 	if got.Status != OrgDisabled {
 		t.Errorf("Got %v, want %v", got.Status, OrgDisabled)
 	}
