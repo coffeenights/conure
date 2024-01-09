@@ -3,6 +3,7 @@ package applications
 import (
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/gin-gonic/gin"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
 )
@@ -40,6 +41,44 @@ func (a *AppHandler) CreateOrganization(c *gin.Context) {
 	response := OrganizationResponse{}
 	response.ParseModelToResponse(org)
 	c.JSON(http.StatusCreated, response)
+}
+
+func (a *AppHandler) CreateEnvironment(c *gin.Context) {
+	request := CreateEnvironmentRequest{}
+	err := c.BindJSON(&request)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// creates the clientset
+	genericClientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	options := metav1.CreateOptions{}
+	namespace := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: request.OrganizationID + "-" + request.ApplicationID + "-" + request.Name,
+			Labels: map[string]string{
+				"conure.io/applicatoin-id":  request.ApplicationID,
+				"conure.io/organization-id": request.OrganizationID,
+			},
+		},
+	}
+	_, err = genericClientset.K8s.CoreV1().Namespaces().Create(c, &namespace, options)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{})
 }
 
 func (a *AppHandler) ListEnvironments(c *gin.Context) {

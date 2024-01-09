@@ -9,9 +9,9 @@ func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *AppHandler) 
 	{
 		applications.POST("/", appHandler.CreateOrganization)
 		applications.GET("/:organizationId", appHandler.GetOrganization)
-
-		applications.GET("/:organizationId/:applicationName/:environmentId", appHandler.DetailApplications)
-		applications.GET("/:organizationId/:applicationName/:environmentId/:componentName", appHandler.DetailApplications)
-		applications.GET("/:organizationId/:applicationName/:environmentId/:componentName/:service", appHandler.DetailApplications)
+		applications.POST("/:organizationId/:applicationName/e/", appHandler.CreateEnvironment)
+		applications.GET("/:organizationId/:applicationName/e/:environmentId", appHandler.CreateEnvironment)
+		applications.GET("/:organizationId/:applicationName/e/:environmentId/:componentName", appHandler.DetailApplications)
+		applications.GET("/:organizationId/:applicationName/e/:environmentId/:componentName/:service", appHandler.DetailApplications)
 	}
 }

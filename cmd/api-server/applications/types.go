@@ -165,3 +165,9 @@ func (r *OrganizationResponse) ParseModelToResponse(organization *Organization) 
 	r.CreatedAt = organization.CreatedAt
 	r.AccountID = organization.AccountID
 }
+
+type CreateEnvironmentRequest struct {
+	Name           string `json:"name" validate:"required,regexp=^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"`
+	ApplicationID  string `json:"application_id" validate:"required"`
+	OrganizationID string `json:"organization_id" validate:"required"`
+}

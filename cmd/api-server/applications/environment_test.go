@@ -3,6 +3,7 @@ package applications
 import (
 	"bytes"
 	"encoding/json"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -63,6 +64,30 @@ func TestCreateOrganization(t *testing.T) {
 	_, err = org.GetById(app.MongoDB, response.ID)
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+func TestCreateEnvironment(t *testing.T) {
+	router, _ := setupRouter()
+	createRequest := &CreateEnvironmentRequest{
+		Name:           "staging",
+		ApplicationID:  primitive.NewObjectID().Hex(),
+		OrganizationID: "6599082303bedbfeb7243ada",
+	}
+	jsonData, err := json.Marshal(createRequest)
+	if err != nil {
+		log.Fatal(err)
+	}
+	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, request)
+	// Assert
+	if resp.Code != http.StatusCreated {
+		t.Errorf("Expected response code 201, got: %v", resp.Code)
 	}
 }
 
