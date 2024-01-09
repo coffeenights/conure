@@ -40,9 +40,9 @@ func (o *Organization) Create(mongo *database.MongoDB) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	oID := insertResult.InsertedID.(primitive.ObjectID)
-	log.Println("Inserted a single document: ", oID.Hex())
-	return oID.Hex(), nil
+	o.ID = insertResult.InsertedID.(primitive.ObjectID)
+	log.Println("Inserted a single document: ", o.ID.Hex())
+	return o.ID.Hex(), nil
 }
 
 func (o *Organization) GetById(mongo *database.MongoDB, Id string) (*Organization, error) {
@@ -59,7 +59,7 @@ func (o *Organization) GetById(mongo *database.MongoDB, Id string) (*Organizatio
 
 func (o *Organization) Update(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
-	filter := bson.M{"accountId": o.AccountID, "status": bson.M{"$ne": OrgDeleted}}
+	filter := bson.M{"_id": o.ID, "status": bson.M{"$ne": OrgDeleted}}
 	update := bson.D{
 		{"$set", bson.D{
 			{"status", o.Status},
@@ -77,7 +77,7 @@ func (o *Organization) Update(mongo *database.MongoDB) error {
 
 func (o *Organization) Delete(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
-	filter := bson.D{{"accountId", o.AccountID}}
+	filter := bson.D{{"_id", o.ID}}
 	deleteResult, err := collection.DeleteOne(context.Background(), filter)
 	if err != nil {
 		log.Fatal(err)
@@ -88,7 +88,7 @@ func (o *Organization) Delete(mongo *database.MongoDB) error {
 
 func (o *Organization) SoftDelete(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
-	filter := bson.D{{"accountId", o.AccountID}}
+	filter := bson.D{{"_id", o.ID}}
 	update := bson.D{
 		{"$set", bson.D{
 			{"status", OrgDeleted},
