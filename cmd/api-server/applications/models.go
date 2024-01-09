@@ -102,6 +102,3 @@ func (o *Organization) SoftDelete(mongo *database.MongoDB) error {
 	log.Printf("Matched %v documents and deleted %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
 	return nil
 }
-
-type Environment struct {
-}
