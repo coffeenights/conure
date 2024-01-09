@@ -21,11 +21,11 @@ type Organization struct {
 
 type OrganizationStatus string
 
+const OrganizationCollection string = "organizations"
 const (
-	OrganizationCollection string             = "organizations"
-	OrgActive              OrganizationStatus = "active"
-	OrgDeleted             OrganizationStatus = "deleted"
-	OrgDisabled            OrganizationStatus = "disabled"
+	OrgActive   OrganizationStatus = "active"
+	OrgDeleted  OrganizationStatus = "deleted"
+	OrgDisabled OrganizationStatus = "disabled"
 )
 
 func (o *Organization) String() string {
@@ -101,4 +101,7 @@ func (o *Organization) SoftDelete(mongo *database.MongoDB) error {
 	}
 	log.Printf("Matched %v documents and deleted %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
 	return nil
+}
+
+type Environment struct {
 }
