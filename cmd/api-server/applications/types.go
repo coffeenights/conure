@@ -143,6 +143,13 @@ type CreateOrganizationRequest struct {
 	AccountID string `json:"account_id" validate:"required"`
 }
 
+func (r *CreateOrganizationRequest) ParseRequestToModel() *Organization {
+	return &Organization{
+		Name:      r.Name,
+		AccountID: r.AccountID,
+	}
+}
+
 type OrganizationResponse struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`

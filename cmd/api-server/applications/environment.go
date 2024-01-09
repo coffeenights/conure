@@ -21,14 +21,15 @@ func (a *AppHandler) GetOrganization(c *gin.Context) {
 }
 
 func (a *AppHandler) CreateOrganization(c *gin.Context) {
-	org := Organization{}
-	err := c.BindJSON(&org)
+	request := CreateOrganizationRequest{}
+	err := c.BindJSON(&request)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
+		c.JSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
+	org := request.ParseRequestToModel()
 	_, err = org.Create(a.MongoDB)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -37,7 +38,7 @@ func (a *AppHandler) CreateOrganization(c *gin.Context) {
 		return
 	}
 	response := OrganizationResponse{}
-	response.ParseModelToResponse(&org)
+	response.ParseModelToResponse(org)
 	c.JSON(http.StatusCreated, response)
 }
 

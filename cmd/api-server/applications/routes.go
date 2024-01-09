@@ -7,8 +7,9 @@ import (
 func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *AppHandler) {
 	applications := r.Group(relativePath)
 	{
-		applications.GET("/:organizationId", appHandler.GetOrganization)
 		applications.POST("/", appHandler.CreateOrganization)
+		applications.GET("/:organizationId", appHandler.GetOrganization)
+
 		applications.GET("/:organizationId/:applicationName/:environmentId", appHandler.DetailApplications)
 		applications.GET("/:organizationId/:applicationName/:environmentId/:componentName", appHandler.DetailApplications)
 		applications.GET("/:organizationId/:applicationName/:environmentId/:componentName/:service", appHandler.DetailApplications)

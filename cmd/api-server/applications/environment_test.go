@@ -1,6 +1,9 @@
 package applications
 
 import (
+	"bytes"
+	"encoding/json"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -29,29 +32,40 @@ func TestGetOrganization(t *testing.T) {
 	}
 }
 
-//func TestCreateOrganization(t *testing.T) {
-//	// Setup
-//	gin.SetMode(gin.TestMode)
-//	router := gin.Default()
-//	router.POST("/organizations", CreateOrganization)
-//
-//	// Prepare request body
-//	org := Organization{
-//		// Fill in fields as needed
-//	}
-//	body, _ := json.Marshal(org)
-//	req, _ := http.NewRequest("POST", "/organizations", bytes.NewBuffer(body))
-//	req.Header.Set("Content-Type", "application/json")
-//
-//	// Execute
-//	resp := httptest.NewRecorder()
-//	router.ServeHTTP(resp, req)
-//
-//	// Assert
-//	if resp.Code != 200 {
-//		t.Errorf("Expected response code 200, got: %v", resp.Code)
-//	}
-//}
+func TestCreateOrganization(t *testing.T) {
+	router, app := setupRouter()
+
+	createRequest := &CreateOrganizationRequest{
+		Name:      "POST Test Organization",
+		AccountID: "333455",
+	}
+	jsonData, err := json.Marshal(createRequest)
+	if err != nil {
+		log.Fatal(err)
+	}
+	request, err := http.NewRequest("POST", "/organizations/", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, request)
+	// Assert
+	if resp.Code != http.StatusCreated {
+		t.Errorf("Expected response code 201, got: %v", resp.Code)
+	}
+	org := Organization{}
+	response := OrganizationResponse{}
+	err = json.Unmarshal(resp.Body.Bytes(), &response)
+	if err != nil {
+		log.Fatal(err)
+	}
+	_, err = org.GetById(app.MongoDB, response.ID)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 //
 //func TestListEnvironments(t *testing.T) {
 //	// Setup
