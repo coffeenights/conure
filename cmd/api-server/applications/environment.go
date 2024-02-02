@@ -11,7 +11,7 @@ import (
 )
 
 func (a *AppHandler) GetOrganization(c *gin.Context) {
-	organizationID := c.Param("organizationId")
+	organizationID := c.Param("organizationID")
 	org := Organization{}
 	_, err := org.GetById(a.MongoDB, organizationID)
 	if err != nil {
