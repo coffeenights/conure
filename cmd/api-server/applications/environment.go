@@ -5,7 +5,9 @@ import (
 	"github.com/gin-gonic/gin"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"log"
 	"net/http"
+	"strings"
 )
 
 func (a *AppHandler) GetOrganization(c *gin.Context) {
@@ -91,7 +93,7 @@ func (a *AppHandler) ListEnvironments(c *gin.Context) {
 		return
 	}
 	labelSelector := metav1.ListOptions{
-		LabelSelector: "usage.oam.dev/control-plane=env",
+		LabelSelector: "conure.io/applicatoin-id=" + c.Param("applicationID") + ",conure.io/organization-id=" + c.Param("organizationID"),
 	}
 	// get the k8s namespaces information
 	namespaces, err := genericClientset.K8s.CoreV1().Namespaces().List(c, labelSelector)
@@ -101,8 +103,21 @@ func (a *AppHandler) ListEnvironments(c *gin.Context) {
 		})
 		return
 	}
+	environments := EnvironmentListResponse{}
+
+	for i := range namespaces.Items {
+		ns := namespaces.Items[i].ObjectMeta.Name
+		nsParts := strings.Split(ns, "-")
+		if len(nsParts) < 3 {
+			log.Printf("namespace %s does not have the correct format", ns)
+			continue
+		}
+		environmentNameParts := nsParts[2:]
+		environmentName := strings.Join(environmentNameParts, "-")
+		environments.Environments = append(environments.Environments, EnvironmentResponse{
+			Name: environmentName,
+		})
+	}
 	// return the information to the client
-	c.JSON(http.StatusOK, gin.H{
-		"namespaces": namespaces,
-	})
+	c.JSON(http.StatusOK, environments)
 }
