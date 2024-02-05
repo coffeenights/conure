@@ -82,3 +82,40 @@ func TestListEnvironments(t *testing.T) {
 		t.Errorf("Expected environment to be staging-test, got: %v", response.Environments[0].Name)
 	}
 }
+
+func TestDeleteEnvironment(t *testing.T) {
+	router, _ := setupRouter()
+	// Create a test environment
+	createRequest := &CreateEnvironmentRequest{
+		Name:           "staging-test",
+		ApplicationID:  primitive.NewObjectID().Hex(),
+		OrganizationID: "6599082303bedbfeb7243ada",
+	}
+	jsonData, err := json.Marshal(createRequest)
+	if err != nil {
+		log.Fatal(err)
+	}
+	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Fatal(err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, request)
+	// Assert
+	if resp.Code != http.StatusCreated {
+		t.Errorf("Expected response code 201, got: %v", resp.Code)
+	}
+
+	// Delete environment
+	request, err = http.NewRequest("DELETE", "/organizations/"+createRequest.OrganizationID+"/"+createRequest.ApplicationID+"/e/"+createRequest.Name, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, request)
+	// Assert
+	if resp.Code != http.StatusOK {
+		t.Errorf("Expected response code 200, got: %v", resp.Code)
+	}
+}

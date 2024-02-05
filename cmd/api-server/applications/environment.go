@@ -86,3 +86,24 @@ func (a *AppHandler) ListEnvironments(c *gin.Context) {
 	// return the information to the client
 	c.JSON(http.StatusOK, environments)
 }
+
+func (a *AppHandler) DeleteEnvironment(c *gin.Context) {
+	// creates the clientset
+	genericClientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	namespace := c.Param("organizationID") + "-" + c.Param("applicationID") + "-" + c.Param("environmentID")
+	// get the k8s namespaces information
+	err = genericClientset.K8s.CoreV1().Namespaces().Delete(c, namespace, metav1.DeleteOptions{})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{})
+}
