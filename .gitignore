@@ -19,6 +19,7 @@ bin/
 .idea/
 .code/
 _data/
+_data_mongo/
 __debug_bin
 .dapr/
 .DS_Store

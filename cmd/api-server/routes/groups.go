@@ -1,12 +1,13 @@
 package routes
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/applications"
+	apps "github.com/coffeenights/conure/cmd/api-server/applications"
 	"github.com/gin-gonic/gin"
 )
 
 func GenerateRouter() *gin.Engine {
 	router := gin.Default()
-	applications.GenerateRoutes("/applications", router)
+	app := apps.NewAppHandler()
+	apps.GenerateRoutes("/organizations", router, app)
 	return router
 }

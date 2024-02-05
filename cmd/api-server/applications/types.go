@@ -137,3 +137,45 @@ func extractMapFromRawExtension(data *runtime.RawExtension) (map[string]interfac
 	}
 	return result, err
 }
+
+type CreateOrganizationRequest struct {
+	Name      string `json:"name" validate:"required"`
+	AccountID string `json:"account_id" validate:"required"`
+}
+
+func (r *CreateOrganizationRequest) ParseRequestToModel() *Organization {
+	return &Organization{
+		Name:      r.Name,
+		AccountID: r.AccountID,
+	}
+}
+
+type OrganizationResponse struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	AccountID string    `json:"account_id"`
+}
+
+func (r *OrganizationResponse) ParseModelToResponse(organization *Organization) {
+	r.ID = organization.ID.Hex()
+	r.Name = organization.Name
+	r.Status = string(organization.Status)
+	r.CreatedAt = organization.CreatedAt
+	r.AccountID = organization.AccountID
+}
+
+type CreateEnvironmentRequest struct {
+	Name           string `json:"name" validate:"required,regexp=^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"`
+	ApplicationID  string `json:"application_id" validate:"required"`
+	OrganizationID string `json:"organization_id" validate:"required"`
+}
+
+type EnvironmentListResponse struct {
+	Environments []EnvironmentResponse `json:"environments"`
+}
+
+type EnvironmentResponse struct {
+	Name string `json:"name"`
+}

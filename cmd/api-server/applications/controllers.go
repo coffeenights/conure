@@ -7,57 +7,19 @@ import (
 	"net/http"
 	"strings"
 
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/gin-gonic/gin"
-	coreOAMDevClientset "github.com/oam-dev/kubevela-core-api/pkg/generated/client/clientset/versioned"
 	k8sV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-
-	"github.com/coffeenights/conure/pkg/client/oam_conure"
 )
 
-type genericClientset struct {
-	Conure *oam_conure.Clientset
-	K8s    *kubernetes.Clientset
-	Vela   *coreOAMDevClientset.Clientset
-}
-
-func getClientset() (*genericClientset, error) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		kubeconfig :=
-			clientcmd.NewDefaultClientConfigLoadingRules().GetDefaultFilename()
-		config, err = clientcmd.BuildConfigFromFlags("", kubeconfig)
-		if err != nil {
-			return nil, err
-		}
-	}
-	k8s, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	vela, err := coreOAMDevClientset.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	conure, err := oam_conure.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-	return &genericClientset{Conure: conure, K8s: k8s, Vela: vela}, nil
-}
-
-func ListApplications(c *gin.Context) {
+func (a *AppHandler) ListApplications(c *gin.Context) {
 	// q is the query param that represents the search term
 	q := c.DefaultQuery("q", "")
-
 	// creates the clientset
-	clientset, err := getClientset()
+	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Fatal(err.Error())
 	}
@@ -68,9 +30,7 @@ func ListApplications(c *gin.Context) {
 	}
 
 	var response []ApplicationResponse
-	for _, app := range applications.Items {
-
-		// Apply filtering based on the query parameter
+	for _, app := range applications.Items { // Apply filtering based on the query parameter
 		if q != "" && !strings.Contains(app.ObjectMeta.Name, q) {
 			continue
 		}
@@ -107,12 +67,12 @@ func ListApplications(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func DetailApplications(c *gin.Context) {
+func (a *AppHandler) DetailApplications(c *gin.Context) {
 	// q is the query param that represents the search term
 	applicationName := c.Param("applicationName")
 
 	// creates the clientset
-	clientset, err := getClientset()
+	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Fatal(err.Error())
 	}
