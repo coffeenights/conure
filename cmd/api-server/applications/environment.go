@@ -33,7 +33,7 @@ func (a *AppHandler) CreateEnvironment(c *gin.Context) {
 		ObjectMeta: metav1.ObjectMeta{
 			Name: request.OrganizationID + "-" + request.ApplicationID + "-" + request.Name,
 			Labels: map[string]string{
-				"conure.io/applicatoin-id":  request.ApplicationID,
+				"conure.io/application-id":  request.ApplicationID,
 				"conure.io/organization-id": request.OrganizationID,
 			},
 		},
@@ -58,7 +58,7 @@ func (a *AppHandler) ListEnvironments(c *gin.Context) {
 		return
 	}
 	labelSelector := metav1.ListOptions{
-		LabelSelector: "conure.io/applicatoin-id=" + c.Param("applicationID") + ",conure.io/organization-id=" + c.Param("organizationID"),
+		LabelSelector: "conure.io/application-id=" + c.Param("applicationID") + ",conure.io/organization-id=" + c.Param("organizationID"),
 	}
 	// get the k8s namespaces information
 	namespaces, err := genericClientset.K8s.CoreV1().Namespaces().List(c, labelSelector)
