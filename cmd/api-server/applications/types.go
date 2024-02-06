@@ -171,3 +171,11 @@ type CreateEnvironmentRequest struct {
 	ApplicationID  string `json:"application_id" validate:"required"`
 	OrganizationID string `json:"organization_id" validate:"required"`
 }
+
+type EnvironmentListResponse struct {
+	Environments []EnvironmentResponse `json:"environments"`
+}
+
+type EnvironmentResponse struct {
+	Name string `json:"name"`
+}

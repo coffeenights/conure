@@ -8,10 +8,13 @@ func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *AppHandler) 
 	applications := r.Group(relativePath)
 	{
 		applications.POST("/", appHandler.CreateOrganization)
-		applications.GET("/:organizationId", appHandler.GetOrganization)
-		applications.POST("/:organizationId/:applicationName/e/", appHandler.CreateEnvironment)
-		applications.GET("/:organizationId/:applicationName/e/:environmentId", appHandler.CreateEnvironment)
-		applications.GET("/:organizationId/:applicationName/e/:environmentId/:componentName", appHandler.DetailApplications)
-		applications.GET("/:organizationId/:applicationName/e/:environmentId/:componentName/:service", appHandler.DetailApplications)
+		applications.GET("/:organizationID", appHandler.GetOrganization)
+		applications.POST("/:organizationID/:applicationID/e/", appHandler.CreateEnvironment)
+		applications.GET("/:organizationID/:applicationID/e/", appHandler.ListEnvironments)
+		applications.DELETE("/:organizationID/:applicationID/e/:environmentID", appHandler.DeleteEnvironment)
+
+		applications.GET("/:organizationID/:applicationID/c/", appHandler.CreateEnvironment)
+		applications.GET("/:organizationID/:applicationID/c/:componentName", appHandler.CreateEnvironment)
+		applications.GET("/:organizationID/:applicationID/e/:environmentID/:componentName", appHandler.DetailApplications)
 	}
 }
