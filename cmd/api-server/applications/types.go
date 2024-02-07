@@ -6,7 +6,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"time"
 
-	"github.com/coffeenights/conure/api/oam/v1alpha1"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	appsV1 "k8s.io/api/apps/v1"
 	coreV1 "k8s.io/api/core/v1"
@@ -20,34 +19,27 @@ const (
 )
 
 type ApplicationResponse struct {
-	ResourceID      string                     `json:"resource_id"`
-	Name            string                     `json:"name"`
-	Description     string                     `json:"description"`
-	EnvironmentId   string                     `json:"environment_id"`
-	AccountId       uint64                     `json:"account_id"`
-	TotalComponents int                        `json:"total_components"`
-	Components      []ServiceComponentResponse `json:"components"`
-	Status          AppStatus                  `json:"status"`
-	Created         time.Time                  `json:"created"`
-}
-
-func (r *ApplicationResponse) FromClientsetToResponse(item *v1alpha1.Application) {
-	r.ResourceID = string(item.ObjectMeta.UID)
-	r.Name = item.ObjectMeta.Name
-	r.Description = item.ObjectMeta.Namespace
-	r.EnvironmentId = ""
-	r.AccountId = 0
-	r.Created = item.ObjectMeta.CreationTimestamp.UTC()
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	Environment     string    `json:"environment"`
+	CreatedBy       string    `json:"created_by"`
+	AccountID       string    `json:"account_id"`
+	TotalComponents int       `json:"total_components"`
+	Status          AppStatus `json:"status"`
+	Created         time.Time `json:"created"`
+	Revision        int64     `json:"revision"`
 }
 
 func (r *ApplicationResponse) FromVelaClientsetToResponse(item *v1beta1.Application) {
-	r.ResourceID = string(item.ObjectMeta.UID)
 	r.Name = item.ObjectMeta.Name
-	r.Description = item.ObjectMeta.Namespace
-	r.EnvironmentId = ""
-	r.AccountId = 0
+	r.Description = item.ObjectMeta.Annotations["conure.io/description"]
+	r.Environment = item.ObjectMeta.Labels["conure.io/environment"]
+	r.CreatedBy = item.ObjectMeta.Labels["conure.io/created-by"]
+	r.AccountID = item.ObjectMeta.Labels["conure.io/account-id"]
 	r.Created = item.ObjectMeta.CreationTimestamp.UTC()
 	r.Status = AppStatus(item.Status.Phase)
+	r.Revision = item.Status.LatestRevision.Revision
+	r.TotalComponents = len(item.Spec.Components)
 }
 
 type ServiceComponentResponse struct {

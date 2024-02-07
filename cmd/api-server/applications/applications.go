@@ -21,12 +21,23 @@ func (a *AppHandler) ListApplications(c *gin.Context) {
 	// creates the clientset
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Printf("Error getting clientset: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
 
-	applications, err := clientset.Vela.CoreV1beta1().Applications("default").List(c, metav1.ListOptions{})
+	listOptions := metav1.ListOptions{
+		LabelSelector: "conure.io/organization-id=" + c.Param("organizationID") + ",conure.io/main=true",
+	}
+	applications, err := clientset.Vela.CoreV1beta1().Applications("").List(c, listOptions)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Printf("Error getting applications: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
 	}
 
 	var response []ApplicationResponse
@@ -39,28 +50,12 @@ func (a *AppHandler) ListApplications(c *gin.Context) {
 		r.FromVelaClientsetToResponse(&app)
 
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Printf("Error getting application: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
 		}
-
-		labels := map[string]string{
-			"app.oam.dev/name": app.Name,
-		}
-
-		components, err := getDeploymentByLabels(clientset.K8s, "default", labels)
-		if err != nil {
-			fmt.Printf("Error getting deployment: %v\n", err)
-		}
-
-		for _, deployment := range components {
-			var c ServiceComponentResponse
-			services, err := getServicesByLabels(clientset.K8s, "default", labels)
-			if err != nil {
-				fmt.Printf("Error getting services: %v\n", err)
-			}
-			c.FromClientsetToResponse(deployment, services)
-			r.Components = append(r.Components, c)
-		}
-		r.TotalComponents = len(r.Components)
 
 		response = append(response, r)
 	}
@@ -101,9 +96,9 @@ func (a *AppHandler) DetailApplications(c *gin.Context) {
 
 		var c ServiceComponentResponse
 		c.FromClientsetToResponse(deployment, services)
-		response.Components = append(response.Components, c)
+		//response.Components = append(response.Components, c)
 	}
-	response.TotalComponents = len(response.Components)
+	//response.TotalComponents = len(response.Components)
 
 	c.JSON(http.StatusOK, response)
 }
