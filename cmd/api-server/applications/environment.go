@@ -96,7 +96,7 @@ func (a *AppHandler) DeleteEnvironment(c *gin.Context) {
 		})
 		return
 	}
-	namespace := c.Param("organizationID") + "-" + c.Param("applicationID") + "-" + c.Param("environmentID")
+	namespace := c.Param("organizationID") + "-" + c.Param("applicationID") + "-" + c.Param("environment")
 	// get the k8s namespaces information
 	err = genericClientset.K8s.CoreV1().Namespaces().Delete(c, namespace, metav1.DeleteOptions{})
 	if err != nil {
