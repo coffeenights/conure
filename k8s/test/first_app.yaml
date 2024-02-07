@@ -1,0 +1,65 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: first-app
+  labels:
+    conure.io/application-id: "65c084eaff5e41522cc80f99"
+    conure.io/organization-id: "6599082303bedbfeb7243ada"
+    conure.io/namespace: "6599082303bedbfeb7243ada-65c084eaff5e41522cc80f99-staging"
+    conure.io/environment: "staging"
+    conure.io/main: "true"
+    conure.io/created-by: "6599082303bedbfeb7243ada"
+    conure.io/account-id: "6599082303bedbfeb7243ada"
+  annotations:
+    conure.io/description: "First App"
+spec:
+  components:
+    - name: backend-service
+      type: webservice
+      properties:
+        image: "coffeenights/django:latest"
+        cmd: ["python", "manage.py", "runserver", "0.0.0.0:8090"]
+        port: 8090
+        workdir: /app
+        imagePullPolicy: "Always"
+      traits:
+        - type: expose
+          properties:
+            type: "LoadBalancer"
+            annotations:
+              service: "backend"
+            port:
+              - 8090
+    - name: redis-cache
+      type: raw
+      properties:
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: redis
+        spec:
+          containers:
+            - name: redis
+              image: "redis:latest"
+              ports:
+                - containerPort: 6379
+    - name: postgres-database
+      type: raw
+      properties:
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: postgres
+        spec:
+          containers:
+            - name: postgres
+              image: "postgres:latest"
+              ports:
+                - containerPort: 5432
+              env:
+                - name: POSTGRES_USER
+                  value: user
+                - name: POSTGRES_PASSWORD
+                  value: password
+                - name: POSTGRES_DB
+                  value: dbname
