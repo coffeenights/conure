@@ -19,6 +19,7 @@ const (
 )
 
 type ApplicationResponse struct {
+	ID              string    `json:"id"`
 	Name            string    `json:"name"`
 	Description     string    `json:"description"`
 	Environment     string    `json:"environment"`
@@ -32,6 +33,7 @@ type ApplicationResponse struct {
 
 func (r *ApplicationResponse) FromVelaClientsetToResponse(item *v1beta1.Application) {
 	r.Name = item.ObjectMeta.Name
+	r.ID = item.ObjectMeta.Labels["conure.io/application-id"]
 	r.Description = item.ObjectMeta.Annotations["conure.io/description"]
 	r.Environment = item.ObjectMeta.Labels["conure.io/environment"]
 	r.CreatedBy = item.ObjectMeta.Labels["conure.io/created-by"]
@@ -75,14 +77,6 @@ func (r *ServiceComponentResponse) FromClientsetToResponse(deployment appsV1.Dep
 
 func (r *ServiceComponentResponse) FromVelaClientsetToResponse(deployment common.ApplicationComponent) {
 	r.Name = deployment.Name
-
-	//deployment.Properties.
-	/*{"cmd":["python","manage.py","runserver","0.0.0.0:8090"], "image":"coffeenights/django:latest",
-	"imagePullPolicy":"Always","port":8090,"workdir":"/app"}*/
-	/*{"apiVersion":"v1","kind":"Pod","metadata":{"name":"postgres"},
-	"spec":{"containers":[{"env":[{"name":"POSTGRES_USER","value":"user"},{"name":"POSTGRES_PASSWORD",
-	"value":"password"},{"name":"POSTGRES_DB","value":"dbname"}],"image":"postgres:latest","name":"postgres",
-	"ports":[{"containerPort":5432}]}]}}*/
 	propertiesData, err := extractMapFromRawExtension(deployment.Properties)
 	if err != nil {
 		panic(err)
@@ -115,6 +109,21 @@ func (r *ServiceComponentResponse) FromVelaClientsetToResponse(deployment common
 			r.ContainerPort = int32(traitsData["port"].([]interface{})[0].(float64))
 		}
 	}
+}
+
+type ServiceComponentShortResponse struct {
+	Name string `json:"name"`
+	Type string `json:"type"`
+}
+
+func (r *ServiceComponentShortResponse) FromClientsetToResponse(component common.ApplicationComponent) {
+	r.Name = component.Name
+	r.Type = component.Type
+}
+
+type ServiceComponentListResponse struct {
+	Application ApplicationResponse             `json:"application"`
+	Components  []ServiceComponentShortResponse `json:"components"`
 }
 
 func extractMapFromRawExtension(data *runtime.RawExtension) (map[string]interface{}, error) {
