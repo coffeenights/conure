@@ -2,7 +2,6 @@ package auth
 
 import (
 	"context"
-	"log"
 	"regexp"
 	"time"
 
@@ -16,12 +15,12 @@ const UserCollection string = "users"
 
 type User struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty"`
-	Email       string
-	Password    string
-	IsActive    bool
-	LastLoginAt *time.Time
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	Email       string             `bson:"email"`
+	Password    string             `bson:"password"`
+	IsActive    bool               `bson:"isActive"`
+	LastLoginAt *time.Time         `bson:"lastLoginAt,omitempty"`
+	CreatedAt   time.Time          `bson:"createdAt"`
+	UpdatedAt   time.Time          `bson:"updatedAt"`
 }
 
 func (u *User) Create(mongo *database.MongoDB) error {
@@ -42,7 +41,6 @@ func (u *User) Create(mongo *database.MongoDB) error {
 		return err
 	}
 	u.ID = insertResult.InsertedID.(primitive.ObjectID)
-	log.Println("Inserted a single document: ", u.ID.Hex())
 	return nil
 }
 
@@ -54,7 +52,6 @@ func (u *User) GetById(mongo *database.MongoDB, id string) error {
 	if err != nil {
 		return err
 	}
-	log.Println("Found a single document: ", u)
 	return nil
 }
 
@@ -65,7 +62,6 @@ func (u *User) GetByEmail(mongo *database.MongoDB, email string) error {
 	if err != nil {
 		return err
 	}
-	log.Println("Found a single document: ", u)
 	return nil
 }
 
