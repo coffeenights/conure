@@ -31,13 +31,12 @@ type Argon struct {
 	hash        []byte
 }
 
-type UserData struct {
-	Id    string `json:"id"`
+type JWTData struct {
 	Email string `json:"email"`
 }
 
 type JWTClaims struct {
-	Data UserData `json:"data"`
+	Data JWTData `json:"data"`
 	jwt.StandardClaims
 }
 
@@ -138,11 +137,12 @@ func GenerateRandomPassword(i int) string {
 	return string(randomString)
 }
 
-func GenerateToken(ttl time.Duration, payload map[string]string, secretJWTKey string) (string, error) {
+func GenerateToken(ttl time.Duration, payload JWTData, secretJWTKey string) (string, error) {
 	now := time.Now().UTC()
 
 	claims := JWTClaims{}
-	claims.Subject = payload["sub"]
+	claims.Data = payload
+	claims.Subject = payload.Email
 	claims.ExpiresAt = now.Add(ttl).Unix()
 	claims.IssuedAt = now.Unix()
 	claims.NotBefore = now.Unix()
