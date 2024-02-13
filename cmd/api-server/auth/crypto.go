@@ -5,6 +5,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"math/big"
 	"strings"
 	"time"
 
@@ -124,6 +125,17 @@ func GenerateRandomBytes(n uint32) ([]byte, error) {
 	}
 
 	return b, nil
+}
+
+func GenerateRandomPassword(i int) string {
+	chars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890-*+&_%$#@!."
+	maxChars := int64(len(chars))
+	randomString := make([]byte, i)
+	for i := range randomString {
+		randomInt, _ := rand.Int(rand.Reader, big.NewInt(maxChars))
+		randomString[i] = chars[randomInt.Int64()]
+	}
+	return string(randomString)
 }
 
 func GenerateToken(ttl time.Duration, payload map[string]string, secretJWTKey string) (string, error) {
