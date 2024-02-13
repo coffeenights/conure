@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"strconv"
 
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 )
@@ -11,14 +12,40 @@ import (
 func LoadConfig(config apiConfig.Config) *apiConfig.Config {
 	v := reflect.ValueOf(&config).Elem()
 	t := reflect.TypeOf(&config).Elem()
+
 	for i := 0; i < v.NumField(); i++ {
 		field := t.Field(i)
-		envName, _ := field.Tag.Lookup("env")
+		envName, ok := field.Tag.Lookup("env")
+		if !ok {
+			continue // Skip fields without an 'env' tag
+		}
+
 		env, exist := os.LookupEnv(envName)
 		if !exist {
-			log.Fatalf("Environment variable not found: %s", envName)
+			log.Fatalf("environment variable not found: %s", envName)
 		}
-		v.Field(i).SetString(env)
+
+		// Handle different field types appropriately
+		switch v.Field(i).Kind() {
+		case reflect.String:
+			v.Field(i).SetString(env)
+		case reflect.Int, reflect.Int64:
+			intValue, err := strconv.ParseInt(env, 10, 64)
+			if err != nil {
+				log.Fatalf("failed to parse int64 for %s: %v", envName, err)
+			}
+			v.Field(i).SetInt(intValue)
+		case reflect.Bool:
+			boolValue, err := strconv.ParseBool(env)
+			if err != nil {
+				log.Fatalf("failed to parse bool for %s: %v", envName, err)
+			}
+			v.Field(i).SetBool(boolValue)
+		default:
+			// Optionally, handle unsupported field types or return an error
+			log.Fatalf("unsupported field type %s for field %s", v.Field(i).Type(), field.Name)
+		}
 	}
+
 	return &config
 }
