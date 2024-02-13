@@ -14,8 +14,5 @@ func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *AppHandler) 
 		applications.DELETE("/:organizationID/:applicationID/e/:environment", appHandler.DeleteEnvironment)
 		applications.GET("/:organizationID/:applicationID/e/:environment/c/", appHandler.ListComponents)
 		applications.GET("/:organizationID/:applicationID/e/:environment/c/:componentName", appHandler.DetailComponent)
-
-		applications.GET("/:organizationID/:applicationID/c/", appHandler.CreateEnvironment)
-		applications.GET("/:organizationID/:applicationID/e/:environment/:componentName", appHandler.DetailApplications)
 	}
 }
