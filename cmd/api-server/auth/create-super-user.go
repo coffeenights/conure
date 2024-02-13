@@ -15,7 +15,7 @@ func CreateSuperUser() {
 		panic(err)
 	}
 
-	email := "admin@conure.com"
+	email := "admin@conure.io"
 	password := GenerateRandomPassword(10)
 	hashedPassword, err := GenerateFromPassword(password)
 	if err != nil {
