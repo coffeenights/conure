@@ -162,7 +162,7 @@ func ValidateToken(tokenString string, JWTSecretKey string) (JWTClaims, error) {
 	claims := JWTClaims{}
 
 	// Parse the JWT string and store the result in `claims`.
-	tokenObject, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+	tokenObject, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
 		return []byte(JWTSecretKey), nil
 	})
 	if err != nil {
