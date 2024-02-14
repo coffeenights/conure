@@ -95,8 +95,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	user.Password = hashedPassword
-	err = user.UpdatePassword(h.MongoDB)
+	err = user.UpdatePassword(h.MongoDB, hashedPassword)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

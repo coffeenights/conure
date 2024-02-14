@@ -66,9 +66,10 @@ func (u *User) GetByEmail(mongo *database.MongoDB, email string) error {
 	return nil
 }
 
-func (u *User) UpdatePassword(mongo *database.MongoDB) error {
+func (u *User) UpdatePassword(mongo *database.MongoDB, password string) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(UserCollection)
 	u.UpdatedAt = time.Now()
+	u.Password = password
 	filter := bson.M{"_id": u.ID}
 	update := bson.M{"$set": bson.M{"password": u.Password, "updatedAt": u.UpdatedAt}}
 	_, err := collection.UpdateOne(context.Background(), filter, update)
