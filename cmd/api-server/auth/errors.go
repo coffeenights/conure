@@ -9,4 +9,5 @@ var (
 	ErrCryptoHandler      = errors.New("crypto handler error")
 	ErrTokenNotValid      = errors.New("token is not valid")
 	ErrEmailPasswordValid = errors.New("invalid email or password")
+	ErrUnauthorized       = errors.New("unauthorized")
 )
