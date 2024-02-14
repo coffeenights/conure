@@ -8,6 +8,6 @@ func GenerateRoutes(relativePath string, r *gin.Engine, handler *Handler) {
 	paths := r.Group(relativePath)
 	{
 		paths.POST("/login", handler.Login)
-		paths.GET("/me", handler.Me)
+		paths.GET("/me", CheckCurrentUser(handler.Config, handler.MongoDB), handler.Me)
 	}
 }
