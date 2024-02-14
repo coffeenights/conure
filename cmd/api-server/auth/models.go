@@ -66,6 +66,18 @@ func (u *User) GetByEmail(mongo *database.MongoDB, email string) error {
 	return nil
 }
 
+func (u *User) UpdatePassword(mongo *database.MongoDB) error {
+	collection := mongo.Client.Database(mongo.DBName).Collection(UserCollection)
+	u.UpdatedAt = time.Now()
+	filter := bson.M{"_id": u.ID}
+	update := bson.M{"$set": bson.M{"password": u.Password, "updatedAt": u.UpdatedAt}}
+	_, err := collection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func ValidateEmail(email string) error {
 	pattern := `^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`
 	if matched, err := regexp.MatchString(pattern, email); err != nil {
@@ -76,7 +88,7 @@ func ValidateEmail(email string) error {
 	return nil
 }
 
-func ValidatePassword(password string) error {
+func ValidatePasswords(password string, password2 string) error {
 	if len(password) < 8 {
 		return ErrPasswordNotValid
 	}
@@ -90,5 +102,8 @@ func ValidatePassword(password string) error {
 		return ErrPasswordNotValid
 	}
 
+	if password != password2 {
+		return ErrPasswordsNotMatch
+	}
 	return nil
 }
