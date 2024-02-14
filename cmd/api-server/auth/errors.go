@@ -10,4 +10,6 @@ var (
 	ErrTokenNotValid      = errors.New("token is not valid")
 	ErrEmailPasswordValid = errors.New("invalid email or password")
 	ErrUnauthorized       = errors.New("unauthorized")
+	ErrPasswordsNotMatch  = errors.New("password and password confirmation do not match")
+	ErrOldPasswordInvalid = errors.New("old password is invalid")
 )
