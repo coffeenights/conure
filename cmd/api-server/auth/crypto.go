@@ -32,7 +32,8 @@ type Argon struct {
 }
 
 type JWTData struct {
-	Email string `json:"email"`
+	Email  string `json:"email"`
+	Client string `json:"client"`
 }
 
 type JWTClaims struct {

@@ -48,7 +48,8 @@ func (h *Handler) Login(c *gin.Context) {
 	}
 
 	payload := JWTData{
-		Email: user.Email,
+		Email:  user.Email,
+		Client: user.Client,
 	}
 	ttl := time.Duration(h.Config.JWTExpiration) * time.Hour * 24
 	jwt, err := GenerateToken(ttl, payload, h.Config.JWTSecret)
