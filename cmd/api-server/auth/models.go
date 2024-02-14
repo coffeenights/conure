@@ -14,13 +14,14 @@ import (
 const UserCollection string = "users"
 
 type User struct {
-	ID          primitive.ObjectID `bson:"_id,omitempty"`
-	Email       string             `bson:"email"`
-	Password    string             `bson:"password"`
-	IsActive    bool               `bson:"isActive"`
-	LastLoginAt *time.Time         `bson:"lastLoginAt,omitempty"`
-	CreatedAt   time.Time          `bson:"createdAt"`
-	UpdatedAt   time.Time          `bson:"updatedAt"`
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Email       string             `bson:"email" json:"email"`
+	Password    string             `bson:"password" json:"-"`
+	IsActive    bool               `bson:"isActive" json:"is_active"`
+	LastLoginAt *time.Time         `bson:"lastLoginAt,omitempty" json:"last_login_at"`
+	CreatedAt   time.Time          `bson:"createdAt" json:"created_at"`
+	UpdatedAt   time.Time          `bson:"updatedAt" json:"updated_at"`
+	Client      string             `bson:"client,omitempty" json:"client"`
 }
 
 func (u *User) Create(mongo *database.MongoDB) error {

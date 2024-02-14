@@ -15,6 +15,7 @@ func CreateSuperUser() {
 		panic(err)
 	}
 
+	client := "conure"
 	email := "admin@conure.io"
 	password := GenerateRandomPassword(10)
 	hashedPassword, err := GenerateFromPassword(password)
@@ -25,6 +26,7 @@ func CreateSuperUser() {
 	user := User{
 		Email:    email,
 		Password: hashedPassword,
+		Client:   client,
 	}
 	err = user.Create(mongo)
 	if err != nil {
