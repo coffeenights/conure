@@ -124,6 +124,7 @@ func (a *AppHandler) StatusComponent(c *gin.Context) {
 	namespace := c.Param("organizationID") + "-" + c.Param("applicationID") + "-" + c.Param("environment")
 	labels := map[string]string{
 		"conure.io/application-id": c.Param("applicationID"),
+		"app.oam.dev/component":    c.Param("componentName"),
 	}
 	deployments, err := getDeploymentByLabels(clientset.K8s, namespace, labels)
 	if err != nil {
@@ -138,5 +139,7 @@ func (a *AppHandler) StatusComponent(c *gin.Context) {
 		return
 	}
 	deployment := deployments[0]
-	_ = deployment
+	var statusResponse ServiceComponentStatusResponse
+	statusResponse.FromClientsetToResponse(deployment)
+	c.JSON(http.StatusOK, statusResponse)
 }

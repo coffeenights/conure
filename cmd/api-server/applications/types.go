@@ -3,6 +3,7 @@ package applications
 import (
 	"encoding/json"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
+	k8sV1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"log"
 	"time"
@@ -89,6 +90,22 @@ func (r *ServiceComponentResponse) FromClientsetToResponse(component common.Appl
 	r.CPU = propertiesData["cpu"].(string)
 	r.Memory = propertiesData["memory"].(string)
 	r.Status = status.Message
+}
+
+type ServiceComponentStatusResponse struct {
+	UpdatedReplicas   int32     `json:"updated_replicas"`
+	ReadyReplicas     int32     `json:"ready_replicas"`
+	AvailableReplicas int32     `json:"available_replicas"`
+	Created           time.Time `json:"created"`
+	Updated           time.Time `json:"updated"`
+}
+
+func (r *ServiceComponentStatusResponse) FromClientsetToResponse(deployment k8sV1.Deployment) {
+	r.UpdatedReplicas = deployment.Status.UpdatedReplicas
+	r.ReadyReplicas = deployment.Status.ReadyReplicas
+	r.AvailableReplicas = deployment.Status.AvailableReplicas
+	r.Created = deployment.ObjectMeta.CreationTimestamp.UTC()
+	r.Updated = deployment.ObjectMeta.CreationTimestamp.UTC()
 }
 
 type ServiceComponentShortResponse struct {
