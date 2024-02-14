@@ -65,3 +65,42 @@ func (h *Handler) Me(c *gin.Context) {
 	user := c.MustGet("currentUser").(User)
 	c.JSON(http.StatusOK, user)
 }
+
+func (h *Handler) ChangePassword(c *gin.Context) {
+	changePasswordRequest := ChangePasswordRequest{}
+	err := c.ShouldBindJSON(&changePasswordRequest)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	err = ValidatePasswords(changePasswordRequest.Password, changePasswordRequest.Password2)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	user := c.MustGet("currentUser").(User)
+	matched, err := ComparePasswordAndHash(changePasswordRequest.OldPassword, user.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !matched {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": ErrOldPasswordInvalid.Error()})
+		return
+	}
+
+	hashedPassword, err := GenerateFromPassword(changePasswordRequest.Password)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	user.Password = hashedPassword
+	err = user.UpdatePassword(h.MongoDB)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully"})
+}
