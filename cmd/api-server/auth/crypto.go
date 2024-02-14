@@ -137,7 +137,7 @@ func GenerateRandomPassword(i int) string {
 	return string(randomString)
 }
 
-func GenerateToken(ttl time.Duration, payload JWTData, secretJWTKey string) (string, error) {
+func GenerateToken(ttl time.Duration, payload JWTData, JWTSecretKey string) (string, error) {
 	now := time.Now().UTC()
 
 	claims := JWTClaims{}
@@ -149,7 +149,7 @@ func GenerateToken(ttl time.Duration, payload JWTData, secretJWTKey string) (str
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	tokenString, err := token.SignedString([]byte(secretJWTKey))
+	tokenString, err := token.SignedString([]byte(JWTSecretKey))
 
 	if err != nil {
 		return "", fmt.Errorf("generating JWT Token failed: %w", err)
@@ -158,12 +158,12 @@ func GenerateToken(ttl time.Duration, payload JWTData, secretJWTKey string) (str
 	return tokenString, nil
 }
 
-func ValidateToken(tokenString string, secretJWTKey string) (JWTClaims, error) {
+func ValidateToken(tokenString string, JWTSecretKey string) (JWTClaims, error) {
 	claims := JWTClaims{}
 
 	// Parse the JWT string and store the result in `claims`.
 	tokenObject, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(secretJWTKey), nil
+		return []byte(JWTSecretKey), nil
 	})
 	if err != nil {
 		if err.Error() == jwt.ErrSignatureInvalid.Error() {
