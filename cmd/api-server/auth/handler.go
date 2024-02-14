@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -56,6 +57,12 @@ func (h *Handler) Login(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	err = user.UpdateLastLoginAt(h.MongoDB)
+	if err != nil {
+		log.Print(err)
+		log.Println("Failed to update last login at")
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": jwt})

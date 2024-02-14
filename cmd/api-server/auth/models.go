@@ -79,6 +79,19 @@ func (u *User) UpdatePassword(mongo *database.MongoDB, password string) error {
 	return nil
 }
 
+func (u *User) UpdateLastLoginAt(mongo *database.MongoDB) error {
+	collection := mongo.Client.Database(mongo.DBName).Collection(UserCollection)
+	now := time.Now()
+	u.LastLoginAt = &now
+	filter := bson.M{"_id": u.ID}
+	update := bson.M{"$set": bson.M{"lastLoginAt": u.LastLoginAt}}
+	_, err := collection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func ValidateEmail(email string) error {
 	pattern := `^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`
 	if matched, err := regexp.MatchString(pattern, email); err != nil {
