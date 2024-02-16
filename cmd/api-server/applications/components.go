@@ -65,6 +65,8 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 	listOptions := metav1.ListOptions{
 		LabelSelector: "conure.io/organization-id=" + c.Param("organizationID") + ",conure.io/application-id=" + c.Param("applicationID") + ",conure.io/environment=" + c.Param("environment"),
 	}
+
+	// Get application manifest
 	applications, err := clientset.Vela.CoreV1beta1().Applications(namespace).List(c, listOptions)
 	if err != nil {
 		log.Printf("Error getting applications: %v\n", err)
@@ -82,6 +84,8 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 	labels := map[string]string{
 		"conure.io/application-id": c.Param("applicationID"),
 	}
+
+	// Get deployment
 	deployments, err := getDeploymentByLabels(clientset.K8s, namespace, labels)
 	if err != nil {
 		log.Printf("Error getting deployments: %v\n", err)
