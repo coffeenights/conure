@@ -32,7 +32,7 @@ type ApplicationResponse struct {
 	LastUpdated     time.Time `json:"last_updated"`
 }
 
-func (r *ApplicationResponse) FromVelaClientsetToResponse(item *v1beta1.Application) {
+func (r *ApplicationResponse) FromVelaClientsetToResponse(item *v1beta1.Application, revision *v1beta1.ApplicationRevision) {
 	r.Name = item.ObjectMeta.Name
 	r.ID = item.ObjectMeta.Labels["conure.io/application-id"]
 	r.Description = item.ObjectMeta.Annotations["conure.io/description"]
@@ -42,7 +42,12 @@ func (r *ApplicationResponse) FromVelaClientsetToResponse(item *v1beta1.Applicat
 	r.Created = item.ObjectMeta.CreationTimestamp.UTC()
 	r.Status = AppStatus(item.Status.Phase)
 	r.Revision = item.Status.LatestRevision.Revision
+	r.LastUpdated = revision.CreationTimestamp.UTC()
 	r.TotalComponents = len(item.Spec.Components)
+}
+
+type ApplicationDetailsResponse struct {
+	Application ApplicationResponse `json:"application"`
 }
 
 type ServiceComponentResponse struct {
