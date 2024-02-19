@@ -125,8 +125,7 @@ func (r *ServiceComponentShortResponse) FromClientsetToResponse(component common
 }
 
 type ServiceComponentListResponse struct {
-	Application ApplicationResponse             `json:"application"`
-	Components  []ServiceComponentShortResponse `json:"components"`
+	Components []ServiceComponentShortResponse `json:"components"`
 }
 
 func extractMapFromRawExtension(data *runtime.RawExtension) (map[string]interface{}, error) {
