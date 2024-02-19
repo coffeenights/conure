@@ -35,6 +35,7 @@ func (a *AppHandler) CreateEnvironment(c *gin.Context) {
 			Labels: map[string]string{
 				"conure.io/application-id":  request.ApplicationID,
 				"conure.io/organization-id": request.OrganizationID,
+				"conure.io/environment":     request.Name,
 			},
 		},
 	}
