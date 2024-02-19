@@ -21,7 +21,7 @@ func setupDB() (*database.MongoDB, error) {
 func setupRouter() (*gin.Engine, *AppHandler) {
 	router := gin.Default()
 	app := NewAppHandler()
-	app.MongoDB.DBName = app.MongoDB.DBName + "-test"
+	app.MongoDB.DBName += "-test"
 	GenerateRoutes("/organizations", router, app)
 	return router, app
 }

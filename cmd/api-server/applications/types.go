@@ -3,12 +3,12 @@ package applications
 import (
 	"encoding/json"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
+	k8sV1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"log"
 	"time"
 
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
-	appsV1 "k8s.io/api/apps/v1"
-	coreV1 "k8s.io/api/core/v1"
 )
 
 type AppStatus string
@@ -45,41 +45,20 @@ func (r *ApplicationResponse) FromVelaClientsetToResponse(item *v1beta1.Applicat
 }
 
 type ServiceComponentResponse struct {
-	Name           string    `json:"name"`
-	Replicas       int32     `json:"replicas"`
-	ContainerImage string    `json:"container_image"`
-	ContainerPort  int32     `json:"container_port"`
-	Status         AppStatus `json:"status"`
-	Updated        time.Time `json:"updated"`
+	Name           string `json:"name"`
+	Replicas       int32  `json:"replicas"`
+	ContainerImage string `json:"container_image"`
+	ContainerPort  int32  `json:"container_port"`
+	Status         string `json:"status"`
+	CPU            string `json:"cpu"`
+	Memory         string `json:"memory"`
 }
 
-func (r *ServiceComponentResponse) FromClientsetToResponse(deployment appsV1.Deployment, services []coreV1.Service) {
-	r.Name = deployment.ObjectMeta.Name
-	r.Replicas = *deployment.Spec.Replicas
-	r.ContainerImage = deployment.Spec.Template.Spec.Containers[0].Image
-	r.Updated = deployment.CreationTimestamp.UTC()
-
-	status := deployment.Status
-	if status.Replicas != status.ReadyReplicas {
-		r.Status = AppNotReady
-	} else {
-		r.Status = AppReady
-	}
-
-	// Extracting all ports from the service associated to the deployment
-	r.ContainerPort = 0
-	if len(services) > 0 {
-		if len(services[0].Spec.Ports) > 0 {
-			r.ContainerPort = services[0].Spec.Ports[0].Port
-		}
-	}
-}
-
-func (r *ServiceComponentResponse) FromVelaClientsetToResponse(deployment common.ApplicationComponent) {
-	r.Name = deployment.Name
-	propertiesData, err := extractMapFromRawExtension(deployment.Properties)
+func (r *ServiceComponentResponse) FromClientsetToResponse(component common.ApplicationComponent, status common.ApplicationComponentStatus) {
+	r.Name = component.Name
+	propertiesData, err := extractMapFromRawExtension(component.Properties)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	r.ContainerImage = propertiesData["image"].(string)
 	// check if the port is defined in the properties or its on the containerPort
@@ -95,20 +74,38 @@ func (r *ServiceComponentResponse) FromVelaClientsetToResponse(deployment common
 	}
 
 	// go through the traits to find the replicas and the ports
-	for _, trait := range deployment.Traits {
+	for _, trait := range component.Traits {
 		traitsData, err := extractMapFromRawExtension(trait.Properties)
 		if err != nil {
-			panic(err)
+			log.Fatal(err)
 		}
 		if trait.Type == "scaler" {
-			//{"replicas":2}
 			r.Replicas = int32(traitsData["replicas"].(float64))
 		}
 		if trait.Type == "expose" {
-			//{"annotations":{"service":"backend"},"port":[8090],"type":"ClusterIP"}
 			r.ContainerPort = int32(traitsData["port"].([]interface{})[0].(float64))
 		}
 	}
+
+	r.CPU = propertiesData["cpu"].(string)
+	r.Memory = propertiesData["memory"].(string)
+	r.Status = status.Message
+}
+
+type ServiceComponentStatusResponse struct {
+	UpdatedReplicas   int32     `json:"updated_replicas"`
+	ReadyReplicas     int32     `json:"ready_replicas"`
+	AvailableReplicas int32     `json:"available_replicas"`
+	Created           time.Time `json:"created"`
+	Updated           time.Time `json:"updated"`
+}
+
+func (r *ServiceComponentStatusResponse) FromClientsetToResponse(deployment k8sV1.Deployment) {
+	r.UpdatedReplicas = deployment.Status.UpdatedReplicas
+	r.ReadyReplicas = deployment.Status.ReadyReplicas
+	r.AvailableReplicas = deployment.Status.AvailableReplicas
+	r.Created = deployment.ObjectMeta.CreationTimestamp.UTC()
+	r.Updated = deployment.ObjectMeta.CreationTimestamp.UTC()
 }
 
 type ServiceComponentShortResponse struct {

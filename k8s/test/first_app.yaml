@@ -22,6 +22,8 @@ spec:
         port: 8090
         workdir: /app
         imagePullPolicy: "Always"
+        cpu: "0.2"
+        memory: "256Mi"
       traits:
         - type: expose
           properties:
@@ -30,6 +32,9 @@ spec:
               service: "backend"
             port:
               - 8090
+        - type: scaler
+          properties:
+            replicas: 2
     - name: redis-cache
       type: raw
       properties:

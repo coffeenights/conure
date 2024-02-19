@@ -3,6 +3,7 @@ package applications
 import (
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/gin-gonic/gin"
+	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"log"
 	"net/http"
@@ -80,9 +81,52 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 		return
 	}
 	application := applications.Items[0]
-	_ = application
+	// Extract the component
+	var componentSpec common.ApplicationComponent
+	for _, comp := range application.Spec.Components {
+		if comp.Name == c.Param("componentName") {
+			componentSpec = comp
+			break
+		}
+	}
+	if componentSpec.Name == "" {
+		c.JSON(http.StatusNotFound, gin.H{})
+		return
+	}
+
+	// Extract the component Status
+	var componentStatus common.ApplicationComponentStatus
+	for _, comp := range application.Status.Services {
+		if comp.Name == c.Param("componentName") {
+			componentStatus = comp
+			break
+		}
+	}
+
+	if componentStatus.Name == "" {
+		c.JSON(http.StatusNotFound, gin.H{})
+		return
+	}
+
+	var componentResponse ServiceComponentResponse
+	componentResponse.FromClientsetToResponse(componentSpec, componentStatus)
+	c.JSON(http.StatusOK, componentResponse)
+}
+
+func (a *AppHandler) StatusComponent(c *gin.Context) {
+	// obtain the deployment related to the component
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		log.Printf("Error getting clientset: %v\n", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	namespace := c.Param("organizationID") + "-" + c.Param("applicationID") + "-" + c.Param("environment")
 	labels := map[string]string{
 		"conure.io/application-id": c.Param("applicationID"),
+		"app.oam.dev/component":    c.Param("componentName"),
 	}
 
 	// Get deployment
@@ -98,6 +142,8 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{})
 		return
 	}
-	// deployment := deployments[0]
-
+	deployment := deployments[0]
+	var statusResponse ServiceComponentStatusResponse
+	statusResponse.FromClientsetToResponse(deployment)
+	c.JSON(http.StatusOK, statusResponse)
 }
