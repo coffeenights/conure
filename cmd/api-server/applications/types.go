@@ -29,6 +29,7 @@ type ApplicationResponse struct {
 	Status          AppStatus `json:"status"`
 	Created         time.Time `json:"created"`
 	Revision        int64     `json:"revision"`
+	LastUpdated     time.Time `json:"last_updated"`
 }
 
 func (r *ApplicationResponse) FromVelaClientsetToResponse(item *v1beta1.Application) {

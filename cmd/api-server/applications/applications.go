@@ -40,9 +40,27 @@ func (a *AppHandler) ListApplications(c *gin.Context) {
 		if q != "" && !strings.Contains(app.ObjectMeta.Name, q) {
 			continue
 		}
+		// Get revision
+		listOptions = metav1.ListOptions{
+			LabelSelector: "app.oam.dev/app-revision-hash=" + app.Status.LatestRevision.RevisionHash,
+		}
+
+		revisions, err := clientset.Vela.CoreV1beta1().ApplicationRevisions(app.Namespace).List(c, listOptions)
+		if err != nil {
+			log.Printf("Error getting application revision: %v\n", err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		if revisions.Items == nil {
+			log.Fatal("Error getting application revision: revision not found")
+		}
+		rev := revisions.Items[0]
 
 		var r ApplicationResponse
 		r.FromVelaClientsetToResponse(&app)
+		r.LastUpdated = rev.CreationTimestamp.UTC()
 
 		if err != nil {
 			log.Printf("Error getting application: %v\n", err)
