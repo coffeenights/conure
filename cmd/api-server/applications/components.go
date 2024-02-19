@@ -42,11 +42,8 @@ func (a *AppHandler) ListComponents(c *gin.Context) {
 		component.FromClientsetToResponse(componentSpec)
 		componentResponse = append(componentResponse, component)
 	}
-	var applicationResponse ApplicationResponse
-	applicationResponse.FromVelaClientsetToResponse(&application)
 	response := ServiceComponentListResponse{
-		Application: applicationResponse,
-		Components:  componentResponse,
+		Components: componentResponse,
 	}
 
 	c.JSON(http.StatusOK, response)
