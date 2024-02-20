@@ -139,6 +139,9 @@ func GenerateRandomPassword(i int) string {
 }
 
 func GenerateToken(ttl time.Duration, payload JWTData, JWTSecretKey string) (string, error) {
+	if JWTSecretKey == "" {
+		return "", ErrJWTSecretKey
+	}
 	now := time.Now().UTC()
 
 	claims := JWTClaims{}

@@ -12,4 +12,5 @@ var (
 	ErrUnauthorized       = errors.New("unauthorized")
 	ErrPasswordsNotMatch  = errors.New("password and password confirmation do not match")
 	ErrOldPasswordInvalid = errors.New("old password is invalid")
+	ErrJWTSecretKey       = errors.New("jwt secret key error")
 )
