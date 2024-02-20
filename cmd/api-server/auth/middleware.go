@@ -1,12 +1,13 @@
 package auth
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/database"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strings"
 
+	"github.com/gin-gonic/gin"
+
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
+	"github.com/coffeenights/conure/cmd/api-server/database"
 )
 
 func CheckCurrentUser(config *apiConfig.Config, mongo *database.MongoDB) gin.HandlerFunc {
@@ -34,7 +35,7 @@ func CheckCurrentUser(config *apiConfig.Config, mongo *database.MongoDB) gin.Han
 			return
 		}
 
-		//validate the token signature and retrieve the jwt payload
+		// validate the token signature and retrieve the jwt payload
 		claims, err := ValidateToken(token[1], config.JWTSecret)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
@@ -43,7 +44,7 @@ func CheckCurrentUser(config *apiConfig.Config, mongo *database.MongoDB) gin.Han
 			return
 		}
 
-		//get the user data and add it to the context
+		// get the user data and add it to the context
 		user := User{}
 		err = user.GetByEmail(mongo, claims.Data.Email)
 		if err != nil {
