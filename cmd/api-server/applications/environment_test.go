@@ -21,7 +21,7 @@ func TestCreateEnvironment(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
+	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/a/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -46,7 +46,7 @@ func TestListEnvironments(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
+	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/a/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func TestListEnvironments(t *testing.T) {
 	}
 
 	// List environments
-	request, err = http.NewRequest("GET", "/organizations/"+createRequest.OrganizationID+"/"+createRequest.ApplicationID+"/e/", nil)
+	request, err = http.NewRequest("GET", "/organizations/"+createRequest.OrganizationID+"/a/"+createRequest.ApplicationID+"/e/", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestDeleteEnvironment(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
+	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/a/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestDeleteEnvironment(t *testing.T) {
 	}
 
 	// Delete environment
-	request, err = http.NewRequest("DELETE", "/organizations/"+createRequest.OrganizationID+"/"+createRequest.ApplicationID+"/e/"+createRequest.Name, nil)
+	request, err = http.NewRequest("DELETE", "/organizations/"+createRequest.OrganizationID+"/a/"+createRequest.ApplicationID+"/e/"+createRequest.Name+"/", nil)
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestGetOrganization(t *testing.T) {
+func TestDetailOrganization(t *testing.T) {
 	router, app := setupRouter()
 	// Create test organization
 	org := Organization{
@@ -21,7 +21,7 @@ func TestGetOrganization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := "/organizations/" + oID
+	url := "/organizations/" + oID + "/"
 	req, _ := http.NewRequest("GET", url, nil)
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)

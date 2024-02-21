@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func (a *AppHandler) GetOrganization(c *gin.Context) {
+func (a *AppHandler) DetailOrganization(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 	org := Organization{}
 	_, err := org.GetById(a.MongoDB, organizationID)
