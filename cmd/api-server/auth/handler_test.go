@@ -137,6 +137,9 @@ func TestHandler_Me(t *testing.T) {
 	_ = user.Create(mongo)
 	token, _ := GenerateToken(1*time.Hour, testPayload, config.JWTSecret)
 
+	err := user.Create(mongo)
+	assert.Error(t, err, "should return error when creating user with same email")
+
 	// Create a request with correct token
 	req, _ := http.NewRequest("GET", "/auth/me", nil)
 	req.Header.Set("Content-Type", "application/json")
