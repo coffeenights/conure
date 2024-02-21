@@ -93,7 +93,7 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		return
 	}
 	if !matched {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": ErrOldPasswordInvalid.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrOldPasswordInvalid.Error()})
 		return
 	}
 
