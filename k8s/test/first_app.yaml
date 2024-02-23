@@ -4,14 +4,15 @@ metadata:
   name: first-app
   labels:
     conure.io/application-id: "65c084eaff5e41522cc80f99"
-    conure.io/organization-id: "6599082303bedbfeb7243ada"
-    conure.io/namespace: "6599082303bedbfeb7243ada-65c084eaff5e41522cc80f99-staging"
-    conure.io/environment: "staging"
+    conure.io/organization-id: "65d6db08a7d5cf185f75e6d2"
+    conure.io/namespace: "65d6db08a7d5cf185f75e6d2-65c084eaff5e41522cc80f99-development"
+    conure.io/environment: "development"
     conure.io/main: "true"
     conure.io/created-by: "6599082303bedbfeb7243ada"
     conure.io/account-id: "6599082303bedbfeb7243ada"
   annotations:
     conure.io/description: "First App"
+  namespace: "65d6db08a7d5cf185f75e6d2-65c084eaff5e41522cc80f99-development"
 spec:
   components:
     - name: backend-service
@@ -68,3 +69,43 @@ spec:
                   value: password
                 - name: POSTGRES_DB
                   value: dbname
+
+---
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: second-app
+  labels:
+    conure.io/application-id: "65c084eaff5e41522cc80f90"
+    conure.io/organization-id: "65d6db08a7d5cf185f75e6d2"
+    conure.io/namespace: "65d6db08a7d5cf185f75e6d2-65c084eaff5e41522cc80f90-development"
+    conure.io/environment: "development"
+    conure.io/main: "true"
+    conure.io/created-by: "6599082303bedbfeb7243ada"
+    conure.io/account-id: "6599082303bedbfeb7243ada"
+  annotations:
+    conure.io/description: "Second App"
+  namespace: "65d6db08a7d5cf185f75e6d2-65c084eaff5e41522cc80f90-development"
+spec:
+  components:
+    - name: backend-service
+      type: webservice
+      properties:
+        image: "coffeenights/django:latest"
+        cmd: ["python", "manage.py", "runserver", "0.0.0.0:8090"]
+        port: 8090
+        workdir: /app
+        imagePullPolicy: "Always"
+        cpu: "0.2"
+        memory: "256Mi"
+      traits:
+        - type: expose
+          properties:
+            type: "LoadBalancer"
+            annotations:
+              service: "backend"
+            port:
+              - 8091
+        - type: scaler
+          properties:
+            replicas: 4
