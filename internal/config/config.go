@@ -5,11 +5,9 @@ import (
 	"os"
 	"reflect"
 	"strconv"
-
-	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 )
 
-func LoadConfig(config apiConfig.Config) *apiConfig.Config {
+func LoadConfig[C any](config C) *C {
 	v := reflect.ValueOf(&config).Elem()
 	t := reflect.TypeOf(&config).Elem()
 
