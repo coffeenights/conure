@@ -99,11 +99,13 @@ func (r *ServiceComponentResponse) FromClientsetToResponse(component common.Appl
 }
 
 type ServiceComponentStatusResponse struct {
-	UpdatedReplicas   int32     `json:"updated_replicas"`
-	ReadyReplicas     int32     `json:"ready_replicas"`
-	AvailableReplicas int32     `json:"available_replicas"`
-	Created           time.Time `json:"created"`
-	Updated           time.Time `json:"updated"`
+	UpdatedReplicas      int32     `json:"updated_replicas"`
+	ReadyReplicas        int32     `json:"ready_replicas"`
+	AvailableReplicas    int32     `json:"available_replicas"`
+	ConditionAvailable   string    `json:"condition_available"`
+	ConditionProgressing string    `json:"condition_progressing"`
+	Created              time.Time `json:"created"`
+	Updated              time.Time `json:"updated"`
 }
 
 func (r *ServiceComponentStatusResponse) FromClientsetToResponse(deployment k8sV1.Deployment) {
@@ -112,6 +114,14 @@ func (r *ServiceComponentStatusResponse) FromClientsetToResponse(deployment k8sV
 	r.AvailableReplicas = deployment.Status.AvailableReplicas
 	r.Created = deployment.ObjectMeta.CreationTimestamp.UTC()
 	r.Updated = deployment.ObjectMeta.CreationTimestamp.UTC()
+
+	for _, condition := range deployment.Status.Conditions {
+		if condition.Type == "Available" {
+			r.ConditionAvailable = string(condition.Status)
+		} else if condition.Type == "Progressing" {
+			r.ConditionProgressing = string(condition.Status)
+		}
+	}
 }
 
 type ServiceComponentShortResponse struct {

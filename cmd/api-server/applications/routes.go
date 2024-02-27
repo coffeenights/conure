@@ -16,6 +16,6 @@ func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *AppHandler) 
 		applications.GET("/:organizationID/a/:applicationID/e/:environment/", appHandler.DetailApplication)
 		applications.GET("/:organizationID/a/:applicationID/e/:environment/c/", appHandler.ListComponents)
 		applications.GET("/:organizationID/a/:applicationID/e/:environment/c/:componentName/", appHandler.DetailComponent)
-		applications.GET("/:organizationID/a/:applicationID/e/:environment/c/:componentName/status", appHandler.StatusComponent)
+		applications.GET("/:organizationID/a/:applicationID/e/:environment/c/:componentName/status/", appHandler.StatusComponent)
 	}
 }
