@@ -64,6 +64,6 @@ template: {
 		name: string
 		password: string
 		storage: string
-		image?: *"postgres:latest" | string
+		image: *"postgres:latest" | string
 	}
 }
