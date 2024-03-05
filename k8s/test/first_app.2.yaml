@@ -19,7 +19,7 @@ spec:
       type: webservice
       properties:
         image: "coffeenights/django:latest"
-        cmd: ["python", "manage.py", "runserver", "0.0.0.0:8090"]
+        cmd: ["python", "manage.py", "runserver", "0.0.0.0:8091"]
         port: 8090
         workdir: /app
         imagePullPolicy: "Always"
@@ -32,27 +32,13 @@ spec:
             annotations:
               service: "backend"
             port:
-              - 8090
+              - 8091
         - type: scaler
           properties:
             replicas: 5
     - name: postgres-database
-      type: raw
+      type: postgres
       properties:
-        apiVersion: v1
-        kind: Pod
-        metadata:
-          name: postgres
-        spec:
-          containers:
-            - name: postgres
-              image: "postgres:latest"
-              ports:
-                - containerPort: 5432
-              env:
-                - name: POSTGRES_USER
-                  value: user
-                - name: POSTGRES_PASSWORD
-                  value: password
-                - name: POSTGRES_DB
-                  value: dbname
+        name: database
+        password: test1234
+        storage: 2Gi
