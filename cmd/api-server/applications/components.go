@@ -127,6 +127,8 @@ func (a *AppHandler) StatusComponent(c *gin.Context) {
 	}
 
 	// Get deployment
+	resource, err := GetResourceByLabel("statefulset", clientset.K8s, namespace, labels)
+	_ = resource
 	deployments, err := getDeploymentByLabels(clientset.K8s, namespace, labels)
 	if err != nil {
 		log.Printf("Error getting deployments: %v\n", err)
