@@ -3,6 +3,9 @@ package applications
 import (
 	"context"
 	"fmt"
+	"github.com/coffeenights/conure/internal/k8s"
+	"github.com/gin-gonic/gin"
+	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	k8sV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -92,4 +95,28 @@ func GetResourceByLabel(resourceType string, clientset *kubernetes.Clientset, na
 		return getServicesByLabels(clientset, namespace, labels)
 	}
 	return nil, fmt.Errorf("resource type %s not supported", resourceType)
+}
+
+func GetNamespaceFromParams(c *gin.Context) string {
+	return c.Param("organizationID") + "-" + c.Param("applicationID") + "-" + c.Param("environment")
+}
+
+func getApplicationByLabels(clientset *k8s.GenericClientset, namespace string, labels map[string]string) (*v1beta1.Application, error) {
+
+	var labelSelector []string
+	for key, value := range labels {
+		labelSelector = append(labelSelector, fmt.Sprintf("%s=%s", key, value))
+	}
+	listOptions := metav1.ListOptions{
+		LabelSelector: strings.Join(labelSelector, ","),
+	}
+
+	applications, err := clientset.Vela.CoreV1beta1().Applications(namespace).List(context.Background(), listOptions)
+	if err != nil {
+		return nil, err
+	}
+	if len(applications.Items) == 0 {
+		return nil, ErrApplicationNotFound
+	}
+	return &applications.Items[0], nil
 }

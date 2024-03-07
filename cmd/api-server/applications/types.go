@@ -66,17 +66,15 @@ func (r *ServiceComponentResponse) FromClientsetToResponse(component common.Appl
 	if err != nil {
 		log.Fatal(err)
 	}
-	r.ContainerImage = propertiesData["image"].(string)
+	if image, ok := propertiesData["image"].(string); ok {
+		r.ContainerImage = image
+	} else {
+		// Handle the error or set a default value
+		r.ContainerImage = ""
+	}
 	// check if the port is defined in the properties or its on the containerPort
 	if propertiesData["port"] != nil {
 		r.ContainerPort = int32(propertiesData["port"].(float64))
-	} else {
-		// go through the containers to find the port
-		for _, container := range propertiesData["image"].([]map[string]interface{}) {
-			if container != nil {
-				r.ContainerPort = 1
-			}
-		}
 	}
 
 	// go through the traits to find the replicas and the ports
@@ -191,4 +189,23 @@ type EnvironmentListResponse struct {
 
 type EnvironmentResponse struct {
 	Name string `json:"name"`
+}
+
+type NetworkProperties struct {
+}
+
+type ResourcesProperties struct {
+}
+
+type StorageProperties struct {
+}
+
+type SourceProperties struct {
+}
+
+type ComponentProperties struct {
+	NetworkProperties   NetworkProperties   `json:"network"`
+	ResourcesProperties ResourcesProperties `json:"resources"`
+	StorageProperties   StorageProperties   `json:"storage"`
+	SourceProperties    SourceProperties    `json:"source"`
 }

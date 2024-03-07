@@ -1,6 +1,7 @@
 package applications
 
 import (
+	"errors"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/gin-gonic/gin"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
@@ -19,7 +20,7 @@ func (a *AppHandler) ListComponents(c *gin.Context) {
 		return
 	}
 
-	namespace := c.Param("organizationID") + "-" + c.Param("applicationID") + "-" + c.Param("environment")
+	namespace := GetNamespaceFromParams(c)
 	listOptions := metav1.ListOptions{
 		LabelSelector: "conure.io/organization-id=" + c.Param("organizationID") + ",conure.io/application-id=" + c.Param("applicationID") + ",conure.io/environment=" + c.Param("environment"),
 	}
@@ -53,31 +54,31 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
-	namespace := c.Param("organizationID") + "-" + c.Param("applicationID") + "-" + c.Param("environment")
-	listOptions := metav1.ListOptions{
-		LabelSelector: "conure.io/organization-id=" + c.Param("organizationID") + ",conure.io/application-id=" + c.Param("applicationID") + ",conure.io/environment=" + c.Param("environment"),
+	namespace := GetNamespaceFromParams(c)
+
+	labels := map[string]string{
+		"conure.io/organization-id": c.Param("organizationID"),
+		"conure.io/application-id":  c.Param("applicationID"),
+		"conure.io/environment":     c.Param("environment"),
 	}
 
-	// Get application manifest
-	applications, err := clientset.Vela.CoreV1beta1().Applications(namespace).List(c, listOptions)
+	application, err := getApplicationByLabels(clientset, namespace, labels)
 	if err != nil {
-		log.Printf("Error getting applications: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
-		return
+		switch {
+		case errors.Is(err, ErrApplicationNotFound):
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		default:
+			log.Printf("Error getting application: %v\n", err)
+			c.AbortWithStatus(http.StatusInternalServerError)
+			return
+		}
 	}
-	if len(applications.Items) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{})
-		return
-	}
-	application := applications.Items[0]
+
 	// Extract the component
 	var componentSpec common.ApplicationComponent
 	for _, comp := range application.Spec.Components {
@@ -87,7 +88,7 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 		}
 	}
 	if componentSpec.Name == "" {
-		c.JSON(http.StatusNotFound, gin.H{})
+		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
@@ -101,7 +102,7 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 	}
 
 	if componentStatus.Name == "" {
-		c.JSON(http.StatusNotFound, gin.H{})
+		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
 
@@ -120,13 +121,16 @@ func (a *AppHandler) StatusComponent(c *gin.Context) {
 		})
 		return
 	}
-	namespace := c.Param("organizationID") + "-" + c.Param("applicationID") + "-" + c.Param("environment")
+	namespace := GetNamespaceFromParams(c)
 	labels := map[string]string{
 		"conure.io/application-id": c.Param("applicationID"),
 		"app.oam.dev/component":    c.Param("componentName"),
 	}
 
-	// Get deployment
+	cd, err := clientset.Vela.CoreV1beta1().ComponentDefinitions("vela-system").Get(c, "webservice", metav1.GetOptions{})
+	_ = cd
+	configmap, err := clientset.K8s.CoreV1().ConfigMaps("vela-system").Get(c, "webservice", metav1.GetOptions{})
+	_ = configmap
 	resource, err := GetResourceByLabel("statefulset", clientset.K8s, namespace, labels)
 	_ = resource
 	deployments, err := getDeploymentByLabels(clientset.K8s, namespace, labels)
