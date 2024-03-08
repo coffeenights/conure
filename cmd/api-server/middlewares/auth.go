@@ -1,18 +1,17 @@
 package middlewares
 
 import (
-	"encoding/json"
-	"io"
 	"net/http"
 	"strings"
 
+	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/gin-gonic/gin"
 
 	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 )
 
-func CheckAuthenticatedUser(config *apiConfig.Config) gin.HandlerFunc {
+func CheckAuthenticatedUser(config *apiConfig.Config, mongo *database.MongoDB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
@@ -31,51 +30,13 @@ func CheckAuthenticatedUser(config *apiConfig.Config) gin.HandlerFunc {
 			return
 		}
 
-		// get the user data and add it to the context, this will use the /me endpoint to get the user data
-		// this middleware must assume that the auth service is an external service
-		user := auth.User{}
-		req, err := http.NewRequest("GET", config.AuthServiceURL, nil)
+		user, err := ValidateUser(token[1], config, mongo)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": auth.ErrUnauthorized.Error(),
+				"error": err.Error(),
 			})
 			return
 		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+token[1])
-
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": auth.ErrUnauthorized.Error(),
-			})
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": auth.ErrUnauthorized.Error(),
-			})
-			return
-		}
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": auth.ErrUnauthorized.Error(),
-			})
-			return
-		}
-		err = json.Unmarshal(body, &user)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"error": auth.ErrUnauthorized.Error(),
-			})
-			return
-		}
-
 		c.Set("currentUser", user)
 		c.Next()
 	}
