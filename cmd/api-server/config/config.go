@@ -8,4 +8,5 @@ type Config struct {
 	JWTExpiration      int    `env:"JWT_EXPIRATION_DAYS"`
 	AESStorageStrategy string `env:"AES_STORAGE_STRATEGY"`
 	AuthServiceURL     string `env:"AUTH_SERVICE_URL"`
+	AuthStrategySystem string `env:"AUTH_STRATEGY_SYSTEM"`
 }
