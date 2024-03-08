@@ -84,7 +84,7 @@ func (v *Variable) ListByOrg(mongo *database.MongoDB, client, organizationID str
 	if err != nil {
 		return nil, err
 	}
-	var variables []Variable
+	var variables = make([]Variable, 0)
 	err = cursor.All(context.Background(), &variables)
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func (v *Variable) ListByEnv(mongo *database.MongoDB, client, organizationID, ap
 	if err != nil {
 		return nil, err
 	}
-	var variables []Variable
+	var variables = make([]Variable, 0)
 	err = cursor.All(context.Background(), &variables)
 	if err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func (v *Variable) ListByComp(mongo *database.MongoDB, client, organizationID, a
 	if err != nil {
 		return nil, err
 	}
-	var variables []Variable
+	var variables = make([]Variable, 0)
 	err = cursor.All(context.Background(), &variables)
 	if err != nil {
 		return nil, err
