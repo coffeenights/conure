@@ -58,7 +58,8 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 		return
 	}
 
-	namespace := GetNamespaceFromParams(c)
+	application := NewApplication(c.Param("organizationID"), c.Param("applicationID"), c.Param("environment"))
+	namespace := application.getNamespace()
 
 	labels := map[string]string{
 		"conure.io/organization-id": c.Param("organizationID"),
@@ -66,7 +67,7 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 		"conure.io/environment":     c.Param("environment"),
 	}
 
-	application, err := getApplicationByLabels(clientset, namespace, labels)
+	applicationDef, err := getApplicationByLabels(clientset, namespace, labels)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrApplicationNotFound):
@@ -81,7 +82,7 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 
 	// Extract the component
 	var componentSpec common.ApplicationComponent
-	for _, comp := range application.Spec.Components {
+	for _, comp := range applicationDef.Spec.Components {
 		if comp.Name == c.Param("componentName") {
 			componentSpec = comp
 			break
@@ -94,7 +95,7 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 
 	// Extract the component Status
 	var componentStatus common.ApplicationComponentStatus
-	for _, comp := range application.Status.Services {
+	for _, comp := range applicationDef.Status.Services {
 		if comp.Name == c.Param("componentName") {
 			componentStatus = comp
 			break
@@ -106,8 +107,32 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 		return
 	}
 
+	componentProperties := ComponentProperties{}
+	wl, err := CreateK8sWorkload(application, &componentSpec, &componentStatus)
+	if err != nil {
+		log.Printf("Error creating workload: %v\n", err)
+	}
+	componentProperties.NetworkProperties, err = wl.GetNetworkProperties()
+	if err != nil {
+		log.Printf("Error extracting network properties: %v\n", err)
+	}
+	componentProperties.ResourcesProperties, err = wl.GetResourcesProperties()
+	if err != nil {
+		log.Printf("Error extracting resources properties: %v\n", err)
+	}
+
+	componentProperties.StorageProperties, err = wl.GetStorageProperties()
+	if err != nil {
+		log.Printf("Error extracting storage properties: %v\n", err)
+	}
+
+	componentProperties.SourceProperties, err = wl.GetSourceProperties()
+	if err != nil {
+		log.Printf("Error extracting source properties: %v\n", err)
+	}
+
 	var componentResponse ServiceComponentResponse
-	componentResponse.FromClientsetToResponse(componentSpec, componentStatus)
+	componentResponse.ComponentProperties = componentProperties
 	c.JSON(http.StatusOK, componentResponse)
 }
 
@@ -131,8 +156,6 @@ func (a *AppHandler) StatusComponent(c *gin.Context) {
 	_ = cd
 	configmap, err := clientset.K8s.CoreV1().ConfigMaps("vela-system").Get(c, "webservice", metav1.GetOptions{})
 	_ = configmap
-	resource, err := GetResourceByLabel("statefulset", clientset.K8s, namespace, labels)
-	_ = resource
 	deployments, err := getDeploymentByLabels(clientset.K8s, namespace, labels)
 	if err != nil {
 		log.Printf("Error getting deployments: %v\n", err)

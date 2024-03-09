@@ -65,8 +65,8 @@ func getStatefulSetByLabels(clientset *kubernetes.Clientset, namespace string, l
 	return statefulsets.Items, nil
 }
 
-func getServicesByLabels(clientset *kubernetes.Clientset, namespace string, labels map[string]string) ([]corev1.Service, error) {
-	servicesClient := clientset.CoreV1().Services(namespace)
+func getServicesByLabels(clientset *k8s.GenericClientset, namespace string, labels map[string]string) ([]corev1.Service, error) {
+	servicesClient := clientset.K8s.CoreV1().Services(namespace)
 
 	var labelSelector []string
 	for key, value := range labels {
@@ -83,18 +83,6 @@ func getServicesByLabels(clientset *kubernetes.Clientset, namespace string, labe
 	}
 
 	return services.Items, nil
-}
-
-func GetResourceByLabel(resourceType string, clientset *kubernetes.Clientset, namespace string, labels map[string]string) (interface{}, error) {
-	switch resourceType {
-	case DeploymentResourceType:
-		return getDeploymentByLabels(clientset, namespace, labels)
-	case StatefulSetResourceType:
-		return getStatefulSetByLabels(clientset, namespace, labels)
-	case ServiceResourceType:
-		return getServicesByLabels(clientset, namespace, labels)
-	}
-	return nil, fmt.Errorf("resource type %s not supported", resourceType)
 }
 
 func GetNamespaceFromParams(c *gin.Context) string {

@@ -5,7 +5,6 @@ import (
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
 	k8sV1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"log"
 	"time"
 
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
@@ -17,6 +16,41 @@ const (
 	AppReady    AppStatus = "Ready"
 	AppNotReady AppStatus = "NotReady"
 )
+
+const (
+	ApplicationIDLabel  = "conure.io/application-id"
+	OrganizationIDLabel = "conure.io/organization-id"
+	EnvironmentLabel    = "conure.io/environment"
+	CreatedByLabel      = "conure.io/created-by"
+	NamespaceLabel      = "conure.io/namespace"
+)
+
+type Application struct {
+	ID              string    `json:"id"`
+	OrganizationID  string    `json:"organization_id"`
+	Name            string    `json:"name"`
+	Description     string    `json:"description"`
+	Environment     string    `json:"environment"`
+	CreatedBy       string    `json:"created_by"`
+	AccountID       string    `json:"account_id"`
+	TotalComponents int       `json:"total_components"`
+	Status          AppStatus `json:"status"`
+	Created         time.Time `json:"created"`
+	Revision        int64     `json:"revision"`
+	LastUpdated     time.Time `json:"last_updated"`
+}
+
+func NewApplication(organizationID string, applicationID string, environment string) *Application {
+	return &Application{
+		OrganizationID: organizationID,
+		ID:             applicationID,
+		Environment:    environment,
+	}
+}
+
+func (a *Application) getNamespace() string {
+	return a.OrganizationID + "-" + a.ID + "-" + a.Environment
+}
 
 type ApplicationResponse struct {
 	ID              string    `json:"id"`
@@ -51,49 +85,7 @@ type ApplicationDetailsResponse struct {
 }
 
 type ServiceComponentResponse struct {
-	Name           string `json:"name"`
-	Replicas       int32  `json:"replicas"`
-	ContainerImage string `json:"container_image"`
-	ContainerPort  int32  `json:"container_port"`
-	Status         string `json:"status"`
-	CPU            string `json:"cpu"`
-	Memory         string `json:"memory"`
-}
-
-func (r *ServiceComponentResponse) FromClientsetToResponse(component common.ApplicationComponent, status common.ApplicationComponentStatus) {
-	r.Name = component.Name
-	propertiesData, err := extractMapFromRawExtension(component.Properties)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if image, ok := propertiesData["image"].(string); ok {
-		r.ContainerImage = image
-	} else {
-		// Handle the error or set a default value
-		r.ContainerImage = ""
-	}
-	// check if the port is defined in the properties or its on the containerPort
-	if propertiesData["port"] != nil {
-		r.ContainerPort = int32(propertiesData["port"].(float64))
-	}
-
-	// go through the traits to find the replicas and the ports
-	for _, trait := range component.Traits {
-		traitsData, err := extractMapFromRawExtension(trait.Properties)
-		if err != nil {
-			log.Fatal(err)
-		}
-		if trait.Type == "scaler" {
-			r.Replicas = int32(traitsData["replicas"].(float64))
-		}
-		if trait.Type == "expose" {
-			r.ContainerPort = int32(traitsData["port"].([]interface{})[0].(float64))
-		}
-	}
-
-	r.CPU = propertiesData["cpu"].(string)
-	r.Memory = propertiesData["memory"].(string)
-	r.Status = status.Message
+	ComponentProperties
 }
 
 type ServiceComponentStatusResponse struct {
@@ -192,20 +184,29 @@ type EnvironmentResponse struct {
 }
 
 type NetworkProperties struct {
+	IP         string  `json:"ip"`
+	ExternalIP string  `json:"external_ip"`
+	Host       string  `json:"host"`
+	Ports      []int32 `json:"port"`
 }
 
 type ResourcesProperties struct {
+	Replicas int32  `json:"replicas"`
+	CPU      string `json:"cpu"`
+	Memory   string `json:"memory"`
 }
 
 type StorageProperties struct {
+	Size string `json:"size"`
 }
 
 type SourceProperties struct {
+	ContainerImage string `json:"container_image"`
 }
 
 type ComponentProperties struct {
-	NetworkProperties   NetworkProperties   `json:"network"`
-	ResourcesProperties ResourcesProperties `json:"resources"`
-	StorageProperties   StorageProperties   `json:"storage"`
-	SourceProperties    SourceProperties    `json:"source"`
+	NetworkProperties   *NetworkProperties   `json:"network"`
+	ResourcesProperties *ResourcesProperties `json:"resources"`
+	StorageProperties   *StorageProperties   `json:"storage"`
+	SourceProperties    *SourceProperties    `json:"source"`
 }
