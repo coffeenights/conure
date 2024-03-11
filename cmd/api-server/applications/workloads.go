@@ -107,7 +107,7 @@ func (w *K8sDeploymentWorkload) GetNetworkProperties() (*NetworkProperties, erro
 		ApplicationIDLabel:  w.Application.ID,
 		EnvironmentLabel:    w.Application.Environment,
 	}
-	err = getNetworkPropertiesFromService(clientset, w.Application.getNamespace(), filter, &properties)
+	err = getNetworkPropertiesFromService(clientset, w.Application.GetNamespace(), filter, &properties)
 	if err != nil {
 		switch {
 		case !errors.Is(err, ErrServiceNotFound):
@@ -190,7 +190,7 @@ func (w *K8sStatefulSetWorkload) GetNetworkProperties() (*NetworkProperties, err
 		ApplicationIDLabel:  w.Application.ID,
 		EnvironmentLabel:    w.Application.Environment,
 	}
-	err = getNetworkPropertiesFromService(clientset, w.Application.getNamespace(), filter, &properties)
+	err = getNetworkPropertiesFromService(clientset, w.Application.GetNamespace(), filter, &properties)
 	if err != nil {
 		switch {
 		case !errors.Is(err, ErrServiceNotFound):
