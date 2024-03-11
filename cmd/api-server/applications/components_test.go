@@ -3,10 +3,14 @@ package applications
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
+	"log"
 	"testing"
 )
 
@@ -71,4 +75,33 @@ func TestServiceComponentStatus(t *testing.T) {
 	}
 	t.Log(r1)
 
+}
+
+func TestChannel(t *testing.T) {
+	watchlist := metav1.ListOptions{}
+	clientset, err := k8sUtils.GetClientset()
+
+	c := context.Background()
+	pods, err := clientset.K8s.CoreV1().Pods("default").Watch(c, watchlist)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ch := pods.ResultChan()
+
+	for event := range ch {
+		pod, ok := event.Object.(*corev1.Pod)
+		if !ok {
+			log.Fatal("unexpected type")
+		}
+
+		switch event.Type {
+		case watch.Added:
+			fmt.Printf("Pod %s was added\n", pod.Name)
+		case watch.Modified:
+			fmt.Printf("Pod %s was modified\n", pod.Name)
+		case watch.Deleted:
+			fmt.Printf("Pod %s was deleted\n", pod.Name)
+		}
+	}
 }
