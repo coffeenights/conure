@@ -107,8 +107,11 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 		return
 	}
 
-	componentProperties := ComponentProperties{}
-	wl, err := CreateK8sWorkload(application, &componentSpec, &componentStatus)
+	componentProperties := ComponentProperties{
+		Name: componentSpec.Name,
+		Type: componentSpec.Type,
+	}
+	wl, err := NewK8sWorkload(application, &componentSpec, &componentStatus)
 	if err != nil {
 		log.Printf("Error creating workload: %v\n", err)
 	}

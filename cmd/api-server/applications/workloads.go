@@ -1,6 +1,7 @@
 package applications
 
 import (
+	"errors"
 	"fmt"
 	"github.com/coffeenights/conure/internal/k8s"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
@@ -51,22 +52,47 @@ type K8sDeploymentWorkload struct {
 	*Application
 }
 
+func getNetworkPropertiesFromService(clientset *k8s.GenericClientset, namespace string, labels map[string]string, properties *NetworkProperties) error {
+	services, err := getServicesByLabels(clientset, namespace, labels)
+	if err != nil {
+		return fmt.Errorf("error getting services: %v", err)
+	}
+	if len(services) == 0 {
+		return fmt.Errorf("no services found with labels: %v", labels)
+	}
+	service := services[0]
+	properties.IP = service.Spec.ClusterIP
+	properties.ExternalIP = ""
+	if service.Spec.Type == "LoadBalancer" {
+		if len(service.Status.LoadBalancer.Ingress) != 0 {
+			properties.ExternalIP = service.Status.LoadBalancer.Ingress[0].IP
+		}
+	}
+	return nil
+}
+
+func getExposeTraitProperties(trait *common.ApplicationTrait, properties *NetworkProperties) error {
+	traitsData, err := extractMapFromRawExtension(trait.Properties)
+	if err != nil {
+		return err
+	}
+	if ports, ok := traitsData["port"].([]interface{}); ok {
+		for _, p := range ports {
+			properties.Ports = append(properties.Ports, int32(p.(float64)))
+		}
+	}
+	return nil
+}
 func (w *K8sDeploymentWorkload) GetNetworkProperties() (*NetworkProperties, error) {
 	var properties NetworkProperties
 
 	// Information from trait
 	for _, trait := range w.ComponentSpec.Traits {
 		if trait.Type == "expose" {
-			traitsData, err := extractMapFromRawExtension(trait.Properties)
+			err := getExposeTraitProperties(&trait, &properties)
 			if err != nil {
 				return nil, err
 			}
-			if ports, ok := traitsData["port"].([]interface{}); ok {
-				for _, p := range ports {
-					properties.Ports = append(properties.Ports, int32(p.(float64)))
-				}
-			}
-
 		}
 	}
 
@@ -81,23 +107,13 @@ func (w *K8sDeploymentWorkload) GetNetworkProperties() (*NetworkProperties, erro
 		ApplicationIDLabel:  w.Application.ID,
 		EnvironmentLabel:    w.Application.Environment,
 	}
-	services, err := getServicesByLabels(clientset, w.Application.getNamespace(), filter)
+	err = getNetworkPropertiesFromService(clientset, w.Application.getNamespace(), filter, &properties)
 	if err != nil {
-		log.Printf("Error getting services: %v\n", err)
-		return nil, err
-	}
-	if len(services) == 0 {
-		return &properties, nil
-	}
-	service := services[0]
-	properties.IP = service.Spec.ClusterIP
-	properties.ExternalIP = ""
-	if service.Spec.Type == "LoadBalancer" {
-		if len(service.Status.LoadBalancer.Ingress) != 0 {
-			properties.ExternalIP = service.Status.LoadBalancer.Ingress[0].IP
+		switch {
+		case !errors.Is(err, ErrServiceNotFound):
+			return nil, err
 		}
 	}
-
 	return &properties, nil
 }
 
@@ -151,7 +167,37 @@ type K8sStatefulSetWorkload struct {
 }
 
 func (w *K8sStatefulSetWorkload) GetNetworkProperties() (*NetworkProperties, error) {
-	return &NetworkProperties{}, nil
+	var properties NetworkProperties
+
+	// Information from trait
+	for _, trait := range w.ComponentSpec.Traits {
+		if trait.Type == "expose" {
+			err := getExposeTraitProperties(&trait, &properties)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Information from Service
+	clientset, err := k8s.GetClientset()
+	if err != nil {
+		log.Printf("Error getting clientset: %v\n", err)
+		return nil, err
+	}
+	filter := map[string]string{
+		OrganizationIDLabel: w.Application.OrganizationID,
+		ApplicationIDLabel:  w.Application.ID,
+		EnvironmentLabel:    w.Application.Environment,
+	}
+	err = getNetworkPropertiesFromService(clientset, w.Application.getNamespace(), filter, &properties)
+	if err != nil {
+		switch {
+		case !errors.Is(err, ErrServiceNotFound):
+			return nil, err
+		}
+	}
+	return &properties, nil
 }
 
 func (w *K8sStatefulSetWorkload) GetResourcesProperties() (*ResourcesProperties, error) {
@@ -166,7 +212,7 @@ func (w *K8sStatefulSetWorkload) GetSourceProperties() (*SourceProperties, error
 	return &SourceProperties{}, nil
 }
 
-func CreateK8sWorkload(app *Application, spec *common.ApplicationComponent, status *common.ApplicationComponentStatus) (Workload, error) {
+func NewK8sWorkload(app *Application, spec *common.ApplicationComponent, status *common.ApplicationComponentStatus) (Workload, error) {
 	wln := WorkloadName(status.WorkloadDefinition.Kind)
 	bt := Kubernetes
 	properties := WorkloadProperties{

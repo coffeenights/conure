@@ -205,6 +205,9 @@ type SourceProperties struct {
 }
 
 type ComponentProperties struct {
+	Name                string               `json:"name"`
+	Type                string               `json:"type"`
+	Description         string               `json:"description"`
 	NetworkProperties   *NetworkProperties   `json:"network"`
 	ResourcesProperties *ResourcesProperties `json:"resources"`
 	StorageProperties   *StorageProperties   `json:"storage"`
