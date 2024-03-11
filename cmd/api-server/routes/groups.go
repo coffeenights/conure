@@ -19,7 +19,7 @@ func GenerateRouter() *gin.Engine {
 	}
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery(), cors.Default())
-	appHandler := apps.NewAppHandler()
+	appHandler := apps.NewApiHandler()
 	authHandler := auth.NewAuthHandler(conf, mongo)
 	apps.GenerateRoutes("/organizations", router, appHandler)
 	auth.GenerateRoutes("/auth", router, authHandler)

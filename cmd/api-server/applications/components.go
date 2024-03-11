@@ -10,7 +10,7 @@ import (
 	"net/http"
 )
 
-func (a *AppHandler) ListComponents(c *gin.Context) {
+func (a *ApiHandler) ListComponents(c *gin.Context) {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
@@ -50,7 +50,7 @@ func (a *AppHandler) ListComponents(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (a *AppHandler) DetailComponent(c *gin.Context) {
+func (a *ApiHandler) DetailComponent(c *gin.Context) {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
@@ -139,7 +139,7 @@ func (a *AppHandler) DetailComponent(c *gin.Context) {
 	c.JSON(http.StatusOK, componentResponse)
 }
 
-func (a *AppHandler) StatusComponent(c *gin.Context) {
+func (a *ApiHandler) StatusComponent(c *gin.Context) {
 	// obtain the deployment related to the component
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {

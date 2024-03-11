@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *AppHandler) {
+func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *ApiHandler) {
 	applications := r.Group(relativePath)
 	{
 		applications.POST("/", appHandler.CreateOrganization)

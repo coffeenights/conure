@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func (a *AppHandler) ListApplications(c *gin.Context) {
+func (a *ApiHandler) ListApplications(c *gin.Context) {
 	// q is the query param that represents the search term
 	q := c.DefaultQuery("q", "")
 	// creates the clientset
@@ -74,7 +74,7 @@ func (a *AppHandler) ListApplications(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (a *AppHandler) DetailApplication(c *gin.Context) {
+func (a *ApiHandler) DetailApplication(c *gin.Context) {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)

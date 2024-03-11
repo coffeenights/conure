@@ -18,9 +18,9 @@ func setupDB() (*database.MongoDB, error) {
 	return &database.MongoDB{Client: client.Client, DBName: testDBName}, nil
 }
 
-func setupRouter() (*gin.Engine, *AppHandler) {
+func setupRouter() (*gin.Engine, *ApiHandler) {
 	router := gin.Default()
-	app := NewAppHandler()
+	app := NewApiHandler()
 	app.MongoDB.DBName += "-test"
 	GenerateRoutes("/organizations", router, app)
 	return router, app

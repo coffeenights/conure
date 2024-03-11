@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-func (a *AppHandler) CreateEnvironment(c *gin.Context) {
+func (a *ApiHandler) CreateEnvironment(c *gin.Context) {
 	request := CreateEnvironmentRequest{}
 	err := c.BindJSON(&request)
 	if err != nil {
@@ -49,7 +49,7 @@ func (a *AppHandler) CreateEnvironment(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{})
 }
 
-func (a *AppHandler) ListEnvironments(c *gin.Context) {
+func (a *ApiHandler) ListEnvironments(c *gin.Context) {
 	// creates the clientset
 	genericClientset, err := k8sUtils.GetClientset()
 	if err != nil {
@@ -88,7 +88,7 @@ func (a *AppHandler) ListEnvironments(c *gin.Context) {
 	c.JSON(http.StatusOK, environments)
 }
 
-func (a *AppHandler) DeleteEnvironment(c *gin.Context) {
+func (a *ApiHandler) DeleteEnvironment(c *gin.Context) {
 	// creates the clientset
 	genericClientset, err := k8sUtils.GetClientset()
 	if err != nil {

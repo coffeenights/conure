@@ -77,12 +77,13 @@ func TestServiceComponentStatus(t *testing.T) {
 
 }
 
-func TestChannel(t *testing.T) {
+func TestChannel(_ *testing.T) {
 	watchlist := metav1.ListOptions{}
 	clientset, err := k8sUtils.GetClientset()
-
-	c := context.Background()
-	pods, err := clientset.K8s.CoreV1().Pods("default").Watch(c, watchlist)
+	if err != nil {
+		log.Fatal(err)
+	}
+	pods, err := clientset.K8s.CoreV1().Pods("default").Watch(context.TODO(), watchlist)
 	if err != nil {
 		log.Fatal(err)
 	}
