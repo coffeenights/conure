@@ -2,6 +2,7 @@ package applications
 
 import (
 	_ "github.com/joho/godotenv/autoload"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"testing"
 )
 
@@ -105,6 +106,10 @@ func TestOrganization_SoftDelete(t *testing.T) {
 	if err == nil {
 		t.Errorf("Got 1 document, want 0")
 	}
+	err = org.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete organization: %v", err)
+	}
 }
 
 func TestApplication_Create(t *testing.T) {
@@ -112,14 +117,17 @@ func TestApplication_Create(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := NewApplication("Test Application", "development")
-	id, err := app.Create(client)
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestApplicationCreate", primitive.NewObjectID().Hex()).Create(client)
 	if err != nil {
 		t.Errorf("Failed to create application: %v", err)
 	}
-	got, _ := app.GetById(client, id)
+	got, _ := app.GetByID(client, app.ID.Hex())
 	if got.Name != app.Name {
 		t.Errorf("Got %v, want %v", got.Name, app.Name)
+	}
+	err = app.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
 	}
 }
 
@@ -128,14 +136,17 @@ func TestApplication_GetById(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := NewApplication("Test Application", "development")
-	id, err := app.Create(client)
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestApplicationGetById", primitive.NewObjectID().Hex()).Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, _ := app.GetById(client, id)
+	got, _ := app.GetByID(client, app.ID.Hex())
 	if got.Name != app.Name {
 		t.Errorf("Got %v, want %v", got.Name, app.Name)
+	}
+	err = app.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
 	}
 }
 
@@ -144,8 +155,7 @@ func TestApplication_Update(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := NewApplication("Test Application", "development")
-	id, err := app.Create(client)
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestApplicationGetById", primitive.NewObjectID().Hex()).Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,9 +164,13 @@ func TestApplication_Update(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to update application: %v", err)
 	}
-	got, _ := app.GetById(client, id)
+	got, _ := app.GetByID(client, app.ID.Hex())
 	if got.Name != app.Name {
 		t.Errorf("Got %v, want %v", got.Name, app.Name)
+	}
+	err = app.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
 	}
 }
 
@@ -165,8 +179,7 @@ func TestApplication_SoftDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := NewApplication("Test Application", "development")
-	id, err := app.Create(client)
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestApplicationSoftDelete", primitive.NewObjectID().Hex()).Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,9 +187,13 @@ func TestApplication_SoftDelete(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to soft delete application: %v", err)
 	}
-	_, err = app.GetById(client, id)
+	_, err = app.GetByID(client, app.ID.Hex())
 	if err == nil {
 		t.Errorf("Got 1 document, want 0")
+	}
+	err = app.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
 	}
 }
 
@@ -185,17 +202,29 @@ func Test_ApplicationList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := NewApplication("testList", "development")
-	_, err = app.Create(client)
+	orgID := primitive.NewObjectID()
+	app1, err := NewApplication(orgID.Hex(), "TestApplicationList1", primitive.NewObjectID().Hex()).Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
-	apps, err := ApplicationList(client, app.OrganizationID)
+	app2, err := NewApplication(orgID.Hex(), "TestApplicationList2", primitive.NewObjectID().Hex()).Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	apps, err := ApplicationList(client, orgID.Hex())
 	if err != nil {
 		t.Errorf("Failed to list applications: %v", err)
 	}
-	if len(apps) == 0 {
-		t.Errorf("Got 0 applications, want > 0")
+	if len(apps) != 2 {
+		t.Errorf("Got %d applications, want == 2", len(apps))
+	}
+	err = app1.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
+	}
+	err = app2.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
 	}
 }
 
@@ -204,21 +233,35 @@ func TestApplication_ListNotDeleted(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := NewApplication("testList2", "development")
-	_, err = app.Create(client)
+
+	orgID := primitive.NewObjectID()
+	app1, err := NewApplication(orgID.Hex(), "TestApplicationListNotDeleted1", primitive.NewObjectID().Hex()).Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = app.SoftDelete(client)
+	app2, err := NewApplication(orgID.Hex(), "TestApplicationListNotDeleted2", primitive.NewObjectID().Hex()).Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = app1.SoftDelete(client)
 	if err != nil {
 		t.Errorf("Failed to soft delete application: %v", err)
 	}
-	apps, err := ApplicationList(client, app.OrganizationID)
+	apps, err := ApplicationList(client, orgID.Hex())
 	if err != nil {
 		t.Errorf("Failed to list applications: %v", err)
 	}
-	if len(apps) != 0 {
-		t.Errorf("Got > 0 applications, want = 0")
+	if len(apps) != 1 {
+		t.Errorf("Got %d applications, want = 1", len(apps))
+	}
+	err = app1.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
+	}
+	err = app2.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
 	}
 }
 
@@ -227,8 +270,7 @@ func TestComponent_CreateList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	app := NewApplication("testAppComponent", "development")
-	_, err = app.Create(client)
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestApplicationSoftDelete", primitive.NewObjectID().Hex()).Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,5 +290,9 @@ func TestComponent_CreateList(t *testing.T) {
 	}
 	if len(comps) == 0 {
 		t.Errorf("Got 0 components, want > 0")
+	}
+	err = app.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
 	}
 }

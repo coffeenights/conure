@@ -108,49 +108,50 @@ func (o *Organization) SoftDelete(mongo *database.MongoDB) error {
 
 type Application struct {
 	ID              primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	OrganizationID  string             `json:"organization_id" bson:"organizationID"`
+	OrganizationID  primitive.ObjectID `json:"organization_id" bson:"organizationID"`
 	Name            string             `json:"name" bson:"name"`
-	Description     string             `json:"description" bson:"description"`
-	Environment     string             `json:"environment" bson:"environment"`
-	CreatedBy       string             `json:"created_by" bson:"createdBy"`
-	AccountID       string             `json:"account_id" bson:"accountID"`
+	Description     string             `json:"description" bson:"description, omitempty"`
+	CreatedBy       primitive.ObjectID `json:"created_by" bson:"createdBy"`
+	AccountID       primitive.ObjectID `json:"account_id" bson:"accountID"`
 	CurrentRevision primitive.ObjectID `json:"current_revision" bson:"currentRevision"`
 	CreatedAt       time.Time          `json:"created_at" bson:"createdAt"`
 	DeletedAt       time.Time          `json:"deleted_at" bson:"deletedAt,omitempty"`
 }
 
-func NewApplication(organizationID string, environment string) *Application {
+func NewApplication(organizationID string, name string, createdBy string) *Application {
+	oID, err := primitive.ObjectIDFromHex(organizationID)
+	if err != nil {
+		log.Fatalf("Error parsing organizationID: %v\n", err)
+	}
+	createdByoID, err := primitive.ObjectIDFromHex(createdBy)
+	if err != nil {
+		log.Fatalf("Error parsing createdBy: %v\n", err)
+	}
 	return &Application{
-		OrganizationID: organizationID,
-		Environment:    environment,
+		OrganizationID: oID,
+		Name:           name,
+		CreatedBy:      createdByoID,
+		AccountID:      createdByoID,
 	}
 }
 
 func (a *Application) GetNamespace() string {
-	return a.OrganizationID + "-" + a.ID.Hex() + "-" + a.Environment
+	return ""
 }
 
-func (a *Application) GenerateLabels() map[string]string {
-	return map[string]string{
-		"conure.io/organization-id": a.OrganizationID,
-		"conure.io/application-id":  a.ID.Hex(),
-		"conure.io/environment":     a.Environment,
-	}
-}
-
-func (a *Application) Create(mongo *database.MongoDB) (string, error) {
+func (a *Application) Create(mongo *database.MongoDB) (*Application, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
 	a.CreatedAt = time.Now()
 	insertResult, err := collection.InsertOne(context.Background(), a)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	log.Println("Inserted a single document: ", insertResult.InsertedID.(primitive.ObjectID).Hex())
 	a.ID = insertResult.InsertedID.(primitive.ObjectID)
-	return insertResult.InsertedID.(primitive.ObjectID).Hex(), nil
+	return a, nil
 }
 
-func (a *Application) GetById(mongo *database.MongoDB, ID string) (*Application, error) {
+func (a *Application) GetByID(mongo *database.MongoDB, ID string) (*Application, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
 	oID, _ := primitive.ObjectIDFromHex(ID)
 	filter := bson.M{"_id": oID, "deletedAt": bson.M{"$exists": false}}
@@ -170,7 +171,6 @@ func (a *Application) Update(mongo *database.MongoDB) error {
 			{"organization_id", a.OrganizationID},
 			{"name", a.Name},
 			{"description", a.Description},
-			{"environment", a.Environment},
 			{"created_by", a.CreatedBy},
 			{"account_id", a.AccountID},
 			{"created_at", a.CreatedAt},
@@ -184,22 +184,37 @@ func (a *Application) Update(mongo *database.MongoDB) error {
 	return nil
 }
 
-func ApplicationList(mongo *database.MongoDB, organizationID string) ([]Application, error) {
+func (a *Application) Delete(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
-	filter := bson.M{"organization_id": organizationID, "deletedAt": bson.M{"$exists": false}}
+	filter := bson.D{{"_id", a.ID}}
+	deleteResult, err := collection.DeleteOne(context.Background(), filter)
+	if err != nil {
+		return err
+	}
+	log.Printf("Deleted %v documents in the applications collection\n", deleteResult.DeletedCount)
+	return nil
+}
+
+func ApplicationList(mongo *database.MongoDB, organizationID string) ([]*Application, error) {
+	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+	oID, err := primitive.ObjectIDFromHex(organizationID)
+	if err != nil {
+		return nil, err
+	}
+	filter := bson.M{"organizationID": oID, "deletedAt": bson.M{"$exists": false}}
 	cursor, err := collection.Find(context.Background(), filter)
 	if err != nil {
 		return nil, err
 	}
 	defer cursor.Close(context.Background())
-	var applications []Application
+	var applications []*Application
 	for cursor.Next(context.Background()) {
 		var app Application
 		err = cursor.Decode(&app)
 		if err != nil {
 			return nil, err
 		}
-		applications = append(applications, app)
+		applications = append(applications, &app)
 	}
 	if err = cursor.Err(); err != nil {
 		return nil, err
