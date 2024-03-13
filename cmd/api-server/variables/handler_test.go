@@ -1,8 +1,8 @@
 package variables
 
 import (
+	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -51,8 +51,6 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
 	defer cleanUpDB(mongo)
 	keyStorage := NewLocalSecretKey("secret.key")
-	secretKeyBytes, _ := keyStorage.Load()
-	_ = hex.EncodeToString(secretKeyBytes)
 
 	user := auth.User{
 		Email:  "test@test.com",
@@ -139,8 +137,6 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	defer cleanUpDB(mongo)
 
 	keyStorage := NewLocalSecretKey("secret.key")
-	secretKeyBytes, _ := keyStorage.Load()
-	_ = hex.EncodeToString(secretKeyBytes)
 
 	user := auth.User{
 		Email:  "test@test.com",
@@ -248,8 +244,6 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	defer cleanUpDB(mongo)
 
 	keyStorage := NewLocalSecretKey("secret.key")
-	secretKeyBytes, _ := keyStorage.Load()
-	_ = hex.EncodeToString(secretKeyBytes)
 
 	user := auth.User{
 		Email:  "test@test.com",
@@ -337,4 +331,396 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.Code, "should return 200 OK")
 	assert.Equal(t, 0, len(variables), "should return 0 results")
+}
+
+func TestHandler_CreateVariableOrg(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	payload := auth.JWTData{
+		Email:  "test@test.com",
+		Client: "test-client",
+	}
+
+	token, _ := auth.GenerateToken(1*time.Hour, payload, "test-secret")
+
+	config := &apiConfig.Config{
+		JWTSecret:          "test-secret",
+		MongoDBURI:         "mongodb://localhost:27017",
+		MongoDBName:        "conure-test",
+		AuthStrategySystem: "local",
+	}
+	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
+	defer cleanUpDB(mongo)
+
+	keyStorage := NewLocalSecretKey("secret.key")
+
+	user := auth.User{
+		Email:  "test@test.com",
+		Client: "test-client",
+	}
+	_ = user.Create(mongo)
+
+	setupTestHandler(router, mongo, config, keyStorage)
+	newVar := Variable{
+		Name:        "newVar",
+		Value:       "value2",
+		IsEncrypted: true,
+	}
+
+	jsonVar, _ := json.Marshal(newVar)
+	var result Variable
+
+	req, _ := http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
+	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, OrganizationType, result.Type, "should return the correct type of variable")
+	assert.NotEqual(t, newVar.Value, result.Value, "should return the encrypted value")
+	assert.True(t, result.IsEncrypted, "should return the correct type of variable")
+
+	newVar = Variable{
+		Name:        "newVar2",
+		Value:       "value2",
+		IsEncrypted: false,
+	}
+
+	jsonVar, _ = json.Marshal(newVar)
+
+	req, _ = http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
+	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, OrganizationType, result.Type, "should return the correct type of variable")
+	assert.Equal(t, newVar.Value, result.Value, "should return the encrypted value")
+	assert.False(t, result.IsEncrypted, "should return the correct type of variable")
+
+	req, _ = http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 401 BadRequest")
+
+	req, _ = http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
+
+	newVar = Variable{
+		Name: "newVarX",
+	}
+	jsonVar, _ = json.Marshal(newVar)
+	req, _ = http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+
+	newVar = Variable{
+		Name:        "Incorrect Variable $$$",
+		Value:       "value2",
+		IsEncrypted: false,
+	}
+	jsonVar, _ = json.Marshal(newVar)
+	req, _ = http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+}
+
+func TestHandler_CreateVariableEnv(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	payload := auth.JWTData{
+		Email:  "test@test.com",
+		Client: "test-client",
+	}
+
+	token, _ := auth.GenerateToken(1*time.Hour, payload, "test-secret")
+
+	config := &apiConfig.Config{
+		JWTSecret:          "test-secret",
+		MongoDBURI:         "mongodb://localhost:27017",
+		MongoDBName:        "conure-test",
+		AuthStrategySystem: "local",
+	}
+	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
+	defer cleanUpDB(mongo)
+
+	keyStorage := NewLocalSecretKey("secret.key")
+
+	user := auth.User{
+		Email:  "test@test.com",
+		Client: "test-client",
+	}
+	_ = user.Create(mongo)
+
+	setupTestHandler(router, mongo, config, keyStorage)
+	newVar := Variable{
+		Name:        "newVar",
+		Value:       "value2",
+		IsEncrypted: true,
+	}
+
+	jsonVar, _ := json.Marshal(newVar)
+	var result Variable
+
+	req, _ := http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
+	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, "app1", *result.ApplicationID, "should return the correct application")
+	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
+	assert.Equal(t, EnvironmentType, result.Type, "should return the correct type of variable")
+	assert.NotEqual(t, newVar.Value, result.Value, "should return the encrypted value")
+	assert.True(t, result.IsEncrypted, "should return the correct type of variable")
+
+	newVar = Variable{
+		Name:        "newVar2",
+		Value:       "value2",
+		IsEncrypted: false,
+	}
+
+	jsonVar, _ = json.Marshal(newVar)
+
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
+	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, "app1", *result.ApplicationID, "should return the correct application")
+	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
+	assert.Equal(t, EnvironmentType, result.Type, "should return the correct type of variable")
+	assert.Equal(t, newVar.Value, result.Value, "should return the encrypted value")
+	assert.False(t, result.IsEncrypted, "should return the correct type of variable")
+
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 401 BadRequest")
+
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
+
+	newVar = Variable{
+		Name: "newVarX",
+	}
+	jsonVar, _ = json.Marshal(newVar)
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+
+	newVar = Variable{
+		Name:        "Incorrect Variable $$$",
+		Value:       "value2",
+		IsEncrypted: false,
+	}
+	jsonVar, _ = json.Marshal(newVar)
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+}
+
+func TestHandler_CreateVariableComp(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	payload := auth.JWTData{
+		Email:  "test@test.com",
+		Client: "test-client",
+	}
+
+	token, _ := auth.GenerateToken(1*time.Hour, payload, "test-secret")
+
+	config := &apiConfig.Config{
+		JWTSecret:          "test-secret",
+		MongoDBURI:         "mongodb://localhost:27017",
+		MongoDBName:        "conure-test",
+		AuthStrategySystem: "local",
+	}
+	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
+	defer cleanUpDB(mongo)
+
+	keyStorage := NewLocalSecretKey("secret.key")
+
+	user := auth.User{
+		Email:  "test@test.com",
+		Client: "test-client",
+	}
+	_ = user.Create(mongo)
+
+	setupTestHandler(router, mongo, config, keyStorage)
+	newVar := Variable{
+		Name:        "newVar",
+		Value:       "value2",
+		IsEncrypted: true,
+	}
+
+	jsonVar, _ := json.Marshal(newVar)
+	var result Variable
+
+	req, _ := http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
+	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, "app1", *result.ApplicationID, "should return the correct application")
+	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
+	assert.Equal(t, "comp1", *result.ComponentID, "should return the correct component")
+	assert.Equal(t, ComponentType, result.Type, "should return the correct type of variable")
+	assert.NotEqual(t, newVar.Value, result.Value, "should return the encrypted value")
+	assert.True(t, result.IsEncrypted, "should return the correct type of variable")
+
+	newVar = Variable{
+		Name:        "newVar2",
+		Value:       "value2",
+		IsEncrypted: false,
+	}
+
+	jsonVar, _ = json.Marshal(newVar)
+
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
+	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, "app1", *result.ApplicationID, "should return the correct application")
+	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
+	assert.Equal(t, "comp1", *result.ComponentID, "should return the correct component")
+	assert.Equal(t, ComponentType, result.Type, "should return the correct type of variable")
+	assert.Equal(t, newVar.Value, result.Value, "should return the encrypted value")
+	assert.False(t, result.IsEncrypted, "should return the correct type of variable")
+
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
+
+	newVar = Variable{
+		Name: "newVarX",
+	}
+	jsonVar, _ = json.Marshal(newVar)
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+
+	newVar = Variable{
+		Name:        "Incorrect Variable $$$",
+		Value:       "value2",
+		IsEncrypted: false,
+	}
+	jsonVar, _ = json.Marshal(newVar)
+	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
 }
