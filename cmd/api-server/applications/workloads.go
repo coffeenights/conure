@@ -53,7 +53,7 @@ type K8sDeploymentWorkload struct {
 }
 
 func getNetworkPropertiesFromService(clientset *k8s.GenericClientset, namespace string, labels map[string]string, properties *NetworkProperties) error {
-	services, err := getServicesByLabels(clientset, namespace, labels)
+	services, err := k8s.GetServicesByLabels(clientset, namespace, labels)
 	if err != nil {
 		return fmt.Errorf("error getting services: %v", err)
 	}
@@ -103,14 +103,14 @@ func (w *K8sDeploymentWorkload) GetNetworkProperties() (*NetworkProperties, erro
 		return nil, err
 	}
 	filter := map[string]string{
-		OrganizationIDLabel: w.Application.OrganizationID,
+		OrganizationIDLabel: w.Application.OrganizationID.Hex(),
 		ApplicationIDLabel:  w.Application.ID.Hex(),
-		EnvironmentLabel:    w.Application.Environment,
+		// EnvironmentLabel:    w.Application.Environment,
 	}
 	err = getNetworkPropertiesFromService(clientset, w.Application.GetNamespace(), filter, &properties)
 	if err != nil {
 		switch {
-		case !errors.Is(err, ErrServiceNotFound):
+		case !errors.Is(err, k8s.ErrServiceNotFound):
 			return nil, err
 		}
 	}
@@ -186,14 +186,14 @@ func (w *K8sStatefulSetWorkload) GetNetworkProperties() (*NetworkProperties, err
 		return nil, err
 	}
 	filter := map[string]string{
-		OrganizationIDLabel: w.Application.OrganizationID,
+		OrganizationIDLabel: w.Application.OrganizationID.Hex(),
 		ApplicationIDLabel:  w.Application.ID.Hex(),
-		EnvironmentLabel:    w.Application.Environment,
+		// EnvironmentLabel:    w.Application.Environment,
 	}
 	err = getNetworkPropertiesFromService(clientset, w.Application.GetNamespace(), filter, &properties)
 	if err != nil {
 		switch {
-		case !errors.Is(err, ErrServiceNotFound):
+		case !errors.Is(err, k8s.ErrServiceNotFound):
 			return nil, err
 		}
 	}
