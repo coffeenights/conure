@@ -17,8 +17,8 @@ const VariableCollection string = "variables"
 type Variable struct {
 	ID             primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	Client         string             `bson:"client" json:"client"`
-	Name           string             `bson:"name" json:"name"`
-	Value          string             `bson:"value" json:"value"`
+	Name           string             `bson:"name" json:"name" binding:"required"`
+	Value          string             `bson:"value" json:"value" binding:"required"`
 	Type           VariableType       `bson:"type" json:"type"`
 	OrganizationID string             `bson:"organizationId,omitempty" json:"organization_id,omitempty"`
 	ApplicationID  *string            `bson:"applicationId,omitempty" json:"application_id,omitempty"`
