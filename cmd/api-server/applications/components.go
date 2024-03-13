@@ -58,7 +58,7 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 		return
 	}
 
-	application := NewApplication(c.Param("organizationID"), c.Param("environment"))
+	application := NewApplication(c.Param("organizationID"), "", "")
 	namespace := application.GetNamespace()
 
 	labels := map[string]string{
@@ -67,10 +67,10 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 		"conure.io/environment":     c.Param("environment"),
 	}
 
-	applicationDef, err := getApplicationByLabels(clientset, namespace, labels)
+	applicationDef, err := k8sUtils.GetApplicationByLabels(clientset, namespace, labels)
 	if err != nil {
 		switch {
-		case errors.Is(err, ErrApplicationNotFound):
+		case errors.Is(err, k8sUtils.ErrApplicationNotFound):
 			c.AbortWithStatus(http.StatusNotFound)
 			return
 		default:
@@ -159,7 +159,7 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 	_ = cd
 	configmap, err := clientset.K8s.CoreV1().ConfigMaps("vela-system").Get(c, "webservice", metav1.GetOptions{})
 	_ = configmap
-	deployments, err := getDeploymentByLabels(clientset.K8s, namespace, labels)
+	deployments, err := k8sUtils.GetDeploymentByLabels(clientset.K8s, namespace, labels)
 	if err != nil {
 		log.Printf("Error getting deployments: %v\n", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
