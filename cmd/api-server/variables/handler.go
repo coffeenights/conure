@@ -149,7 +149,7 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	// save the variable to the database
 	_, _ = variable.Create(h.MongoDB)
 
-	c.JSON(http.StatusOK, variable)
+	c.JSON(http.StatusCreated, variable)
 }
 
 func checkVariable(h *Handler, variable Variable) error {
