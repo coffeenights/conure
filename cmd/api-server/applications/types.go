@@ -25,33 +25,6 @@ const (
 	NamespaceLabel      = "conure.io/namespace"
 )
 
-type Application struct {
-	ID              string    `json:"id"`
-	OrganizationID  string    `json:"organization_id"`
-	Name            string    `json:"name"`
-	Description     string    `json:"description"`
-	Environment     string    `json:"environment"`
-	CreatedBy       string    `json:"created_by"`
-	AccountID       string    `json:"account_id"`
-	TotalComponents int       `json:"total_components"`
-	Status          AppStatus `json:"status"`
-	Created         time.Time `json:"created"`
-	Revision        int64     `json:"revision"`
-	LastUpdated     time.Time `json:"last_updated"`
-}
-
-func NewApplication(organizationID string, applicationID string, environment string) *Application {
-	return &Application{
-		OrganizationID: organizationID,
-		ID:             applicationID,
-		Environment:    environment,
-	}
-}
-
-func (a *Application) getNamespace() string {
-	return a.OrganizationID + "-" + a.ID + "-" + a.Environment
-}
-
 type ApplicationResponse struct {
 	ID              string    `json:"id"`
 	Name            string    `json:"name"`
@@ -181,35 +154,4 @@ type EnvironmentListResponse struct {
 
 type EnvironmentResponse struct {
 	Name string `json:"name"`
-}
-
-type NetworkProperties struct {
-	IP         string  `json:"ip"`
-	ExternalIP string  `json:"external_ip"`
-	Host       string  `json:"host"`
-	Ports      []int32 `json:"port"`
-}
-
-type ResourcesProperties struct {
-	Replicas int32  `json:"replicas"`
-	CPU      string `json:"cpu"`
-	Memory   string `json:"memory"`
-}
-
-type StorageProperties struct {
-	Size string `json:"size"`
-}
-
-type SourceProperties struct {
-	ContainerImage string `json:"container_image"`
-}
-
-type ComponentProperties struct {
-	Name                string               `json:"name"`
-	Type                string               `json:"type"`
-	Description         string               `json:"description"`
-	NetworkProperties   *NetworkProperties   `json:"network"`
-	ResourcesProperties *ResourcesProperties `json:"resources"`
-	StorageProperties   *StorageProperties   `json:"storage"`
-	SourceProperties    *SourceProperties    `json:"source"`
 }

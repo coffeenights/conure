@@ -58,8 +58,8 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 		return
 	}
 
-	application := NewApplication(c.Param("organizationID"), c.Param("applicationID"), c.Param("environment"))
-	namespace := application.getNamespace()
+	application := NewApplication(c.Param("organizationID"), c.Param("environment"))
+	namespace := application.GetNamespace()
 
 	labels := map[string]string{
 		"conure.io/organization-id": c.Param("organizationID"),

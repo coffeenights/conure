@@ -104,7 +104,7 @@ func (w *K8sDeploymentWorkload) GetNetworkProperties() (*NetworkProperties, erro
 	}
 	filter := map[string]string{
 		OrganizationIDLabel: w.Application.OrganizationID,
-		ApplicationIDLabel:  w.Application.ID,
+		ApplicationIDLabel:  w.Application.ID.Hex(),
 		EnvironmentLabel:    w.Application.Environment,
 	}
 	err = getNetworkPropertiesFromService(clientset, w.Application.GetNamespace(), filter, &properties)
@@ -187,7 +187,7 @@ func (w *K8sStatefulSetWorkload) GetNetworkProperties() (*NetworkProperties, err
 	}
 	filter := map[string]string{
 		OrganizationIDLabel: w.Application.OrganizationID,
-		ApplicationIDLabel:  w.Application.ID,
+		ApplicationIDLabel:  w.Application.ID.Hex(),
 		EnvironmentLabel:    w.Application.Environment,
 	}
 	err = getNetworkPropertiesFromService(clientset, w.Application.GetNamespace(), filter, &properties)
