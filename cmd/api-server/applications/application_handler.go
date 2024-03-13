@@ -1,5 +1,10 @@
 package applications
 
+import (
+	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
+	"github.com/coffeenights/conure/cmd/api-server/database"
+)
+
 type Properties interface {
 }
 
@@ -49,6 +54,43 @@ type ComponentHandler struct {
 }
 
 type ApplicationHandler struct {
-	Model  *Application `json:"model"`
-	Status *Status      `json:"status"`
+	ID             string
+	OrganizationID string
+	Model          *Application
+	Status         *providers.ProviderStatus
+}
+
+func NewApplicationHandler(organizationID string, applicationID string, db *database.MongoDB) (*ApplicationHandler, error) {
+	model, err := NewApplication(organizationID, "", "").GetByID(db, applicationID)
+	if err != nil {
+		return nil, err
+	}
+	status, err := providers.NewProviderStatus()
+	if err != nil {
+		return nil, err
+	}
+	return &ApplicationHandler{
+		Model:  model,
+		Status: &status,
+	}, nil
+}
+
+func ListOrganizationApplications(organizationID string, db *database.MongoDB) ([]*ApplicationHandler, error) {
+	models, err := ApplicationList(db, organizationID)
+	if err != nil {
+		return nil, err
+	}
+	handlers := make([]*ApplicationHandler, len(models))
+	for i, model := range models {
+		status, err := providers.NewProviderStatus()
+		if err != nil {
+			return nil, err
+		}
+		handlers[i] = &ApplicationHandler{
+			Model:  model,
+			Status: &status,
+		}
+
+	}
+	return handlers, nil
 }
