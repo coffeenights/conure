@@ -65,11 +65,7 @@ func (o *Organization) Update(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
 	filter := bson.M{"_id": o.ID, "status": bson.M{"$ne": OrgDeleted}}
 	update := bson.D{
-		{"$set", bson.D{
-			{"status", o.Status},
-			{"accountId", o.AccountID},
-			{"name", o.Name},
-		}},
+		{"$set", o},
 	}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
 	if err != nil {
@@ -108,16 +104,16 @@ func (o *Organization) SoftDelete(mongo *database.MongoDB) error {
 }
 
 type Application struct {
-	ID              primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	ID              primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
 	OrganizationID  primitive.ObjectID `json:"organization_id" bson:"organizationID"`
 	Name            string             `json:"name" bson:"name"`
-	Description     string             `json:"description" bson:"description, omitempty"`
+	Description     string             `json:"description,omitempty" bson:"description,omitempty"`
 	CreatedBy       primitive.ObjectID `json:"created_by" bson:"createdBy"`
 	AccountID       primitive.ObjectID `json:"account_id" bson:"accountID"`
-	CurrentRevision primitive.ObjectID `json:"current_revision" bson:"currentRevision"`
+	CurrentRevision primitive.ObjectID `json:"current_revision,omitempty" bson:"currentRevision,omitempty"`
 	CreatedAt       time.Time          `json:"created_at" bson:"createdAt"`
-	DeletedAt       time.Time          `json:"deleted_at" bson:"deletedAt,omitempty"`
-	Environments    []Environment      `json:"environments" bson:"environments,omitempty"`
+	DeletedAt       time.Time          `json:"deleted_at,omitempty" bson:"deletedAt,omitempty"`
+	Environments    []Environment      `json:"environments,omitempty" bson:"environments,omitempty"`
 }
 
 func NewApplication(organizationID string, name string, createdBy string) *Application {
@@ -169,15 +165,7 @@ func (a *Application) Update(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
 	filter := bson.M{"_id": a.ID}
 	update := bson.D{
-		{"$set", bson.D{
-			{"organization_id", a.OrganizationID},
-			{"name", a.Name},
-			{"description", a.Description},
-			{"created_by", a.CreatedBy},
-			{"account_id", a.AccountID},
-			{"created_at", a.CreatedAt},
-			{"environments", a.Environments},
-		}},
+		{"$set", a},
 	}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
 	if err != nil {
@@ -265,7 +253,7 @@ func (a *Application) ListComponents(mongo *database.MongoDB) ([]Component, erro
 }
 
 func (a *Application) CreateEnvironment(mongo *database.MongoDB, name string) (*Environment, error) {
-	env := NewEnvironment(a.ID.Hex(), name)
+	env := NewEnvironment(name)
 	a.Environments = append(a.Environments, *env)
 	err := a.Update(mongo)
 	if err != nil {
@@ -340,20 +328,11 @@ func (ar *ApplicationRevision) Create(mongo *database.MongoDB) error {
 }
 
 type Environment struct {
-	ID            primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	Name          string             `json:"name" bson:"name"`
-	ApplicationID primitive.ObjectID `json:"application_id" bson:"applicationID"`
-	CreatedAt     time.Time          `json:"created_at" bson:"createdAt"`
-	DeletedAt     time.Time          `json:"deleted_at" bson:"deletedAt,omitempty"`
+	Name string `json:"name" bson:"name"`
 }
 
-func NewEnvironment(appID string, name string) *Environment {
-	id, err := primitive.ObjectIDFromHex(appID)
-	if err != nil {
-		log.Fatalf("Error parsing applicationID: %v\n", err)
-	}
+func NewEnvironment(name string) *Environment {
 	return &Environment{
-		ApplicationID: id,
-		Name:          name,
+		Name: name,
 	}
 }
