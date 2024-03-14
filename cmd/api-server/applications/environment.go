@@ -81,7 +81,9 @@ func (a *ApiHandler) ListEnvironments(c *gin.Context) {
 		environmentNameParts := nsParts[2:]
 		environmentName := strings.Join(environmentNameParts, "-")
 		environments.Environments = append(environments.Environments, EnvironmentResponse{
-			Name: environmentName,
+			Environment: &Environment{
+				Name: environmentName,
+			},
 		})
 	}
 	// return the information to the client
