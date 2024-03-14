@@ -24,6 +24,7 @@ type OrganizationStatus string
 const OrganizationCollection string = "organizations"
 const ApplicationCollection string = "applications"
 const ComponentCollection string = "components"
+const EnvironmentCollection string = "environments"
 
 const (
 	OrgActive   OrganizationStatus = "active"
@@ -116,6 +117,7 @@ type Application struct {
 	CurrentRevision primitive.ObjectID `json:"current_revision" bson:"currentRevision"`
 	CreatedAt       time.Time          `json:"created_at" bson:"createdAt"`
 	DeletedAt       time.Time          `json:"deleted_at" bson:"deletedAt,omitempty"`
+	Environments    []Environment      `json:"environments" bson:"environments,omitempty"`
 }
 
 func NewApplication(organizationID string, name string, createdBy string) *Application {
@@ -174,6 +176,7 @@ func (a *Application) Update(mongo *database.MongoDB) error {
 			{"created_by", a.CreatedBy},
 			{"account_id", a.AccountID},
 			{"created_at", a.CreatedAt},
+			{"environments", a.Environments},
 		}},
 	}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
@@ -261,6 +264,16 @@ func (a *Application) ListComponents(mongo *database.MongoDB) ([]Component, erro
 	return components, nil
 }
 
+func (a *Application) CreateEnvironment(mongo *database.MongoDB, name string) (*Environment, error) {
+	env := NewEnvironment(a.ID.Hex(), name)
+	a.Environments = append(a.Environments, *env)
+	err := a.Update(mongo)
+	if err != nil {
+		return nil, err
+	}
+	return env, nil
+}
+
 type Component struct {
 	ID            primitive.ObjectID     `json:"id" bson:"_id"`
 	Name          string                 `json:"name" bson:"name"`
@@ -324,4 +337,23 @@ func (ar *ApplicationRevision) Create(mongo *database.MongoDB) error {
 		return err
 	}
 	return nil
+}
+
+type Environment struct {
+	ID            primitive.ObjectID `json:"id" bson:"_id,omitempty"`
+	Name          string             `json:"name" bson:"name"`
+	ApplicationID primitive.ObjectID `json:"application_id" bson:"applicationID"`
+	CreatedAt     time.Time          `json:"created_at" bson:"createdAt"`
+	DeletedAt     time.Time          `json:"deleted_at" bson:"deletedAt,omitempty"`
+}
+
+func NewEnvironment(appID string, name string) *Environment {
+	id, err := primitive.ObjectIDFromHex(appID)
+	if err != nil {
+		log.Fatalf("Error parsing applicationID: %v\n", err)
+	}
+	return &Environment{
+		ApplicationID: id,
+		Name:          name,
+	}
 }

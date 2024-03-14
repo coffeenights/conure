@@ -265,6 +265,40 @@ func TestApplication_ListNotDeleted(t *testing.T) {
 	}
 }
 
+func TestApplication_ListEnvironments(t *testing.T) {
+	client, err := setupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestApplicationListEnvironments", primitive.NewObjectID().Hex()).Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env1, err := NewEnvironment(app.ID.Hex(), "testEnvironment1").Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env2, err := NewEnvironment(app.ID.Hex(), "testEnvironment2").Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	envs, err := app.ListEnvironments(client)
+	if err != nil {
+		t.Errorf("Failed to list environments: %v", err)
+	}
+	if len(envs) != 2 {
+		t.Errorf("Got %d environments, want == 2", len(envs))
+	}
+	err = app.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
+	}
+	_ = env1.Delete(client)
+	_ = env2.Delete(client)
+	_ = app.Delete(client)
+
+}
+
 func TestComponent_CreateList(t *testing.T) {
 	client, err := setupDB()
 	if err != nil {
@@ -296,4 +330,24 @@ func TestComponent_CreateList(t *testing.T) {
 		t.Errorf("Failed to delete application: %v", err)
 	}
 	_ = comp.Delete(client)
+}
+
+func TestApplication_CreateEnvironment(t *testing.T) {
+	client, err := setupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestApplicationCreateEnvironment", primitive.NewObjectID().Hex()).Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := app.CreateEnvironment(client, "testEnvironment")
+	if err != nil {
+		t.Errorf("Failed to create environment: %v", err)
+	}
+	got, _ := app.GetByID(client, env.ID.Hex())
+	if got.Name != env.Name {
+		t.Errorf("Got %v, want %v", got.Name, env.Name)
+	}
+	_ = app.Delete(client)
 }

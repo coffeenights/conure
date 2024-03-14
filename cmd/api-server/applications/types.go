@@ -27,6 +27,7 @@ const (
 
 type ApplicationResponse struct {
 	*Application
+	Environments []EnvironmentResponse `json:"environments"`
 }
 
 type ApplicationListResponse struct {
@@ -155,5 +156,5 @@ type EnvironmentListResponse struct {
 }
 
 type EnvironmentResponse struct {
-	Name string `json:"name"`
+	*Environment
 }

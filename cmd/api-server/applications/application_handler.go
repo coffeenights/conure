@@ -90,7 +90,6 @@ func ListOrganizationApplications(organizationID string, db *database.MongoDB) (
 			Model:  model,
 			Status: &status,
 		}
-
 	}
 	return handlers, nil
 }
