@@ -31,11 +31,11 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 	response := ApplicationListResponse{}
 	response.Organization.ParseModelToResponse(&org)
 	applicationResponses := make([]ApplicationResponse, len(handlers))
-	for _, handler := range handlers {
+	for i, handler := range handlers {
 		r := ApplicationResponse{
 			Application: handler.Model,
 		}
-		applicationResponses = append(applicationResponses, r)
+		applicationResponses[i] = r
 	}
 	response.Applications = applicationResponses
 	c.JSON(http.StatusOK, response)
