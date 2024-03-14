@@ -22,7 +22,18 @@ func TestListApplications(t *testing.T) {
 
 	// Create test application
 	app1, err := NewApplication(oID, "TestListApplications", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
 	app2, err := NewApplication(oID, "TestListApplications2", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = app1.CreateEnvironment(app.MongoDB, "TestListApplications")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = app2.CreateEnvironment(app.MongoDB, "TestListApplications")
 	if err != nil {
 		t.Fatal(err)
 	}
