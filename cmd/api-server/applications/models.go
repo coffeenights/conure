@@ -262,6 +262,7 @@ func (a *Application) ListComponents(mongo *database.MongoDB) ([]Component, erro
 }
 
 type Component struct {
+	ID            primitive.ObjectID     `json:"id" bson:"_id"`
 	Name          string                 `json:"name" bson:"name"`
 	Type          string                 `json:"type" bson:"type"`
 	Description   string                 `json:"description" bson:"description"`
@@ -279,13 +280,25 @@ func NewComponent(a *Application, name string, componentType string) *Component 
 	}
 }
 func (c *Component) Create(mongo *database.MongoDB) error {
-	collection := mongo.Client.Database(mongo.DBName).Collection("components")
+	collection := mongo.Client.Database(mongo.DBName).Collection(ComponentCollection)
 	c.CreatedAt = time.Now()
 	_, err := collection.InsertOne(context.Background(), c)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (c *Component) Delete(mongo *database.MongoDB) error {
+	collection := mongo.Client.Database(mongo.DBName).Collection(ComponentCollection)
+	filter := bson.D{{"_id", c.ID}}
+	deleteResult, err := collection.DeleteOne(context.Background(), filter)
+	if err != nil {
+		return err
+	}
+	log.Printf("Deleted %v documents in the components collection\n", deleteResult.DeletedCount)
+	return nil
+
 }
 
 type ApplicationRevision struct {

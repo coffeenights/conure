@@ -295,4 +295,5 @@ func TestComponent_CreateList(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to delete application: %v", err)
 	}
+	_ = comp.Delete(client)
 }
