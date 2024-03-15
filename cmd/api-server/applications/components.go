@@ -11,6 +11,17 @@ import (
 )
 
 func (a *ApiHandler) ListComponents(c *gin.Context) {
+	handler, err := NewApplicationHandler(a.MongoDB)
+	_ = handler
+	if err != nil {
+		log.Printf("Error creating application handler: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+
+	}
+
+}
+func (a *ApiHandler) ListComponentsOld(c *gin.Context) {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
