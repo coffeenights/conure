@@ -9,4 +9,5 @@ var (
 	ErrVariableTypeNotValid  = errors.New("type is not valid")
 	ErrVariableAlreadyExists = errors.New("variable already exists")
 	ErrVariableNameNotValid  = errors.New("variable name is not valid")
+	ErrInvalidIDValue        = errors.New("invalid id")
 )
