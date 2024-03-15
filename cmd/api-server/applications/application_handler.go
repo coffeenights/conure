@@ -58,21 +58,27 @@ type ApplicationHandler struct {
 	OrganizationID string
 	Model          *Application
 	Status         *providers.ProviderStatus
+	DB             *database.MongoDB
 }
 
-func NewApplicationHandler(organizationID string, applicationID string, db *database.MongoDB) (*ApplicationHandler, error) {
-	model, err := NewApplication(organizationID, "", "").GetByID(db, applicationID)
-	if err != nil {
-		return nil, err
-	}
+func NewApplicationHandler(db *database.MongoDB) (*ApplicationHandler, error) {
 	status, err := providers.NewProviderStatus()
 	if err != nil {
 		return nil, err
 	}
 	return &ApplicationHandler{
-		Model:  model,
+		Model:  &Application{},
 		Status: &status,
+		DB:     db,
 	}, nil
+}
+
+func (ah *ApplicationHandler) GetApplicationByID(appID string) error {
+	_, err := ah.Model.GetByID(ah.DB, appID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func ListOrganizationApplications(organizationID string, db *database.MongoDB) ([]*ApplicationHandler, error) {
