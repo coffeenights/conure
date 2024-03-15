@@ -55,10 +55,6 @@ func (r *ApplicationResponseOld) FromVelaClientsetToResponse(item *v1beta1.Appli
 	r.AccountID = item.ObjectMeta.Labels["conure.io/account-id"]
 }
 
-type ApplicationDetailsResponse struct {
-	Application ApplicationResponse `json:"application"`
-}
-
 type ServiceComponentResponse struct {
 	ComponentProperties
 }
