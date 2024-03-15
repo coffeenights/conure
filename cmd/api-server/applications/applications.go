@@ -28,6 +28,7 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
+
 	response := ApplicationListResponse{}
 	response.Organization.ParseModelToResponse(&org)
 	applicationResponses := make([]ApplicationResponse, len(handlers))
@@ -43,6 +44,34 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 }
 
 func (a *ApiHandler) DetailApplication(c *gin.Context) {
+	// Escape the organizationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
+		log.Printf("Error parsing organizationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	// Escape the applicationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("applicationID")); err != nil {
+		log.Printf("Error parsing applicationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	handler, err := NewApplicationHandler(a.MongoDB)
+	err = handler.GetApplicationByID(c.Param("applicationID"))
+	if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	response := ApplicationResponse{
+		Application: handler.Model,
+	}
+	c.JSON(http.StatusOK, response)
+	return
+}
+
+func (a *ApiHandler) DetailApplicationOld(c *gin.Context) {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
@@ -88,7 +117,7 @@ func (a *ApiHandler) DetailApplication(c *gin.Context) {
 	var appResponse ApplicationResponseOld
 	appResponse.FromVelaClientsetToResponse(&app, &rev)
 
-	r := ApplicationDetailsResponse{
+	r := ApplicationResponse{
 		//Application: appResponse,
 	}
 	c.JSON(http.StatusOK, r)
