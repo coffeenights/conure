@@ -2,10 +2,13 @@ package applications
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
 	"fmt"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"io"
 	"log"
 	"time"
 )
@@ -24,7 +27,6 @@ type OrganizationStatus string
 const OrganizationCollection string = "organizations"
 const ApplicationCollection string = "applications"
 const ComponentCollection string = "components"
-const EnvironmentCollection string = "environments"
 
 const (
 	OrgActive   OrganizationStatus = "active"
@@ -104,37 +106,71 @@ func (o *Organization) SoftDelete(mongo *database.MongoDB) error {
 }
 
 type Application struct {
-	ID              primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
-	OrganizationID  primitive.ObjectID `json:"organization_id" bson:"organizationID"`
-	Name            string             `json:"name" bson:"name"`
-	Description     string             `json:"description,omitempty" bson:"description,omitempty"`
-	CreatedBy       primitive.ObjectID `json:"created_by" bson:"createdBy"`
-	AccountID       primitive.ObjectID `json:"account_id" bson:"accountID"`
-	CurrentRevision primitive.ObjectID `json:"current_revision,omitempty" bson:"currentRevision,omitempty"`
-	CreatedAt       time.Time          `json:"created_at" bson:"createdAt"`
-	DeletedAt       time.Time          `json:"deleted_at,omitempty" bson:"deletedAt,omitempty"`
-	Environments    []Environment      `json:"environments,omitempty" bson:"environments,omitempty"`
+	ID             primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
+	OrganizationID primitive.ObjectID    `json:"organization_id" bson:"organizationID"`
+	Name           string                `json:"name" bson:"name"`
+	Description    string                `json:"description,omitempty" bson:"description,omitempty"`
+	CreatedBy      primitive.ObjectID    `json:"created_by" bson:"createdBy"`
+	AccountID      primitive.ObjectID    `json:"account_id" bson:"accountID"`
+	Revisions      []ApplicationRevision `json:"revisions,omitempty" bson:"revisions,omitempty"`
+	CreatedAt      time.Time             `json:"created_at" bson:"createdAt"`
+	DeletedAt      time.Time             `json:"-" bson:"deletedAt,omitempty"`
+	Environments   []Environment         `json:"environments,omitempty" bson:"environments,omitempty"`
 }
 
 func NewApplication(organizationID string, name string, createdBy string) *Application {
 	oID, err := primitive.ObjectIDFromHex(organizationID)
 	if err != nil {
-		log.Fatalf("Error parsing organizationID: %v\n", err)
+		log.Panicf("Error parsing organizationID: %v\n", err)
 	}
 	createdByoID, err := primitive.ObjectIDFromHex(createdBy)
 	if err != nil {
-		log.Fatalf("Error parsing createdBy: %v\n", err)
+		log.Panicf("Error parsing createdBy: %v\n", err)
 	}
+
 	return &Application{
 		OrganizationID: oID,
 		Name:           name,
-		CreatedBy:      createdByoID,
-		AccountID:      createdByoID,
+		Revisions: []ApplicationRevision{
+			{
+				RevisionNumber: 0,
+				CreatedAt:      time.Now(),
+			},
+		},
+		CreatedBy: createdByoID,
+		AccountID: createdByoID,
 	}
 }
 
+func ApplicationList(mongo *database.MongoDB, organizationID string) ([]*Application, error) {
+	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+	oID, err := primitive.ObjectIDFromHex(organizationID)
+	if err != nil {
+		return nil, err
+	}
+	filter := bson.M{"organizationID": oID, "deletedAt": bson.M{"$exists": false}}
+	cursor, err := collection.Find(context.Background(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.Background())
+	var applications []*Application
+	for cursor.Next(context.Background()) {
+		var app Application
+		err = cursor.Decode(&app)
+		if err != nil {
+			return nil, err
+		}
+		applications = append(applications, &app)
+	}
+	if err = cursor.Err(); err != nil {
+		return nil, err
+	}
+	return applications, nil
+}
+
 func (a *Application) GetNamespace() string {
-	return ""
+	return fmt.Sprintf("%s-%s", a.OrganizationID.Hex(), a.ID.Hex())
 }
 
 func (a *Application) Create(mongo *database.MongoDB) (*Application, error) {
@@ -184,33 +220,6 @@ func (a *Application) Delete(mongo *database.MongoDB) error {
 	}
 	log.Printf("Deleted %v documents in the applications collection\n", deleteResult.DeletedCount)
 	return nil
-}
-
-func ApplicationList(mongo *database.MongoDB, organizationID string) ([]*Application, error) {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
-	oID, err := primitive.ObjectIDFromHex(organizationID)
-	if err != nil {
-		return nil, err
-	}
-	filter := bson.M{"organizationID": oID, "deletedAt": bson.M{"$exists": false}}
-	cursor, err := collection.Find(context.Background(), filter)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(context.Background())
-	var applications []*Application
-	for cursor.Next(context.Background()) {
-		var app Application
-		err = cursor.Decode(&app)
-		if err != nil {
-			return nil, err
-		}
-		applications = append(applications, &app)
-	}
-	if err = cursor.Err(); err != nil {
-		return nil, err
-	}
-	return applications, nil
 }
 
 func (a *Application) SoftDelete(mongo *database.MongoDB) error {
@@ -303,36 +312,36 @@ func (c *Component) Delete(mongo *database.MongoDB) error {
 }
 
 type ApplicationRevision struct {
-	ID             primitive.ObjectID `json:"id" bson:"_id,omitempty"`
-	ApplicationID  primitive.ObjectID `json:"application_id" bson:"applicationID"`
-	RevisionNumber int                `json:"revision_number" bson:"revisionNumber"`
-	CreatedAt      time.Time          `json:"created_at" bson:"createdAt"`
-	DeletedAt      time.Time          `json:"deleted_at" bson:"deletedAt,omitempty"`
-}
-
-func NewApplicationRevision(appID *Application, revisionNumber int) *ApplicationRevision {
-	return &ApplicationRevision{
-		ApplicationID:  appID.ID,
-		RevisionNumber: revisionNumber,
-	}
-}
-
-func (ar *ApplicationRevision) Create(mongo *database.MongoDB) error {
-	collection := mongo.Client.Database(mongo.DBName).Collection("applicationRevisions")
-	ar.CreatedAt = time.Now()
-	_, err := collection.InsertOne(context.Background(), ar)
-	if err != nil {
-		return err
-	}
-	return nil
+	RevisionNumber int       `json:"revision_number" bson:"revisionNumber"`
+	CreatedAt      time.Time `json:"created_at" bson:"createdAt"`
+	DeletedAt      time.Time `json:"-" bson:"deletedAt,omitempty"`
 }
 
 type Environment struct {
+	ID   string `json:"id" bson:"_id"`
 	Name string `json:"name" bson:"name"`
 }
 
 func NewEnvironment(name string) *Environment {
 	return &Environment{
+		ID:   generate8DigitHash(),
 		Name: name,
 	}
+}
+
+func (e *Environment) GetNamespace() string {
+	return fmt.Sprintf("%s-%s", e.ID, e.Name)
+}
+
+func generate8DigitHash() string {
+	// Create a new random seed
+	seed := make([]byte, 16)
+	_, err := io.ReadFull(rand.Reader, seed)
+	if err != nil {
+		log.Panicf("Error generating random seed")
+	}
+	// Hash the seed
+	hash := sha256.Sum256(seed)
+	// Return the first 8 characters of the hexadecimal representation of the hash
+	return fmt.Sprintf("%x", hash)[:8]
 }
