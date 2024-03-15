@@ -2,6 +2,7 @@ package variables
 
 import (
 	"encoding/hex"
+	"log"
 	"net/http"
 
 	"github.com/coffeenights/conure/cmd/api-server/auth"
@@ -191,12 +192,12 @@ func checkVariable(h *Handler, variable Variable) error {
 func encryptValue(storage SecretKeyStorage, value string) string {
 	key, err := storage.Load()
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	encryptedValue := encrypt(value, hex.EncodeToString(key))
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	return encryptedValue
@@ -205,12 +206,12 @@ func encryptValue(storage SecretKeyStorage, value string) string {
 func decryptValue(storage SecretKeyStorage, value string) string {
 	key, err := storage.Load()
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	decryptedValue := decrypt(value, hex.EncodeToString(key))
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	return decryptedValue
