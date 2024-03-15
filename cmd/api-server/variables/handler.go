@@ -5,9 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/coffeenights/conure/cmd/api-server/auth"
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
+	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 )
@@ -31,7 +32,11 @@ func (h *Handler) ListOrganizationVariables(c *gin.Context) {
 	user := c.MustGet("currentUser").(auth.User)
 
 	client := user.Client
-	organizationID := c.Param("organizationID")
+	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		return
+	}
 
 	variables, err := variable.ListByOrg(h.MongoDB, client, organizationID)
 	if err != nil {
@@ -53,8 +58,17 @@ func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 	user := c.MustGet("currentUser").(auth.User)
 
 	client := user.Client
-	organizationID := c.Param("organizationID")
-	applicationID := c.Param("applicationID")
+	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		return
+	}
+	applicationID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		return
+	}
+
 	environmentID := c.Param("environmentID")
 
 	variables, err := variable.ListByEnv(h.MongoDB, client, organizationID, applicationID, environmentID)
@@ -77,10 +91,22 @@ func (h *Handler) ListComponentVariables(c *gin.Context) {
 	user := c.MustGet("currentUser").(auth.User)
 
 	client := user.Client
-	organizationID := c.Param("organizationID")
-	applicationID := c.Param("applicationID")
+	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		return
+	}
+	applicationID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		return
+	}
+	componentID, err := primitive.ObjectIDFromHex(c.Param("componentID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		return
+	}
 	environmentID := c.Param("environmentID")
-	componentID := c.Param("componentID")
 
 	variables, err := variable.ListByComp(h.MongoDB, client, organizationID, applicationID, environmentID, componentID)
 	if err != nil {
@@ -113,7 +139,12 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	}
 
 	variable.Client = client
-	variable.OrganizationID = c.Param("organizationID")
+	orgID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		return
+	}
+	variable.OrganizationID = orgID
 	variable.Type = OrganizationType
 
 	envID := c.Param("environmentID")
@@ -122,10 +153,15 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 		variable.EnvironmentID = &envID
 	}
 
-	componentID := c.Param("componentID")
-	if componentID != "" {
+	compID := c.Param("componentID")
+	if compID != "" {
 		variable.Type = ComponentType
-		variable.ComponentID = &componentID
+		compID, err := primitive.ObjectIDFromHex(c.Param("componentID"))
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+			return
+		}
+		variable.ComponentID = &compID
 	}
 
 	if !variable.Type.IsValid() {
@@ -135,6 +171,13 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 
 	appID := c.Param("applicationID")
 	if appID != "" {
+		appID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
+
+		if err != nil {
+			log.Print(err)
+			c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+			return
+		}
 		variable.ApplicationID = &appID
 	}
 
