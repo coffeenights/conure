@@ -20,7 +20,7 @@ func LoadConfig[C any](config C) *C {
 
 		env, exist := os.LookupEnv(envName)
 		if !exist {
-			log.Fatalf("environment variable not found: %s", envName)
+			log.Panicf("environment variable not found: %s", envName)
 		}
 
 		// Handle different field types appropriately
@@ -30,18 +30,18 @@ func LoadConfig[C any](config C) *C {
 		case reflect.Int, reflect.Int64:
 			intValue, err := strconv.ParseInt(env, 10, 64)
 			if err != nil {
-				log.Fatalf("failed to parse int64 for %s: %v", envName, err)
+				log.Panicf("failed to parse int64 for %s: %v", envName, err)
 			}
 			v.Field(i).SetInt(intValue)
 		case reflect.Bool:
 			boolValue, err := strconv.ParseBool(env)
 			if err != nil {
-				log.Fatalf("failed to parse bool for %s: %v", envName, err)
+				log.Panicf("failed to parse bool for %s: %v", envName, err)
 			}
 			v.Field(i).SetBool(boolValue)
 		default:
 			// Optionally, handle unsupported field types or return an error
-			log.Fatalf("unsupported field type %s for field %s", v.Field(i).Type(), field.Name)
+			log.Panicf("unsupported field type %s for field %s", v.Field(i).Type(), field.Name)
 		}
 	}
 
