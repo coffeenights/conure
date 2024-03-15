@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
@@ -57,9 +58,9 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 		Client: "test-client",
 	}
 	_ = user.Create(mongo)
-
+	orgID := primitive.NewObjectID()
 	orgVar := &Variable{
-		OrganizationID: "org1",
+		OrganizationID: orgID,
 		Name:           "var1",
 		Value:          "value1",
 		IsEncrypted:    false,
@@ -69,7 +70,7 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 	_, _ = orgVar.Create(mongo)
 
 	orgVar2 := &Variable{
-		OrganizationID: "org1",
+		OrganizationID: orgID,
 		Name:           "var2",
 		Value:          encryptValue(keyStorage, "value2"),
 		IsEncrypted:    true,
@@ -81,7 +82,7 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 	setupTestHandler(router, mongo, config, keyStorage)
 	var variables []Variable
 
-	req, _ := http.NewRequest("GET", "/variables/org1", nil)
+	req, _ := http.NewRequest("GET", "/variables/"+orgID.Hex(), nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -96,6 +97,16 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 	assert.True(t, variables[1].IsEncrypted, "should return the correct type of variable")
 
 	req, _ = http.NewRequest("GET", "/variables/fakeOrg", nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &variables)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 Bad Request")
+
+	req, _ = http.NewRequest("GET", "/variables/"+primitive.NewObjectID().Hex(), nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -144,10 +155,11 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	}
 	_ = user.Create(mongo)
 
-	app1 := "app1"
+	orgID1 := primitive.NewObjectID()
+	app1 := primitive.NewObjectID()
 	env1 := "env1"
 	orgVar := &Variable{
-		OrganizationID: "org1",
+		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
 		Name:           "var1",
@@ -159,7 +171,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	_, _ = orgVar.Create(mongo)
 
 	orgVar2 := &Variable{
-		OrganizationID: "org1",
+		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
 		Name:           "var2",
@@ -173,8 +185,8 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	setupTestHandler(router, mongo, config, keyStorage)
 	var variables []Variable
 
-	urlFormat := "/variables/org1/%s/e/%s"
-	url := fmt.Sprintf(urlFormat, app1, env1)
+	urlFormat := "/variables/%s/%s/e/%s"
+	url := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -189,7 +201,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	assert.Equal(t, orgVar.Type, variables[0].Type, "should return the correct type of variable")
 	assert.True(t, variables[1].IsEncrypted, "should return the correct type of variable")
 
-	fakeURL := fmt.Sprintf(urlFormat, app1, "fakeEnv")
+	fakeURL := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), "fakeEnv")
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -210,7 +222,29 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
 
-	fakeURL = fmt.Sprintf(urlFormat, "fakeApp", env1)
+	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), "fakeApp", env1)
+	req, _ = http.NewRequest("GET", fakeURL, nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &variables)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 Bad Request")
+
+	fakeURL = fmt.Sprintf(urlFormat, "fakeOrg", primitive.NewObjectID().Hex(), env1)
+	req, _ = http.NewRequest("GET", fakeURL, nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &variables)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 Bad Request")
+
+	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), primitive.NewObjectID().Hex(), env1)
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -251,11 +285,12 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	}
 	_ = user.Create(mongo)
 
-	app1 := "app1"
+	orgID1 := primitive.NewObjectID()
+	app1 := primitive.NewObjectID()
 	env1 := "env1"
-	comp1 := "comp1"
+	comp1 := primitive.NewObjectID()
 	orgVar := &Variable{
-		OrganizationID: "org1",
+		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
 		ComponentID:    &comp1,
@@ -268,7 +303,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	_, _ = orgVar.Create(mongo)
 
 	orgVar2 := &Variable{
-		OrganizationID: "org1",
+		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
 		ComponentID:    &comp1,
@@ -283,8 +318,8 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	setupTestHandler(router, mongo, config, keyStorage)
 	var variables []Variable
 
-	urlFormat := "/variables/org1/%s/e/%s/c/%s"
-	url := fmt.Sprintf(urlFormat, app1, env1, comp1)
+	urlFormat := "/variables/%s/%s/e/%s/c/%s"
+	url := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1, comp1.Hex())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -299,7 +334,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	assert.Equal(t, orgVar.Type, variables[0].Type, "should return the correct type of variable")
 	assert.True(t, variables[1].IsEncrypted, "should return the correct type of variable")
 
-	fakeURL := fmt.Sprintf(urlFormat, app1, env1, "fakeComp")
+	fakeURL := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1, primitive.NewObjectID().Hex())
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -311,6 +346,28 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.Code, "should return 200 OK")
 	assert.Equal(t, 0, len(variables), "should return 0 results")
 
+	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1, "fakeComp")
+	req, _ = http.NewRequest("GET", fakeURL, nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &variables)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 Bad Request")
+
+	fakeURL = fmt.Sprintf(urlFormat, "fakeOrg", app1.Hex(), env1, primitive.NewObjectID().Hex())
+	req, _ = http.NewRequest("GET", fakeURL, nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &variables)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 Bad Request")
+
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
 
@@ -320,7 +377,18 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
 
-	fakeURL = fmt.Sprintf(urlFormat, "fakeApp", env1, comp1)
+	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), "fakeApp", env1, comp1.Hex())
+	req, _ = http.NewRequest("GET", fakeURL, nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &variables)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 Bad Request")
+
+	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), primitive.NewObjectID().Hex(), env1, comp1.Hex())
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -370,8 +438,9 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	jsonVar, _ := json.Marshal(newVar)
 	var result Variable
+	orgID1 := primitive.NewObjectID()
 
-	req, _ := http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req, _ := http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -380,7 +449,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
 	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
-	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, orgID1, result.OrganizationID, "should return the correct organization")
 	assert.Equal(t, OrganizationType, result.Type, "should return the correct type of variable")
 	assert.NotEqual(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.True(t, result.IsEncrypted, "should return the correct type of variable")
@@ -393,7 +462,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	jsonVar, _ = json.Marshal(newVar)
 
-	req, _ = http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -402,7 +471,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
 	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
-	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, orgID1, result.OrganizationID, "should return the correct organization")
 	assert.Equal(t, OrganizationType, result.Type, "should return the correct type of variable")
 	assert.Equal(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.False(t, result.IsEncrypted, "should return the correct type of variable")
@@ -417,7 +486,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 401 BadRequest")
 
-	req, _ = http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp = httptest.NewRecorder()
@@ -426,11 +495,21 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
 
+	req, _ = http.NewRequest("POST", "/variables/invalidID", bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+
 	newVar = Variable{
 		Name: "newVarX",
 	}
 	jsonVar, _ = json.Marshal(newVar)
-	req, _ = http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -446,7 +525,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 		IsEncrypted: false,
 	}
 	jsonVar, _ = json.Marshal(newVar)
-	req, _ = http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -491,11 +570,15 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 		Value:       "value2",
 		IsEncrypted: true,
 	}
+	orgID1 := primitive.NewObjectID()
+	appID1 := primitive.NewObjectID()
 
 	jsonVar, _ := json.Marshal(newVar)
 	var result Variable
 
-	req, _ := http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	urlFormat := "/variables/%s/%s/e/%s"
+	url := fmt.Sprintf(urlFormat, orgID1.Hex(), appID1.Hex(), "env1")
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -504,8 +587,8 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
 	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
-	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
-	assert.Equal(t, "app1", *result.ApplicationID, "should return the correct application")
+	assert.Equal(t, orgID1, result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, appID1, *result.ApplicationID, "should return the correct application")
 	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
 	assert.Equal(t, EnvironmentType, result.Type, "should return the correct type of variable")
 	assert.NotEqual(t, newVar.Value, result.Value, "should return the encrypted value")
@@ -519,7 +602,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 
 	jsonVar, _ = json.Marshal(newVar)
 
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -528,14 +611,14 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
 	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
-	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
-	assert.Equal(t, "app1", *result.ApplicationID, "should return the correct application")
+	assert.Equal(t, orgID1, result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, appID1, *result.ApplicationID, "should return the correct application")
 	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
 	assert.Equal(t, EnvironmentType, result.Type, "should return the correct type of variable")
 	assert.Equal(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.False(t, result.IsEncrypted, "should return the correct type of variable")
 
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -545,7 +628,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 401 BadRequest")
 
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp = httptest.NewRecorder()
@@ -558,7 +641,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 		Name: "newVarX",
 	}
 	jsonVar, _ = json.Marshal(newVar)
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -574,7 +657,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 		IsEncrypted: false,
 	}
 	jsonVar, _ = json.Marshal(newVar)
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -620,10 +703,16 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 		IsEncrypted: true,
 	}
 
+	orgID1 := primitive.NewObjectID()
+	appID1 := primitive.NewObjectID()
+	compID1 := primitive.NewObjectID()
+
 	jsonVar, _ := json.Marshal(newVar)
 	var result Variable
 
-	req, _ := http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	urlFormat := "/variables/%s/%s/e/%s/c/%s"
+	url := fmt.Sprintf(urlFormat, orgID1.Hex(), appID1.Hex(), "env1", compID1.Hex())
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -632,10 +721,10 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
 	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
-	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
-	assert.Equal(t, "app1", *result.ApplicationID, "should return the correct application")
+	assert.Equal(t, orgID1, result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, appID1, *result.ApplicationID, "should return the correct application")
 	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
-	assert.Equal(t, "comp1", *result.ComponentID, "should return the correct component")
+	assert.Equal(t, compID1, *result.ComponentID, "should return the correct component")
 	assert.Equal(t, ComponentType, result.Type, "should return the correct type of variable")
 	assert.NotEqual(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.True(t, result.IsEncrypted, "should return the correct type of variable")
@@ -648,7 +737,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 
 	jsonVar, _ = json.Marshal(newVar)
 
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -657,15 +746,15 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
 	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
-	assert.Equal(t, "org1", result.OrganizationID, "should return the correct organization")
-	assert.Equal(t, "app1", *result.ApplicationID, "should return the correct application")
+	assert.Equal(t, orgID1, result.OrganizationID, "should return the correct organization")
+	assert.Equal(t, appID1, *result.ApplicationID, "should return the correct application")
 	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
-	assert.Equal(t, "comp1", *result.ComponentID, "should return the correct component")
+	assert.Equal(t, compID1, *result.ComponentID, "should return the correct component")
 	assert.Equal(t, ComponentType, result.Type, "should return the correct type of variable")
 	assert.Equal(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.False(t, result.IsEncrypted, "should return the correct type of variable")
 
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -675,7 +764,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
 
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -685,8 +774,30 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
 
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
+
+	fakeURL := fmt.Sprintf(urlFormat, orgID1.Hex(), appID1.Hex(), "env1", "fakeComp")
+	req, _ = http.NewRequest("POST", fakeURL, bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+	_ = json.Unmarshal(resp.Body.Bytes(), &result)
+
+	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
+
+	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), "fakeApp", "env1", compID1.Hex())
+	req, _ = http.NewRequest("POST", fakeURL, bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -698,7 +809,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 		Name: "newVarX",
 	}
 	jsonVar, _ = json.Marshal(newVar)
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
@@ -714,7 +825,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 		IsEncrypted: false,
 	}
 	jsonVar, _ = json.Marshal(newVar)
-	req, _ = http.NewRequest("POST", "/variables/org1/app1/e/env1/c/comp1", bytes.NewBuffer(jsonVar))
+	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
