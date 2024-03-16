@@ -1,109 +1,133 @@
 package applications
 
-//
-//import (
-//	"context"
-//	"encoding/json"
-//	"fmt"
-//	k8sUtils "github.com/coffeenights/conure/internal/k8s"
-//	corev1 "k8s.io/api/core/v1"
-//	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-//	"k8s.io/apimachinery/pkg/runtime/schema"
-//	"k8s.io/apimachinery/pkg/watch"
-//	"k8s.io/client-go/dynamic"
-//	"log"
-//	"testing"
-//)
-//
-//func TestServiceComponentStatus(t *testing.T) {
-//	clientset, err := k8sUtils.GetClientset()
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	cd, err := clientset.Vela.CoreV1beta1().ComponentDefinitions("vela-system").Get(context.TODO(), "webservice", metav1.GetOptions{})
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	_ = cd
-//	configmap, err := clientset.K8s.CoreV1().ConfigMaps("vela-system").Get(context.TODO(), "component-schema-webservice", metav1.GetOptions{})
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	_ = configmap
-//	var result map[string]interface{}
-//	dataJSON := configmap.Data["openapi-v3-json-schema"]
-//	data := json.Unmarshal([]byte(dataJSON), &result)
-//	_ = data
-//	gv := schema.GroupVersion{}
-//	config := clientset.Config
-//	config.GroupVersion = &gv
-//
-//	//scheme := runtime.NewScheme()
-//	//codecFactory := serializer.NewCodecFactory(scheme)
-//	//// Get a codec that performs conversion
-//	//codec := codecFactory.LegacyCodec(gv)
-//	//// Now you can use the codec for encoding and decoding
-//	//config.NegotiatedSerializer = codec
-//	//config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
-//	//restClient, err := rest.RESTClientFor(clientset.Config)
-//	//if err != nil {
-//	//	t.Fatal(err)
-//	//}
-//	//r := restClient.Get()
-//	//// r = r.AbsPath("api", "v1", "namespaces", "default", "pods")
-//	//r = r.AbsPath("apis", "s3.aws.upbound.io", "v1beta1", "buckets")
-//	//res := r.Do(context.TODO())
-//	//
-//	//if res.Error() != nil {
-//	//	t.Fatal(res.Error())
-//	//}
-//	//decodedRes, err := res.Get()
-//	//t.Log(decodedRes)
-//
-//	dynamicClient, err := dynamic.NewForConfig(config)
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	gvr := schema.GroupVersionResource{
-//		Group:    "s3.aws.upbound.io",
-//		Version:  "v1beta1",
-//		Resource: "buckets",
-//	}
-//	r1, err := dynamicClient.Resource(gvr).List(context.TODO(), metav1.ListOptions{})
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//	t.Log(r1)
-//
-//}
-//
-//func TestChannel(_ *testing.T) {
-//	watchlist := metav1.ListOptions{}
-//	clientset, err := k8sUtils.GetClientset()
-//	if err != nil {
-//		log.Fatal(err)
-//	}
-//	pods, err := clientset.K8s.CoreV1().Pods("default").Watch(context.TODO(), watchlist)
-//	if err != nil {
-//		log.Fatal(err)
-//	}
-//
-//	ch := pods.ResultChan()
-//
-//	for event := range ch {
-//		pod, ok := event.Object.(*corev1.Pod)
-//		if !ok {
-//			log.Fatal("unexpected type")
-//		}
-//
-//		switch event.Type {
-//		case watch.Added:
-//			fmt.Printf("Pod %s was added\n", pod.Name)
-//		case watch.Modified:
-//			fmt.Printf("Pod %s was modified\n", pod.Name)
-//		case watch.Deleted:
-//			fmt.Printf("Pod %s was deleted\n", pod.Name)
-//		}
-//	}
-//}
+import (
+	"encoding/json"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+)
+
+func TestListComponents(t *testing.T) {
+	router, app := setupRouter()
+	// Create test organization
+	org := Organization{
+		Status:    OrgActive,
+		AccountID: "testOrgId",
+		Name:      "Test Organization for ListApplications",
+	}
+	oID, err := org.Create(app.MongoDB) // lint:ignore
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer org.Delete(app.MongoDB)
+
+	// Create test application
+	application, err := NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer application.Delete(app.MongoDB)
+
+	_, err = application.CreateEnvironment(app.MongoDB, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	comp, err := NewComponent(application, "TestListComponents", "service").Create(app.MongoDB)
+	if err != nil {
+		t.Errorf("Failed to create component: %v", err)
+	}
+	defer comp.Delete(app.MongoDB)
+
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c/"
+	req, _ := http.NewRequest("GET", url, nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusOK {
+		t.Errorf("Expected response code 200, got: %v", resp.Code)
+	}
+	var response ComponentListResponse
+	err = json.Unmarshal(resp.Body.Bytes(), &response)
+	if err != nil {
+		t.Errorf("Failed to unmarshal response: %v", err)
+	}
+	if len(response.Components) != 1 {
+		t.Errorf("Expected 1 component, got: %v", len(response.Components))
+	}
+
+}
+
+func TestListComponents_NotExist(t *testing.T) {
+	router, app := setupRouter()
+
+	// Create test organization
+	org := Organization{
+		Status:    OrgActive,
+		AccountID: "testOrgId",
+		Name:      "Test Organization for ListApplications",
+	}
+	oID, err := org.Create(app.MongoDB) // lint:ignore
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer org.Delete(app.MongoDB)
+
+	url := "/organizations/" + oID + "/a/" + primitive.NewObjectID().Hex() + "/e/test-env/c/"
+	req, _ := http.NewRequest("GET", url, nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusNotFound {
+		t.Errorf("Expected response code 404, got: %v", resp.Code)
+	}
+}
+
+func TestListComponents_Empty(t *testing.T) {
+	router, app := setupRouter()
+
+	// Create test organization
+	org := Organization{
+		Status:    OrgActive,
+		AccountID: "testOrgId",
+		Name:      "Test Organization for ListApplications",
+	}
+	oID, err := org.Create(app.MongoDB) // lint:ignore
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer org.Delete(app.MongoDB)
+
+	// Create test application
+	application, err := NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer application.Delete(app.MongoDB)
+
+	_, err = application.CreateEnvironment(app.MongoDB, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c/"
+	req, _ := http.NewRequest("GET", url, nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusOK {
+		t.Errorf("Expected response code 200, got: %v", resp.Code)
+	}
+	var response ComponentListResponse
+	err = json.Unmarshal(resp.Body.Bytes(), &response)
+	if err != nil {
+		t.Errorf("Failed to unmarshal response: %v", err)
+	}
+	if len(response.Components) != 0 {
+		t.Errorf("Expected 0 component, got: %v", len(response.Components))
+	}
+}

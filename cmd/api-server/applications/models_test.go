@@ -280,7 +280,7 @@ func TestComponent_CreateList(t *testing.T) {
 		"memory":   "1Gi",
 		"replicas": int32(1),
 	}
-	err = comp.Create(client)
+	_, err = comp.Create(client)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}

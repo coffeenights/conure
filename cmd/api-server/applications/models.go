@@ -272,14 +272,14 @@ func (a *Application) CreateEnvironment(mongo *database.MongoDB, name string) (*
 }
 
 type Component struct {
-	ID            primitive.ObjectID     `json:"id" bson:"_id"`
+	ID            primitive.ObjectID     `json:"id,omitempty" bson:"_id,omitempty"`
 	Name          string                 `json:"name" bson:"name"`
 	Type          string                 `json:"type" bson:"type"`
 	Description   string                 `json:"description" bson:"description"`
 	ApplicationID primitive.ObjectID     `json:"application_id" bson:"applicationID"`
-	Properties    map[string]interface{} `json:"properties" bson:"properties, omitempty"`
+	Properties    map[string]interface{} `json:"properties,omitempty" bson:"properties,omitempty"`
 	CreatedAt     time.Time              `json:"created_at" bson:"createdAt"`
-	DeleteAt      time.Time              `json:"deleted_at" bson:"deletedAt,omitempty"`
+	DeletedAt     time.Time              `json:"-" bson:"deletedAt,omitempty"`
 }
 
 func NewComponent(a *Application, name string, componentType string) *Component {
@@ -289,14 +289,15 @@ func NewComponent(a *Application, name string, componentType string) *Component 
 		Type:          componentType,
 	}
 }
-func (c *Component) Create(mongo *database.MongoDB) error {
+func (c *Component) Create(mongo *database.MongoDB) (*Component, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(ComponentCollection)
 	c.CreatedAt = time.Now()
-	_, err := collection.InsertOne(context.Background(), c)
+	r, err := collection.InsertOne(context.Background(), c)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+	c.ID = r.InsertedID.(primitive.ObjectID)
+	return c, nil
 }
 
 func (c *Component) Delete(mongo *database.MongoDB) error {

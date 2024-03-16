@@ -12,52 +12,29 @@ import (
 
 func (a *ApiHandler) ListComponents(c *gin.Context) {
 	handler, err := NewApplicationHandler(a.MongoDB)
-	_ = handler
 	if err != nil {
 		log.Printf("Error creating application handler: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
-
 	}
-
-}
-func (a *ApiHandler) ListComponentsOld(c *gin.Context) {
-	clientset, err := k8sUtils.GetClientset()
+	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
 	if err != nil {
-		log.Printf("Error getting clientset: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-
-	namespace := GetNamespaceFromParams(c)
-	listOptions := metav1.ListOptions{
-		LabelSelector: "conure.io/organization-id=" + c.Param("organizationID") + ",conure.io/application-id=" + c.Param("applicationID") + ",conure.io/environment=" + c.Param("environment"),
-	}
-	applications, err := clientset.Vela.CoreV1beta1().Applications(namespace).List(c, listOptions)
+	components, err := handler.Model.ListComponents(a.MongoDB)
 	if err != nil {
-		log.Printf("Error getting applications: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		log.Printf("Error getting components: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	if len(applications.Items) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{})
-		return
+	var response ComponentListResponse
+	response.Components = make([]ComponentResponse, len(components))
+	for i, component := range components {
+		response.Components[i] = ComponentResponse{
+			&component,
+		}
 	}
-	application := applications.Items[0]
-	var componentResponse []ServiceComponentShortResponse
-	for _, componentSpec := range application.Spec.Components {
-		var component ServiceComponentShortResponse
-		component.FromClientsetToResponse(componentSpec)
-		componentResponse = append(componentResponse, component)
-	}
-	response := ServiceComponentListResponse{
-		Components: componentResponse,
-	}
-
 	c.JSON(http.StatusOK, response)
 }
 

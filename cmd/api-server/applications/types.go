@@ -99,6 +99,14 @@ type ServiceComponentListResponse struct {
 	Components []ServiceComponentShortResponse `json:"components"`
 }
 
+type ComponentResponse struct {
+	*Component
+}
+
+type ComponentListResponse struct {
+	Components []ComponentResponse `json:"components"`
+}
+
 func extractMapFromRawExtension(data *runtime.RawExtension) (map[string]interface{}, error) {
 	var result map[string]interface{}
 	bytesData, err := data.MarshalJSON()
