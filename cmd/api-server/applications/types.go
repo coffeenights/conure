@@ -6,8 +6,6 @@ import (
 	k8sV1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"time"
-
-	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 )
 
 type AppStatus string
@@ -32,27 +30,6 @@ type ApplicationResponse struct {
 type ApplicationListResponse struct {
 	Organization OrganizationResponse  `json:"organization"`
 	Applications []ApplicationResponse `json:"applications"`
-}
-
-type ApplicationResponseOld struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	Description     string    `json:"description"`
-	Environment     string    `json:"environment"`
-	CreatedBy       string    `json:"created_by"`
-	AccountID       string    `json:"account_id"`
-	TotalComponents int       `json:"total_components"`
-	Status          AppStatus `json:"status"`
-	Created         time.Time `json:"created"`
-	Revision        int64     `json:"revision"`
-	LastUpdated     time.Time `json:"last_updated"`
-}
-
-func (r *ApplicationResponseOld) FromVelaClientsetToResponse(item *v1beta1.Application, revision *v1beta1.ApplicationRevision) {
-	r.Name = item.ObjectMeta.Name
-	r.Description = item.ObjectMeta.Annotations["conure.io/description"]
-	r.CreatedBy = item.ObjectMeta.Labels["conure.io/account-id"]
-	r.AccountID = item.ObjectMeta.Labels["conure.io/account-id"]
 }
 
 type ServiceComponentResponse struct {
@@ -149,9 +126,7 @@ func (r *OrganizationResponse) ParseModelToResponse(organization *Organization) 
 }
 
 type CreateEnvironmentRequest struct {
-	Name           string `json:"name" validate:"required,regexp=^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"`
-	ApplicationID  string `json:"application_id" validate:"required"`
-	OrganizationID string `json:"organization_id" validate:"required"`
+	Name string `json:"name" validate:"required,regexp=^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"`
 }
 
 type EnvironmentListResponse struct {

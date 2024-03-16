@@ -187,9 +187,12 @@ func (a *Application) Create(mongo *database.MongoDB) (*Application, error) {
 
 func (a *Application) GetByID(mongo *database.MongoDB, ID string) (*Application, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
-	oID, _ := primitive.ObjectIDFromHex(ID)
+	oID, err := primitive.ObjectIDFromHex(ID)
+	if err != nil {
+		return nil, err
+	}
 	filter := bson.M{"_id": oID, "deletedAt": bson.M{"$exists": false}}
-	err := collection.FindOne(context.Background(), filter).Decode(a)
+	err = collection.FindOne(context.Background(), filter).Decode(a)
 	if err != nil {
 		return nil, err
 	}
@@ -269,6 +272,34 @@ func (a *Application) CreateEnvironment(mongo *database.MongoDB, name string) (*
 		return nil, err
 	}
 	return env, nil
+}
+
+func (a *Application) DeleteEnvironmentByID(mongo *database.MongoDB, envID string) error {
+	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+	filter := bson.M{"_id": a.ID}
+	update := bson.M{"$pull": bson.M{"environments": bson.M{"_id": envID}}}
+	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return err
+	}
+	if updateResult.ModifiedCount == 0 {
+		return ErrDocumentNotFound
+	}
+	return nil
+}
+
+func (a *Application) DeleteEnvironmentByName(mongo *database.MongoDB, envName string) error {
+	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+	filter := bson.M{"_id": a.ID}
+	update := bson.M{"$pull": bson.M{"environments": bson.M{"name": envName}}}
+	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return err
+	}
+	if updateResult.ModifiedCount == 0 {
+		return ErrDocumentNotFound
+	}
+	return nil
 }
 
 type Component struct {
