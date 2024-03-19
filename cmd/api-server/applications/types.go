@@ -32,7 +32,7 @@ type ApplicationListResponse struct {
 	Applications []ApplicationResponse `json:"applications"`
 }
 
-type ApplicationRequest struct {
+type CreateApplicationRequest struct {
 	Name        string `json:"name" validate:"required"`
 	Description string `json:"description"`
 }
@@ -92,8 +92,8 @@ type ComponentListResponse struct {
 type CreateComponentRequest struct {
 	Name        string                 `json:"name" validate:"required"`
 	Type        string                 `json:"type" validate:"required"`
+	Properties  map[string]interface{} `json:"properties" validate:"required"`
 	Description string                 `json:"description"`
-	Properties  map[string]interface{} `json:"properties"`
 }
 
 func extractMapFromRawExtension(data *runtime.RawExtension) (map[string]interface{}, error) {

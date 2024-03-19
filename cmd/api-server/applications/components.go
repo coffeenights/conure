@@ -110,26 +110,26 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	app, err := handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	var request ComponentRequest
+	var request CreateComponentRequest
 	err = c.BindJSON(&request)
 	if err != nil {
 		log.Printf("Error binding request: %v\n", err)
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-	component := request.ParseRequestToModel()
-	err = component.Create(a.MongoDB)
+	component := NewComponent(app, request.Name, request.Type)
+	component.Description = request.Description
+	component.Properties = request.Properties
+	_, err = component.Create(a.MongoDB)
 	if err != nil {
 		log.Printf("Error creating component: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	c.JSON(http.StatusCreated, gin.H{
-		"id": component.ID,
-	})
+	c.JSON(http.StatusCreated, component)
 }

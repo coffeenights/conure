@@ -85,7 +85,7 @@ func (a *ApiHandler) CreateApplication(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	request := ApplicationRequest{}
+	request := CreateApplicationRequest{}
 	err = c.BindJSON(&request)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
