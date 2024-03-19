@@ -32,6 +32,11 @@ type ApplicationListResponse struct {
 	Applications []ApplicationResponse `json:"applications"`
 }
 
+type ApplicationRequest struct {
+	Name        string `json:"name" validate:"required"`
+	Description string `json:"description"`
+}
+
 type ServiceComponentResponse struct {
 	ComponentProperties
 }

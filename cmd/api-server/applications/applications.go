@@ -38,7 +38,6 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 	}
 	response.Applications = applicationResponses
 	c.JSON(http.StatusOK, response)
-	return
 }
 
 func (a *ApiHandler) DetailApplication(c *gin.Context) {
@@ -56,6 +55,11 @@ func (a *ApiHandler) DetailApplication(c *gin.Context) {
 	}
 
 	handler, err := NewApplicationHandler(a.MongoDB)
+	if err != nil {
+		log.Printf("Error creating application handler: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
 	err = handler.GetApplicationByID(c.Param("applicationID"))
 	if err != nil {
 		log.Printf("Error getting application: %v\n", err)
@@ -66,5 +70,37 @@ func (a *ApiHandler) DetailApplication(c *gin.Context) {
 		Application: handler.Model,
 	}
 	c.JSON(http.StatusOK, response)
-	return
+}
+
+func (a *ApiHandler) CreateApplication(c *gin.Context) {
+	// Escape the organizationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
+		log.Printf("Error parsing organizationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	org := Organization{}
+	_, err := org.GetById(a.MongoDB, c.Param("organizationID"))
+	if err != nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	request := ApplicationRequest{}
+	err = c.BindJSON(&request)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	application := NewApplication(c.Param("organizationID"), request.Name, primitive.NewObjectID().Hex())
+	application.Description = request.Description
+	_, err = application.Create(a.MongoDB)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	c.JSON(http.StatusCreated, application)
 }

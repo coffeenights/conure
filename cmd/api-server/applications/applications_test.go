@@ -1,6 +1,8 @@
 package applications
 
 import (
+	"bytes"
+	"encoding/json"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"net/http"
 	"net/http/httptest"
@@ -108,5 +110,62 @@ func TestDetailApplication(t *testing.T) {
 		t.Errorf("Expected response code 200, got: %v", resp.Code)
 	}
 	_ = app1.Delete(app.MongoDB)
+	_ = org.Delete(app.MongoDB)
+}
+
+func TestCreateApplication(t *testing.T) {
+	router, app := setupRouter()
+	// Create test organization
+	org := Organization{
+		Status:    OrgActive,
+		AccountID: "testOrgId",
+		Name:      "Test Organization for CreateApplication",
+	}
+	oID, err := org.Create(app.MongoDB) // lint:ignore
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "/organizations/" + oID + "/a/"
+	body := map[string]interface{}{
+		"name": "TestCreateApplication",
+	}
+	bodyBytes, err := json.Marshal(body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bodyReader := bytes.NewBuffer(bodyBytes)
+	req, _ := http.NewRequest("POST", url, bodyReader)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusCreated {
+		t.Errorf("Expected response code 201, got: %v", resp.Code)
+	}
+	_ = org.Delete(app.MongoDB)
+}
+
+func TestCreateApplication_Empty(t *testing.T) {
+	router, app := setupRouter()
+	// Create test organization
+	org := Organization{
+		Status:    OrgActive,
+		AccountID: "testOrgId",
+		Name:      "Test Organization for CreateApplication",
+	}
+	oID, err := org.Create(app.MongoDB) // lint:ignore
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "/organizations/" + oID + "/a/"
+	req, _ := http.NewRequest("POST", url, nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusBadRequest {
+		t.Errorf("Expected response code 400, got: %v", resp.Code)
+	}
 	_ = org.Delete(app.MongoDB)
 }
