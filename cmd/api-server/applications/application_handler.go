@@ -43,31 +43,48 @@ type ComponentProperties struct {
 }
 
 type ComponentHandler struct {
-	Name        string              `json:"name"`
-	Type        string              `json:"type"`
-	Description string              `json:"description"`
-	Traits      []Trait             `json:"traits"`
-	Properties  ComponentProperties `json:"properties"`
+	Properties ComponentProperties
+	Status     *providers.ProviderStatus
+	Model      *Component
+}
+
+func NewComponentHandler(name, componentType, description string, properties ComponentProperties) *ComponentHandler {
+	status, _ := providers.NewProviderStatus()
+	return &ComponentHandler{
+		Properties: properties,
+		Status:     &status,
+	}
 }
 
 type ApplicationHandler struct {
 	ID             string
 	OrganizationID string
 	Model          *Application
-	Status         *providers.ProviderStatus
 	DB             *database.MongoDB
 }
 
 func NewApplicationHandler(db *database.MongoDB) (*ApplicationHandler, error) {
-	status, err := providers.NewProviderStatus()
+	return &ApplicationHandler{
+		Model: &Application{},
+		DB:    db,
+	}, nil
+}
+
+func ListOrganizationApplications(organizationID string, db *database.MongoDB) ([]*ApplicationHandler, error) {
+	models, err := ApplicationList(db, organizationID)
 	if err != nil {
 		return nil, err
 	}
-	return &ApplicationHandler{
-		Model:  &Application{},
-		Status: &status,
-		DB:     db,
-	}, nil
+	handlers := make([]*ApplicationHandler, len(models))
+	for i, model := range models {
+		handler, err := NewApplicationHandler(db)
+		if err != nil {
+			return nil, err
+		}
+		handler.Model = model
+		handlers[i] = handler
+	}
+	return handlers, nil
 }
 
 func (ah *ApplicationHandler) GetApplicationByID(appID string) error {
@@ -78,20 +95,15 @@ func (ah *ApplicationHandler) GetApplicationByID(appID string) error {
 	return nil
 }
 
-func ListOrganizationApplications(organizationID string, db *database.MongoDB) ([]*ApplicationHandler, error) {
-	models, err := ApplicationList(db, organizationID)
+func (ah *ApplicationHandler) ListComponents() ([]*ComponentHandler, error) {
+	models, err := ah.Model.ListComponents(ah.DB)
 	if err != nil {
 		return nil, err
 	}
-	handlers := make([]*ApplicationHandler, len(models))
+	handlers := make([]*ComponentHandler, len(models))
 	for i, model := range models {
-		status, err := providers.NewProviderStatus()
-		if err != nil {
-			return nil, err
-		}
-		handlers[i] = &ApplicationHandler{
-			Model:  model,
-			Status: &status,
+		handlers[i] = &ComponentHandler{
+			Model: &model,
 		}
 	}
 	return handlers, nil

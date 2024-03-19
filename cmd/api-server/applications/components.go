@@ -30,13 +30,39 @@ func (a *ApiHandler) ListComponents(c *gin.Context) {
 	response.Components = make([]ComponentResponse, len(components))
 	for i, component := range components {
 		response.Components[i] = ComponentResponse{
-			&component,
+			Component: &component,
 		}
 	}
 	c.JSON(http.StatusOK, response)
 }
 
 func (a *ApiHandler) DetailComponent(c *gin.Context) {
+	handler, err := NewApplicationHandler(a.MongoDB)
+	if err != nil {
+		log.Printf("Error creating application handler: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	if err != nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+
+	components, err := handler.Model.ListComponents(a.MongoDB)
+	if err != nil {
+		log.Printf("Error getting components: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	var response ComponentListResponse
+	response.Components = make([]ComponentResponse, len(components))
+	for i, component := range components {
+		response.Components[i] = ComponentResponse{
+			Component: &component,
+		}
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func (a *ApiHandler) StatusComponent(c *gin.Context) {
