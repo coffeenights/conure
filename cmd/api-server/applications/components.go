@@ -102,3 +102,34 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 	statusResponse.FromClientsetToResponse(deployment)
 	c.JSON(http.StatusOK, statusResponse)
 }
+
+func (a *ApiHandler) CreateComponent(c *gin.Context) {
+	handler, err := NewApplicationHandler(a.MongoDB)
+	if err != nil {
+		log.Printf("Error creating application handler: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	if err != nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	var request ComponentRequest
+	err = c.BindJSON(&request)
+	if err != nil {
+		log.Printf("Error binding request: %v\n", err)
+		c.AbortWithStatus(http.StatusBadRequest)
+		return
+	}
+	component := request.ParseRequestToModel()
+	err = component.Create(a.MongoDB)
+	if err != nil {
+		log.Printf("Error creating component: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	c.JSON(http.StatusCreated, gin.H{
+		"id": component.ID,
+	})
+}
