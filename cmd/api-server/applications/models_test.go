@@ -390,3 +390,87 @@ func TestApplication_DeleteEnvironment_NotExist(t *testing.T) {
 	}
 	_ = app.Delete(client)
 }
+
+func TestComponent_GetByID(t *testing.T) {
+	client, err := setupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestComponentGetByID", primitive.NewObjectID().Hex()).Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	comp := NewComponent(app, "testComponent", "service")
+	comp.Properties = map[string]interface{}{
+		"cpu":      "1",
+		"memory":   "1Gi",
+		"replicas": int32(1),
+	}
+	_, err = comp.Create(client)
+	defer comp.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to create component: %v", err)
+	}
+	got, err := comp.GetByID(client, comp.ID)
+	if err != nil {
+		t.Errorf("Failed to get component: %v", err)
+	}
+	if got.ID != comp.ID {
+		t.Errorf("Got %v, want %v", got.ID, comp.ID)
+	}
+}
+
+func TestComponent_Create(t *testing.T) {
+	client, err := setupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestComponentCreate", primitive.NewObjectID().Hex()).Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Delete(client)
+
+	comp := NewComponent(app, "testComponent", "service")
+	comp.Properties = map[string]interface{}{
+		"cpu":      "1",
+		"memory":   "1Gi",
+		"replicas": int32(1),
+	}
+	_, err = comp.Create(client)
+	if err != nil {
+		t.Errorf("Failed to create component: %v", err)
+	}
+	_ = comp.Delete(client)
+}
+
+func TestComponent_Create_Duplicate(t *testing.T) {
+	client, err := setupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestComponentCreateDuplicate", primitive.NewObjectID().Hex()).Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer app.Delete(client)
+
+	comp := NewComponent(app, "testComponent", "service")
+	comp.Properties = map[string]interface{}{
+		"cpu":      "1",
+		"memory":   "1Gi",
+		"replicas": int32(1),
+	}
+	_, err = comp.Create(client)
+	if err != nil {
+		t.Errorf("Failed to create component: %v", err)
+	}
+	_, err = comp.Create(client)
+	if err == nil {
+		t.Errorf("Got nil, want error")
+	} else if err != ErrDuplicateDocument {
+		t.Errorf("Got %v, want %v", err, ErrDuplicateDocument)
+	}
+	_ = comp.Delete(client)
+}

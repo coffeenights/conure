@@ -1,6 +1,7 @@
 package applications
 
 import (
+	"errors"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/gin-gonic/gin"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -49,19 +50,15 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 		return
 	}
 
-	components, err := handler.Model.ListComponents(a.MongoDB)
+	component := &Component{}
+	component, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
 		log.Printf("Error getting components: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	var response ComponentListResponse
-	response.Components = make([]ComponentResponse, len(components))
-	for i, component := range components {
-		response.Components[i] = ComponentResponse{
-			Component: &component,
-		}
-	}
+	var response ComponentResponse
+	response.Component = component
 	c.JSON(http.StatusOK, response)
 }
 
@@ -78,7 +75,7 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 	namespace := GetNamespaceFromParams(c)
 	labels := map[string]string{
 		"conure.io/application-id": c.Param("applicationID"),
-		"app.oam.dev/component":    c.Param("componentName"),
+		"app.oam.dev/component":    c.Param("componentID"),
 	}
 
 	cd, err := clientset.Vela.CoreV1beta1().ComponentDefinitions("vela-system").Get(c, "webservice", metav1.GetOptions{})
@@ -129,6 +126,11 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 	if err != nil {
 		log.Printf("Error creating component: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	} else if errors.Is(err, ErrDuplicateDocument) {
+		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
+			"error": err.Error(),
+		})
 		return
 	}
 	c.JSON(http.StatusCreated, component)

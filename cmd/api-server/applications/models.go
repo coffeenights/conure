@@ -8,6 +8,7 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"log"
 	"time"
@@ -303,8 +304,7 @@ func (a *Application) DeleteEnvironmentByName(mongo *database.MongoDB, envName s
 }
 
 type Component struct {
-	ID            primitive.ObjectID     `json:"id,omitempty" bson:"_id,omitempty"`
-	Name          string                 `json:"name" bson:"name"`
+	ID            string                 `json:"id" bson:"_id"`
 	Type          string                 `json:"type" bson:"type"`
 	Description   string                 `json:"description" bson:"description"`
 	ApplicationID primitive.ObjectID     `json:"application_id" bson:"applicationID"`
@@ -313,21 +313,28 @@ type Component struct {
 	DeletedAt     time.Time              `json:"-" bson:"deletedAt,omitempty"`
 }
 
-func NewComponent(a *Application, name string, componentType string) *Component {
+func NewComponent(a *Application, id string, componentType string) *Component {
 	return &Component{
 		ApplicationID: a.ID,
-		Name:          name,
+		ID:            id,
 		Type:          componentType,
 	}
 }
-func (c *Component) Create(mongo *database.MongoDB) (*Component, error) {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ComponentCollection)
+func (c *Component) Create(db *database.MongoDB) (*Component, error) {
+	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
 	c.CreatedAt = time.Now()
+
 	r, err := collection.InsertOne(context.Background(), c)
 	if err != nil {
+		switch err.(type) {
+		case mongo.WriteException:
+			if err.(mongo.WriteException).WriteErrors[0].Code == 11000 {
+				return nil, ErrDuplicateDocument
+			}
+		}
 		return nil, err
 	}
-	c.ID = r.InsertedID.(primitive.ObjectID)
+	c.ID = r.InsertedID.(string)
 	return c, nil
 }
 
@@ -340,7 +347,17 @@ func (c *Component) Delete(mongo *database.MongoDB) error {
 	}
 	log.Printf("Deleted %v documents in the components collection\n", deleteResult.DeletedCount)
 	return nil
+}
 
+func (c *Component) GetByID(mongo *database.MongoDB, ID string) (*Component, error) {
+	collection := mongo.Client.Database(mongo.DBName).Collection(ComponentCollection)
+	filter := bson.M{"_id": ID, "deletedAt": bson.M{"$exists": false}}
+	err := collection.FindOne(context.Background(), filter).Decode(c)
+	if err != nil {
+		return nil, err
+	}
+	log.Println("Found a single document: ", c)
+	return c, nil
 }
 
 type ApplicationRevision struct {

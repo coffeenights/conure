@@ -10,6 +10,7 @@ import (
 type MongoDB struct {
 	Client *mongo.Client
 	DBName string
+	err    mongo.WriteException
 }
 
 func ConnectToMongoDB(uri string, dbName string) (*MongoDB, error) {
