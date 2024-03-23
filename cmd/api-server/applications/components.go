@@ -53,6 +53,10 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 	component := &Component{}
 	component, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
+		if err.Error() == "mongo: no documents in result" {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
 		log.Printf("Error getting components: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
@@ -119,7 +123,7 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-	component := NewComponent(app, request.Name, request.Type)
+	component := NewComponent(app, request.ID, request.Type)
 	component.Description = request.Description
 	component.Properties = request.Properties
 	_, err = component.Create(a.MongoDB)

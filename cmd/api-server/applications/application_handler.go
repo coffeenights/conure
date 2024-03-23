@@ -3,6 +3,7 @@ package applications
 import (
 	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"log"
 )
 
 type Properties interface {
@@ -12,48 +13,6 @@ type Trait struct {
 	Name       string                 `json:"name"`
 	Type       string                 `json:"type"`
 	Properties map[string]interface{} `json:"properties"`
-}
-
-type NetworkProperties struct {
-	IP         string  `json:"ip"`
-	ExternalIP string  `json:"external_ip"`
-	Host       string  `json:"host"`
-	Ports      []int32 `json:"port"`
-}
-
-type ResourcesProperties struct {
-	Replicas int32  `json:"replicas"`
-	CPU      string `json:"cpu"`
-	Memory   string `json:"memory"`
-}
-
-type StorageProperties struct {
-	Size string `json:"size"`
-}
-
-type SourceProperties struct {
-	ContainerImage string `json:"container_image"`
-}
-
-type ComponentProperties struct {
-	NetworkProperties   *NetworkProperties   `json:"network"`
-	ResourcesProperties *ResourcesProperties `json:"resources"`
-	StorageProperties   *StorageProperties   `json:"storage"`
-	SourceProperties    *SourceProperties    `json:"source"`
-}
-
-type ComponentHandler struct {
-	Properties ComponentProperties
-	Status     *providers.ProviderStatus
-	Model      *Component
-}
-
-func NewComponentHandler(name, componentType, description string, properties ComponentProperties) *ComponentHandler {
-	status, _ := providers.NewProviderStatus()
-	return &ComponentHandler{
-		Properties: properties,
-		Status:     &status,
-	}
 }
 
 type ApplicationHandler struct {
@@ -95,16 +54,10 @@ func (ah *ApplicationHandler) GetApplicationByID(appID string) error {
 	return nil
 }
 
-func (ah *ApplicationHandler) ListComponents() ([]*ComponentHandler, error) {
-	models, err := ah.Model.ListComponents(ah.DB)
+func (ah *ApplicationHandler) Status(environment *Environment) providers.ProviderStatus {
+	status, err := providers.NewProviderStatus(environment, ah.Model)
 	if err != nil {
-		return nil, err
+		log.Panicf("Error getting provider status: %v\n", err)
 	}
-	handlers := make([]*ComponentHandler, len(models))
-	for i, model := range models {
-		handlers[i] = &ComponentHandler{
-			Model: &model,
-		}
-	}
-	return handlers, nil
+	return status
 }

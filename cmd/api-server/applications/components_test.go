@@ -247,3 +247,41 @@ func TestDetailComponent(t *testing.T) {
 		t.Errorf("Expected component name to be TestDetailComponent, got: %v", response.ID)
 	}
 }
+
+func TestDetailComponent_NotFound(t *testing.T) {
+	router, app := setupRouter()
+
+	// Create test organization
+	org := Organization{
+		Status:    OrgActive,
+		AccountID: "testOrgId",
+		Name:      "Test Organization for ListApplications",
+	}
+	oID, err := org.Create(app.MongoDB) // lint:ignore
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer org.Delete(app.MongoDB)
+
+	// Create test application
+	application, err := NewApplication(oID, "TestDetailComponents_NotFound", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer application.Delete(app.MongoDB)
+
+	env, err := application.CreateEnvironment(app.MongoDB, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/asdasd/"
+	req, _ := http.NewRequest("GET", url, nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusNotFound {
+		t.Errorf("Expected response code 404, got: %v", resp.Code)
+	}
+}

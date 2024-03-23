@@ -1,26 +1,9 @@
 package applications
 
 import (
-	"encoding/json"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
 	k8sV1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"time"
-)
-
-type AppStatus string
-
-const (
-	AppReady    AppStatus = "Ready"
-	AppNotReady AppStatus = "NotReady"
-)
-
-const (
-	ApplicationIDLabel  = "conure.io/application-id"
-	OrganizationIDLabel = "conure.io/organization-id"
-	EnvironmentLabel    = "conure.io/environment"
-	CreatedByLabel      = "conure.io/created-by"
-	NamespaceLabel      = "conure.io/namespace"
 )
 
 type ApplicationResponse struct {
@@ -35,10 +18,6 @@ type ApplicationListResponse struct {
 type CreateApplicationRequest struct {
 	Name        string `json:"name" validate:"required"`
 	Description string `json:"description"`
-}
-
-type ServiceComponentResponse struct {
-	ComponentProperties
 }
 
 type ServiceComponentStatusResponse struct {
@@ -90,23 +69,10 @@ type ComponentListResponse struct {
 }
 
 type CreateComponentRequest struct {
-	Name        string                 `json:"name" validate:"required"`
+	ID          string                 `json:"id" validate:"required"`
 	Type        string                 `json:"type" validate:"required"`
 	Properties  map[string]interface{} `json:"properties" validate:"required"`
 	Description string                 `json:"description"`
-}
-
-func extractMapFromRawExtension(data *runtime.RawExtension) (map[string]interface{}, error) {
-	var result map[string]interface{}
-	bytesData, err := data.MarshalJSON()
-	if err != nil {
-		panic(err)
-	}
-	err = json.Unmarshal(bytesData, &result)
-	if err != nil {
-		panic(err)
-	}
-	return result, err
 }
 
 type CreateOrganizationRequest struct {

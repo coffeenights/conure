@@ -40,12 +40,6 @@ type K8sWorkloadProperties struct {
 	ComponentStatus *common.ApplicationComponentStatus
 }
 
-type ApplicationProperties struct {
-	ApplicationID  string
-	OrganizationID string
-	Environment    string
-}
-
 type K8sDeploymentWorkload struct {
 	WorkloadProperties
 	K8sWorkloadProperties

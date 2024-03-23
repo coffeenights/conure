@@ -143,8 +143,8 @@ func NewApplication(organizationID string, name string, createdBy string) *Appli
 	}
 }
 
-func ApplicationList(mongo *database.MongoDB, organizationID string) ([]*Application, error) {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+func ApplicationList(db *database.MongoDB, organizationID string) ([]*Application, error) {
+	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
 	oID, err := primitive.ObjectIDFromHex(organizationID)
 	if err != nil {
 		return nil, err
@@ -170,8 +170,30 @@ func ApplicationList(mongo *database.MongoDB, organizationID string) ([]*Applica
 	return applications, nil
 }
 
-func (a *Application) GetNamespace() string {
-	return fmt.Sprintf("%s-%s", a.OrganizationID.Hex(), a.ID.Hex())
+func (a *Application) GetEnvironmentByName(db *database.MongoDB, environmentName string) (*Environment, error) {
+	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
+	pipeline := mongo.Pipeline{
+		{{"$match", bson.D{{"_id", a.ID}}}},
+		{{"$unwind", "$environments"}},
+		{{"$match", bson.D{{"environments.name", environmentName}}}},
+	}
+	cursor, err := collection.Aggregate(context.Background(), pipeline)
+	if err != nil {
+		return nil, err
+	}
+	var results []bson.M
+	if err = cursor.All(context.Background(), &results); err != nil {
+		return nil, err
+	}
+	if len(results) == 0 {
+		return nil, ErrDocumentNotFound
+	}
+	var env Environment
+	bsonBytes, _ := bson.Marshal(results[0]["environments"])
+	if err = bson.Unmarshal(bsonBytes, &env); err != nil {
+		return nil, err
+	}
+	return &env, nil
 }
 
 func (a *Application) Create(mongo *database.MongoDB) (*Application, error) {
