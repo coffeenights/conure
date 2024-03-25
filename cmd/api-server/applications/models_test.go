@@ -375,6 +375,52 @@ func TestApplication_DeleteEnvironmentByName(t *testing.T) {
 	_ = app.Delete(client)
 }
 
+func TestApplication_GetEnvironmentByName(t *testing.T) {
+	client, err := setupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestApplicationGetEnvironmentByName", primitive.NewObjectID().Hex()).Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env1, err := app.CreateEnvironment(client, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = app.CreateEnvironment(client, "development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := app.GetEnvironmentByName(client, env1.Name)
+	if err != nil {
+		t.Errorf("Failed to get environment: %v", err)
+	}
+	if env.Name != env1.Name {
+		t.Errorf("Got %v, want %v", env.Name, env1.Name)
+	}
+	_ = app.Delete(client)
+}
+
+func TestApplication_GetEnvironmentByName_NotFound(t *testing.T) {
+	client, err := setupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestApplicationGetEnvironmentByNameNotFound", primitive.NewObjectID().Hex()).Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = app.CreateEnvironment(client, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = app.GetEnvironmentByName(client, "asd")
+	if err == nil {
+		t.Errorf("Got nil, want error")
+	}
+}
+
 func TestApplication_DeleteEnvironment_NotExist(t *testing.T) {
 	client, err := setupDB()
 	if err != nil {

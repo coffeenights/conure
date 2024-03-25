@@ -1,7 +1,7 @@
 package applications
 
 import (
-	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
+	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
 	k8sV1 "k8s.io/api/apps/v1"
 	"time"
 )
@@ -46,26 +46,24 @@ func (r *ServiceComponentStatusResponse) FromClientsetToResponse(deployment k8sV
 	}
 }
 
-type ServiceComponentShortResponse struct {
-	Name string `json:"name"`
-	Type string `json:"type"`
-}
-
-func (r *ServiceComponentShortResponse) FromClientsetToResponse(component common.ApplicationComponent) {
-	r.Name = component.Name
-	r.Type = component.Type
-}
-
-type ServiceComponentListResponse struct {
-	Components []ServiceComponentShortResponse `json:"components"`
-}
-
 type ComponentResponse struct {
 	*Component
 }
 
 type ComponentListResponse struct {
 	Components []ComponentResponse `json:"components"`
+}
+
+type ComponentProperties struct {
+	NetworkProperties   *providers.NetworkProperties   `json:"network"`
+	ResourcesProperties *providers.ResourcesProperties `json:"resources"`
+	StorageProperties   *providers.StorageProperties   `json:"storage"`
+	SourceProperties    *providers.SourceProperties    `json:"source"`
+}
+
+type ComponentStatusResponse struct {
+	Component  ComponentResponse   `json:"component"`
+	Properties ComponentProperties `json:"properties"`
 }
 
 type CreateComponentRequest struct {

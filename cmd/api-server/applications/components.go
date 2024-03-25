@@ -2,9 +2,7 @@ package applications
 
 import (
 	"errors"
-	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/gin-gonic/gin"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"log"
 	"net/http"
 )
@@ -51,7 +49,7 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 	}
 
 	component := &Component{}
-	component, err = component.GetByID(a.MongoDB, c.Param("componentID"))
+	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
 		if err.Error() == "mongo: no documents in result" {
 			c.AbortWithStatus(http.StatusNotFound)
@@ -67,41 +65,67 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 }
 
 func (a *ApiHandler) StatusComponent(c *gin.Context) {
-	// obtain the deployment related to the component
-	clientset, err := k8sUtils.GetClientset()
+	handler, err := NewApplicationHandler(a.MongoDB)
 	if err != nil {
-		log.Printf("Error getting clientset: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		log.Printf("Error creating application handler: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	namespace := GetNamespaceFromParams(c)
-	labels := map[string]string{
-		"conure.io/application-id": c.Param("applicationID"),
-		"app.oam.dev/component":    c.Param("componentID"),
+	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	if err != nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
 	}
 
-	cd, err := clientset.Vela.CoreV1beta1().ComponentDefinitions("vela-system").Get(c, "webservice", metav1.GetOptions{})
-	_ = cd
-	configmap, err := clientset.K8s.CoreV1().ConfigMaps("vela-system").Get(c, "webservice", metav1.GetOptions{})
-	_ = configmap
-	deployments, err := k8sUtils.GetDeploymentByLabels(clientset.K8s, namespace, labels)
+	component := &Component{}
+	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
-		log.Printf("Error getting deployments: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		if err.Error() == "mongo: no documents in result" {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
+		log.Printf("Error getting components: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	if len(deployments) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{})
+
+	// Get environment
+	env, err := handler.Model.GetEnvironmentByName(a.MongoDB, c.Param("environment"))
+	if errors.Is(err, ErrDocumentNotFound) {
+		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	deployment := deployments[0]
-	var statusResponse ServiceComponentStatusResponse
-	statusResponse.FromClientsetToResponse(deployment)
-	c.JSON(http.StatusOK, statusResponse)
+
+	var response ComponentStatusResponse
+
+	status := handler.Status(env)
+	response.Properties.ResourcesProperties, err = status.GetResourcesProperties(component.ID)
+	if err != nil {
+		log.Printf("Error getting resources properties: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	response.Properties.NetworkProperties, err = status.GetNetworkProperties(component.ID)
+	if err != nil {
+		log.Printf("Error getting network properties: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	response.Properties.StorageProperties, err = status.GetStorageProperties(component.ID)
+	if err != nil {
+		log.Printf("Error getting storage properties: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	response.Properties.SourceProperties, err = status.GetSourceProperties(component.ID)
+	if err != nil {
+		log.Printf("Error getting source properties: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	response.Component.Component = component
+	c.JSON(http.StatusOK, response)
+
 }
 
 func (a *ApiHandler) CreateComponent(c *gin.Context) {
