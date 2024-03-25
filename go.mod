@@ -17,7 +17,7 @@ require (
 	go.mongodb.org/mongo-driver v1.14.0
 	golang.org/x/crypto v0.19.0
 	google.golang.org/grpc v1.59.0
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 	gorm.io/driver/postgres v1.5.0
 	gorm.io/gorm v1.24.7-0.20230306060331-85eaf9eeda11
 	k8s.io/api v0.27.4
