@@ -5,6 +5,7 @@ import (
 	"fmt"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
+	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	"log"
 )
 
@@ -29,37 +30,71 @@ const (
 )
 
 type ProviderStatusVela struct {
-	Provider
-	VelaComponent *VelaComponent
-	Workload      WorkloadName
+	OrganizationID  string
+	ApplicationID   string
+	Namespace       string
+	VelaApplication *v1beta1.Application
 }
 
-func (p *ProviderStatusVela) GetComponentProperties() (*ComponentProperties, error) {
-	return nil, nil
-}
-func (p *ProviderStatusVela) GetApplicationStatus() (string, error) {
+func (p *ProviderStatusVela) NewProviderStatus(organizationID string, applicationID string, namespace string) (*ProviderStatusVela, error) {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
-		return "", err
+		return nil, err
 	}
 	filter := map[string]string{
-		OrganizationIDLabel: p.Application.OrganizationID.Hex(),
-		ApplicationIDLabel:  p.Application.ID.Hex(),
-		EnvironmentLabel:    p.Environment.Name,
+		OrganizationIDLabel: organizationID,
+		ApplicationIDLabel:  applicationID,
 	}
 
-	velaApplication, err := k8sUtils.GetApplicationByLabels(clientset, p.Environment.GetNamespace(), filter)
+	velaApplication, err := k8sUtils.GetApplicationByLabels(clientset, namespace, filter)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(velaApplication.Status.Phase), nil
-}
-func (p *ProviderStatusVela) GetNetworkProperties() (*NetworkProperties, error) {
-	var properties NetworkProperties
 
+	return &ProviderStatusVela{
+		OrganizationID:  organizationID,
+		ApplicationID:   applicationID,
+		Namespace:       namespace,
+		VelaApplication: velaApplication,
+	}, nil
+}
+
+func (p *ProviderStatusVela) GetApplicationStatus() (string, error) {
+	return string(p.VelaApplication.Status.Phase), nil
+}
+
+func (p *ProviderStatusVela) getVelaComponent(componentID string) (*VelaComponent, error) {
+	velaComponent := &VelaComponent{}
+	for _, componentSpec := range p.VelaApplication.Spec.Components {
+		if componentSpec.Name == componentID {
+			velaComponent.ComponentSpec = &componentSpec
+			break
+		}
+	}
+	if velaComponent.ComponentSpec == nil {
+		return nil, ErrComponentNotFound
+	}
+	for _, componentStatus := range p.VelaApplication.Status.Services {
+		if componentStatus.Name == componentID {
+			velaComponent.ComponentStatus = &componentStatus
+			break
+		}
+	}
+	if velaComponent.ComponentStatus == nil {
+		return nil, ErrComponentNotFound
+	}
+	return velaComponent, nil
+}
+
+func (p *ProviderStatusVela) GetNetworkProperties(componentID string) (*NetworkProperties, error) {
+	var properties NetworkProperties
+	velaComponent, err := p.getVelaComponent(componentID)
+	if err != nil {
+		return nil, err
+	}
 	// Information from trait
-	for _, trait := range p.VelaComponent.ComponentSpec.Traits {
+	for _, trait := range velaComponent.ComponentSpec.Traits {
 		if trait.Type == "expose" {
 			err := getExposeTraitProperties(&trait, &properties)
 			if err != nil {
@@ -75,10 +110,10 @@ func (p *ProviderStatusVela) GetNetworkProperties() (*NetworkProperties, error) 
 		return nil, err
 	}
 	filter := map[string]string{
-		OrganizationIDLabel: p.Application.OrganizationID.Hex(),
-		ApplicationIDLabel:  p.Application.ID.Hex(),
+		OrganizationIDLabel: p.OrganizationID,
+		ApplicationIDLabel:  p.ApplicationID,
 	}
-	err = getNetworkPropertiesFromService(clientset, p.Environment.GetNamespace(), filter, &properties)
+	err = getNetworkPropertiesFromService(clientset, p.Namespace, filter, &properties)
 	if err != nil {
 		switch {
 		case !errors.Is(err, k8sUtils.ErrServiceNotFound):
@@ -87,10 +122,15 @@ func (p *ProviderStatusVela) GetNetworkProperties() (*NetworkProperties, error) 
 	}
 	return &properties, nil
 }
-func (p *ProviderStatusVela) GetResourcesProperties() (*ResourcesProperties, error) {
+
+func (p *ProviderStatusVela) GetResourcesProperties(componentID string) (*ResourcesProperties, error) {
 	var resources ResourcesProperties
+	velaComponent, err := p.getVelaComponent(componentID)
+	if err != nil {
+		return nil, err
+	}
 	// Information from trait
-	for _, trait := range p.VelaComponent.ComponentSpec.Traits {
+	for _, trait := range velaComponent.ComponentSpec.Traits {
 		if trait.Type == "scaler" {
 			traitsData, err := k8sUtils.ExtractMapFromRawExtension(trait.Properties)
 			if err != nil {
@@ -101,7 +141,7 @@ func (p *ProviderStatusVela) GetResourcesProperties() (*ResourcesProperties, err
 			}
 		}
 	}
-	propertiesData, err := k8sUtils.ExtractMapFromRawExtension(p.VelaComponent.ComponentSpec.Properties)
+	propertiesData, err := k8sUtils.ExtractMapFromRawExtension(velaComponent.ComponentSpec.Properties)
 	if err != nil {
 		return nil, err
 	}
@@ -112,11 +152,26 @@ func (p *ProviderStatusVela) GetResourcesProperties() (*ResourcesProperties, err
 	resources.Memory = propertiesData["memory"].(string)
 	return &resources, nil
 }
-func (p *ProviderStatusVela) GetStorageProperties() (*StorageProperties, error) {
+
+func (p *ProviderStatusVela) GetStorageProperties(componentID string) (*StorageProperties, error) {
 	return nil, nil
 }
-func (p *ProviderStatusVela) GetSourceProperties() (*SourceProperties, error) {
-	return nil, nil
+
+func (p *ProviderStatusVela) GetSourceProperties(componentID string) (*SourceProperties, error) {
+	var source SourceProperties
+	velaComponent, err := p.getVelaComponent(componentID)
+	if err != nil {
+		return nil, err
+	}
+	propertiesData, err := k8sUtils.ExtractMapFromRawExtension(velaComponent.ComponentSpec.Properties)
+	if err != nil {
+		return nil, err
+	}
+	source.ContainerImage = ""
+	if image, ok := propertiesData["image"].(string); ok {
+		source.ContainerImage = image
+	}
+	return &source, nil
 }
 
 func getNetworkPropertiesFromService(clientset *k8sUtils.GenericClientset, namespace string, labels map[string]string, properties *NetworkProperties) error {
