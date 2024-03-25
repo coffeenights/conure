@@ -1,7 +1,6 @@
 package applications
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"log"
 )
@@ -54,8 +53,8 @@ func (ah *ApplicationHandler) GetApplicationByID(appID string) error {
 	return nil
 }
 
-func (ah *ApplicationHandler) Status(environment *Environment) providers.ProviderStatus {
-	status, err := providers.NewProviderStatus(environment, ah.Model)
+func (ah *ApplicationHandler) Status(environment *Environment) ProviderStatus {
+	status, err := NewProviderStatus(ah.Model, environment)
 	if err != nil {
 		log.Panicf("Error getting provider status: %v\n", err)
 	}
