@@ -1,11 +1,17 @@
 package providers
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
 	"log"
 )
 
@@ -203,5 +209,57 @@ func getExposeTraitProperties(trait *common.ApplicationTrait, properties *Networ
 			properties.Ports = append(properties.Ports, int32(p.(float64)))
 		}
 	}
+	return nil
+}
+
+type ProviderDispatcherVela struct {
+	OrganizationID string
+	ApplicationID  string
+	Namespace      string
+	Environment    string
+}
+
+func (p *ProviderDispatcherVela) createNamespace(clientset *k8sUtils.GenericClientset) error {
+	options := metav1.CreateOptions{}
+	namespaceManifest := corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: p.Namespace,
+			Labels: map[string]string{
+				ApplicationIDLabel:  p.ApplicationID,
+				OrganizationIDLabel: p.OrganizationID,
+				EnvironmentLabel:    p.Environment,
+			},
+		},
+	}
+	_, err := clientset.K8s.CoreV1().Namespaces().Create(context.Background(), &namespaceManifest, options)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface{}) error {
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		log.Printf("Error getting clientset: %v\n", err)
+		return err
+	}
+
+	client, err := dynamic.NewForConfig(clientset.Config)
+	if err != nil {
+		return err
+	}
+	// Create namespace if necessary
+	err = p.createNamespace(clientset)
+
+	deploymentRes := schema.GroupVersionResource{Group: "core.oam.dev", Version: "v1beta1", Resource: "applications"}
+	deployment := &unstructured.Unstructured{
+		Object: manifest,
+	}
+	result, err := client.Resource(deploymentRes).Namespace(p.Namespace).Create(context.Background(), deployment, metav1.CreateOptions{})
+	if err != nil {
+		return err
+	}
+	log.Printf("Created deployment %q.\n", result.GetName())
 	return nil
 }

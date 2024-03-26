@@ -34,3 +34,23 @@ func NewProviderStatus(application *Application, environment *Environment) (Prov
 	}
 	return nil, providers.ErrProviderNotSupported
 }
+
+type ProviderDispatcher interface {
+	DeployApplication(manifest map[string]interface{}) error
+}
+
+func NewProviderDispatcher(application *Application, environment *Environment) (ProviderDispatcher, error) {
+	appConfig := config.LoadConfig(apiConfig.Config{})
+	providerType := ProviderType(appConfig.ProviderSource)
+
+	switch providerType {
+	case Vela:
+		return &providers.ProviderDispatcherVela{
+			OrganizationID: application.OrganizationID.Hex(),
+			ApplicationID:  application.ID.Hex(),
+			Namespace:      environment.GetNamespace(),
+			Environment:    environment.Name,
+		}, nil
+	}
+	return nil, providers.ErrProviderNotSupported
+}

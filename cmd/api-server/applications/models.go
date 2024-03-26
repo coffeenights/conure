@@ -14,15 +14,6 @@ import (
 	"time"
 )
 
-type Organization struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty"`
-	Status    OrganizationStatus `bson:"status"`
-	AccountID string             `bson:"accountId"`
-	Name      string             `bson:"name"`
-	CreatedAt time.Time          `bson:"createdAt"`
-	DeletedAt time.Time          `bson:"deletedAt,omitempty"`
-}
-
 type OrganizationStatus string
 
 const OrganizationCollection string = "organizations"
@@ -34,6 +25,15 @@ const (
 	OrgDeleted  OrganizationStatus = "deleted"
 	OrgDisabled OrganizationStatus = "disabled"
 )
+
+type Organization struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty"`
+	Status    OrganizationStatus `bson:"status"`
+	AccountID string             `bson:"accountId"`
+	Name      string             `bson:"name"`
+	CreatedAt time.Time          `bson:"createdAt"`
+	DeletedAt time.Time          `bson:"deletedAt,omitempty"`
+}
 
 func (o *Organization) String() string {
 	return fmt.Sprintf("Organization: %s, %s", o.Status, o.AccountID)
@@ -326,13 +326,14 @@ func (a *Application) DeleteEnvironmentByName(mongo *database.MongoDB, envName s
 }
 
 type Component struct {
-	ID            string                 `json:"id" bson:"_id"`
-	Type          string                 `json:"type" bson:"type"`
-	Description   string                 `json:"description" bson:"description"`
-	ApplicationID primitive.ObjectID     `json:"application_id" bson:"applicationID"`
-	Properties    map[string]interface{} `json:"properties,omitempty" bson:"properties,omitempty"`
-	CreatedAt     time.Time              `json:"created_at" bson:"createdAt"`
-	DeletedAt     time.Time              `json:"-" bson:"deletedAt,omitempty"`
+	ID            string                   `json:"id" bson:"_id"`
+	Type          string                   `json:"type" bson:"type"`
+	Description   string                   `json:"description" bson:"description"`
+	ApplicationID primitive.ObjectID       `json:"application_id" bson:"applicationID"`
+	Properties    map[string]interface{}   `json:"properties,omitempty" bson:"properties,omitempty"`
+	Traits        []map[string]interface{} `json:"traits,omitempty" bson:"traits,omitempty"`
+	CreatedAt     time.Time                `json:"created_at" bson:"createdAt"`
+	DeletedAt     time.Time                `json:"-" bson:"deletedAt,omitempty"`
 }
 
 func NewComponent(a *Application, id string, componentType string) *Component {

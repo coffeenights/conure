@@ -150,15 +150,16 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 	component := NewComponent(app, request.ID, request.Type)
 	component.Description = request.Description
 	component.Properties = request.Properties
+	component.Traits = request.Traits
 	_, err = component.Create(a.MongoDB)
-	if err != nil {
-		log.Printf("Error creating component: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
-		return
-	} else if errors.Is(err, ErrDuplicateDocument) {
+	if errors.Is(err, ErrDuplicateDocument) {
 		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
 			"error": err.Error(),
 		})
+		return
+	} else if err != nil {
+		log.Printf("Error creating component: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 	c.JSON(http.StatusCreated, component)

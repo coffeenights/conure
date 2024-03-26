@@ -67,10 +67,11 @@ type ComponentStatusResponse struct {
 }
 
 type CreateComponentRequest struct {
-	ID          string                 `json:"id" validate:"required"`
-	Type        string                 `json:"type" validate:"required"`
-	Properties  map[string]interface{} `json:"properties" validate:"required"`
-	Description string                 `json:"description"`
+	ID          string                   `json:"id" validate:"required"`
+	Type        string                   `json:"type" validate:"required"`
+	Properties  map[string]interface{}   `json:"properties" validate:"required"`
+	Traits      []map[string]interface{} `json:"traits"`
+	Description string                   `json:"description"`
 }
 
 type CreateOrganizationRequest struct {

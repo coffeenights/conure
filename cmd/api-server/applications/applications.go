@@ -104,3 +104,58 @@ func (a *ApiHandler) CreateApplication(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, application)
 }
+
+func (a *ApiHandler) DeployApplication(c *gin.Context) {
+	// Escape the organizationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
+		log.Printf("Error parsing organizationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	// Escape the applicationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("applicationID")); err != nil {
+		log.Printf("Error parsing applicationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	handler, err := NewApplicationHandler(a.MongoDB)
+	if err != nil {
+		log.Printf("Error creating application handler: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	err = handler.GetApplicationByID(c.Param("applicationID"))
+	if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	env, err := handler.Model.GetEnvironmentByName(a.MongoDB, c.Param("environment"))
+	if err != nil {
+		log.Printf("Error getting environment: %v\n", err)
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	manifest, err := BuildApplicationManifest(handler.Model, env, a.MongoDB)
+	if err != nil {
+		log.Printf("Error building application manifest: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	provider, err := NewProviderDispatcher(handler.Model, env)
+	if err != nil {
+		log.Printf("Error creating provider dispatcher: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	err = provider.DeployApplication(manifest)
+	if err != nil {
+		log.Printf("Error deploying application: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Application deployed",
+	})
+}
