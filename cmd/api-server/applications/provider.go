@@ -26,11 +26,11 @@ func NewProviderStatus(application *Application, environment *Environment) (Prov
 
 	switch providerType {
 	case Vela:
-		return &providers.ProviderStatusVela{
-			OrganizationID: application.OrganizationID.Hex(),
-			ApplicationID:  application.ID.Hex(),
-			Namespace:      environment.GetNamespace(),
-		}, nil
+		provider, err := providers.NewProviderStatusVela(application.OrganizationID.Hex(), application.ID.Hex(), environment.GetNamespace())
+		if err != nil {
+			return nil, err
+		}
+		return provider, nil
 	}
 	return nil, providers.ErrProviderNotSupported
 }

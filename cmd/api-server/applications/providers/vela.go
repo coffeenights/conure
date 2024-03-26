@@ -42,7 +42,7 @@ type ProviderStatusVela struct {
 	VelaApplication *v1beta1.Application
 }
 
-func (p *ProviderStatusVela) NewProviderStatus(organizationID string, applicationID string, namespace string) (*ProviderStatusVela, error) {
+func NewProviderStatusVela(organizationID string, applicationID string, namespace string) (*ProviderStatusVela, error) {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
