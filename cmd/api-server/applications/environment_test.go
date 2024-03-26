@@ -11,111 +11,88 @@ import (
 )
 
 func TestCreateEnvironment(t *testing.T) {
-	router, _ := setupRouter()
+	router, api := setupRouter()
 	createRequest := &CreateEnvironmentRequest{
-		Name:           "staging",
-		ApplicationID:  primitive.NewObjectID().Hex(),
-		OrganizationID: "6599082303bedbfeb7243ada",
+		Name: "staging",
 	}
+	orgID := primitive.NewObjectID().Hex()
+	app, err := NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
+	if err != nil {
+		t.Fatalf("Failed to create application: %v", err)
+	}
+	defer app.Delete(api.MongoDB)
 	jsonData, err := json.Marshal(createRequest)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to marshal request: %v", err)
 	}
-	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/a/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
+	request, err := http.NewRequest("POST", "/organizations/"+orgID+"/a/"+app.ID.Hex()+"/e/", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to create request: %v", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, request)
-	// Assert
 	if resp.Code != http.StatusCreated {
 		t.Errorf("Expected response code 201, got: %v", resp.Code)
+	}
+	_, err = app.GetByID(api.MongoDB, app.ID.Hex())
+	if err != nil {
+		t.Errorf("Failed to get application: %v", err)
+	}
+	if len(app.Environments) != 1 {
+		t.Errorf("Expected 1 environment, got: %v", len(app.Environments))
 	}
 }
 
-func TestListEnvironments(t *testing.T) {
+func TestCreateEnvironment_NotExist(t *testing.T) {
 	router, _ := setupRouter()
-	// Create a test environment
 	createRequest := &CreateEnvironmentRequest{
-		Name:           "staging-test",
-		ApplicationID:  primitive.NewObjectID().Hex(),
-		OrganizationID: "6599082303bedbfeb7243ada",
+		Name: "staging",
 	}
+	orgID := primitive.NewObjectID().Hex()
+	appID := primitive.NewObjectID().Hex()
 	jsonData, err := json.Marshal(createRequest)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to marshal request: %v", err)
 	}
-	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/a/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
+	request, err := http.NewRequest("POST", "/organizations/"+orgID+"/a/"+appID+"/e/", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Failed to create request: %v", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, request)
-	// Assert
-	if resp.Code != http.StatusCreated {
-		t.Errorf("Expected response code 201, got: %v", resp.Code)
-	}
-
-	// List environments
-	request, err = http.NewRequest("GET", "/organizations/"+createRequest.OrganizationID+"/a/"+createRequest.ApplicationID+"/e/", nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	resp = httptest.NewRecorder()
-	router.ServeHTTP(resp, request)
-	// Assert
-	if resp.Code != http.StatusOK {
-		t.Errorf("Expected response code 200, got: %v", resp.Code)
-	}
-
-	var response EnvironmentListResponse
-	err = json.Unmarshal(resp.Body.Bytes(), &response)
-	if err != nil {
-		log.Fatal(err)
-	}
-	if len(response.Environments) != 1 {
-		t.Errorf("Expected 1 environment, got: %v", len(response.Environments))
-	}
-	if response.Environments[0].Name != "staging-test" {
-		t.Errorf("Expected environment to be staging-test, got: %v", response.Environments[0].Name)
+	if resp.Code != http.StatusNotFound {
+		t.Errorf("Expected response code 404, got: %v", resp.Code)
 	}
 }
 
 func TestDeleteEnvironment(t *testing.T) {
-	router, _ := setupRouter()
-	// Create a test environment
-	createRequest := &CreateEnvironmentRequest{
-		Name:           "staging-test",
-		ApplicationID:  primitive.NewObjectID().Hex(),
-		OrganizationID: "6599082303bedbfeb7243ada",
-	}
-	jsonData, err := json.Marshal(createRequest)
+	router, api := setupRouter()
+	orgID := primitive.NewObjectID().Hex()
+	app, err := NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
 	if err != nil {
-		log.Fatal(err)
+		t.Fatalf("Failed to create application: %v", err)
 	}
-	request, err := http.NewRequest("POST", "/organizations/"+createRequest.OrganizationID+"/a/"+createRequest.ApplicationID+"/e/", bytes.NewBuffer(jsonData))
+	defer app.Delete(api.MongoDB)
+	env, err := app.CreateEnvironment(api.MongoDB, "staging")
 	if err != nil {
-		log.Fatal(err)
+		t.Fatalf("Failed to create environment: %v", err)
 	}
-	request.Header.Set("Content-Type", "application/json")
+	request, err := http.NewRequest("DELETE", "/organizations/"+orgID+"/a/"+app.ID.Hex()+"/e/"+env.Name+"/", nil)
+	if err != nil {
+		log.Fatalf("Failed to create request: %v", err)
+	}
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, request)
-	// Assert
-	if resp.Code != http.StatusCreated {
-		t.Errorf("Expected response code 201, got: %v", resp.Code)
-	}
-
-	// Delete environment
-	request, err = http.NewRequest("DELETE", "/organizations/"+createRequest.OrganizationID+"/a/"+createRequest.ApplicationID+"/e/"+createRequest.Name+"/", nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	resp = httptest.NewRecorder()
-	router.ServeHTTP(resp, request)
-	// Assert
 	if resp.Code != http.StatusOK {
 		t.Errorf("Expected response code 200, got: %v", resp.Code)
+	}
+	_, err = app.GetByID(api.MongoDB, app.ID.Hex())
+	if err != nil {
+		t.Errorf("Failed to get application: %v", err)
+	}
+	if len(app.Environments) != 0 {
+		t.Errorf("Expected 0 environments, got: %v", len(app.Environments))
 	}
 }

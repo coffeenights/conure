@@ -7,18 +7,18 @@ import (
 	"log"
 )
 
-type AppHandler struct {
+type ApiHandler struct {
 	MongoDB *database.MongoDB
 	Config  *apiConfig.Config
 }
 
-func NewAppHandler() *AppHandler {
+func NewApiHandler() *ApiHandler {
 	appConfig := config.LoadConfig(apiConfig.Config{})
 	mongo, err := database.ConnectToMongoDB(appConfig.MongoDBURI, appConfig.MongoDBName)
 	if err != nil {
 		log.Fatal(err)
 	}
-	return &AppHandler{
+	return &ApiHandler{
 		MongoDB: mongo,
 		Config:  appConfig,
 	}

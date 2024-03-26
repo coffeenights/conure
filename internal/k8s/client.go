@@ -12,6 +12,7 @@ type GenericClientset struct {
 	Conure *oam_conure.Clientset
 	K8s    *kubernetes.Clientset
 	Vela   *coreOAMDevClientset.Clientset
+	Config *rest.Config
 }
 
 func GetClientset() (*GenericClientset, error) {
@@ -38,5 +39,5 @@ func GetClientset() (*GenericClientset, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &GenericClientset{Conure: conure, K8s: k8s, Vela: vela}, nil
+	return &GenericClientset{Conure: conure, K8s: k8s, Vela: vela, Config: config}, nil
 }

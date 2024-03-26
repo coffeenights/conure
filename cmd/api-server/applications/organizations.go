@@ -5,7 +5,7 @@ import (
 	"net/http"
 )
 
-func (a *AppHandler) DetailOrganization(c *gin.Context) {
+func (a *ApiHandler) DetailOrganization(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 	org := Organization{}
 	_, err := org.GetById(a.MongoDB, organizationID)
@@ -18,7 +18,7 @@ func (a *AppHandler) DetailOrganization(c *gin.Context) {
 	c.JSON(http.StatusOK, response)
 }
 
-func (a *AppHandler) CreateOrganization(c *gin.Context) {
+func (a *ApiHandler) CreateOrganization(c *gin.Context) {
 	request := CreateOrganizationRequest{}
 	err := c.BindJSON(&request)
 	if err != nil {

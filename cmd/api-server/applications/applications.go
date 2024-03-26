@@ -1,127 +1,161 @@
 package applications
 
 import (
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"net/http"
-	"strings"
-
-	k8sUtils "github.com/coffeenights/conure/internal/k8s"
-	"github.com/gin-gonic/gin"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func (a *AppHandler) ListApplications(c *gin.Context) {
-	// q is the query param that represents the search term
-	q := c.DefaultQuery("q", "")
-	// creates the clientset
-	clientset, err := k8sUtils.GetClientset()
+func (a *ApiHandler) ListApplications(c *gin.Context) {
+	// Escape the organizationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
+		log.Printf("Error parsing organizationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	org := Organization{}
+	_, err := org.GetById(a.MongoDB, c.Param("organizationID"))
 	if err != nil {
-		log.Printf("Error getting clientset: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	handlers, err := ListOrganizationApplications(c.Param("organizationID"), a.MongoDB)
+	if err != nil {
+		log.Printf("Error getting applications list: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
-	listOptions := metav1.ListOptions{
-		LabelSelector: "conure.io/organization-id=" + c.Param("organizationID") + ",conure.io/main=true",
+	response := ApplicationListResponse{}
+	response.Organization.ParseModelToResponse(&org)
+	applicationResponses := make([]ApplicationResponse, len(handlers))
+	for i, handler := range handlers {
+		r := ApplicationResponse{
+			Application: handler.Model,
+		}
+		applicationResponses[i] = r
 	}
-	applications, err := clientset.Vela.CoreV1beta1().Applications("").List(c, listOptions)
-	if err != nil {
-		log.Printf("Error getting applications: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+	response.Applications = applicationResponses
+	c.JSON(http.StatusOK, response)
+}
+
+func (a *ApiHandler) DetailApplication(c *gin.Context) {
+	// Escape the organizationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
+		log.Printf("Error parsing organizationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	// Escape the applicationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("applicationID")); err != nil {
+		log.Printf("Error parsing applicationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
-	var response []ApplicationResponse
-	for _, app := range applications.Items { // Apply filtering based on the query parameter
-		if q != "" && !strings.Contains(app.ObjectMeta.Name, q) {
-			continue
-		}
-		// Get revision
-		listOptions = metav1.ListOptions{
-			LabelSelector: "app.oam.dev/app-revision-hash=" + app.Status.LatestRevision.RevisionHash,
-		}
-
-		revisions, err := clientset.Vela.CoreV1beta1().ApplicationRevisions(app.Namespace).List(c, listOptions)
-		if err != nil {
-			log.Printf("Error getting application revision: %v\n", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-		if revisions.Items == nil {
-			log.Fatal("Error getting application revision: revision not found")
-		}
-		rev := revisions.Items[0]
-
-		var r ApplicationResponse
-		r.FromVelaClientsetToResponse(&app, &rev)
-
-		if err != nil {
-			log.Printf("Error getting application: %v\n", err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-			return
-		}
-
-		response = append(response, r)
+	handler, err := NewApplicationHandler(a.MongoDB)
+	if err != nil {
+		log.Printf("Error creating application handler: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	err = handler.GetApplicationByID(c.Param("applicationID"))
+	if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	response := ApplicationResponse{
+		Application: handler.Model,
 	}
 	c.JSON(http.StatusOK, response)
 }
 
-func (a *AppHandler) DetailApplication(c *gin.Context) {
-	clientset, err := k8sUtils.GetClientset()
+func (a *ApiHandler) CreateApplication(c *gin.Context) {
+	// Escape the organizationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
+		log.Printf("Error parsing organizationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	org := Organization{}
+	_, err := org.GetById(a.MongoDB, c.Param("organizationID"))
 	if err != nil {
-		log.Printf("Error getting clientset: %v\n", err)
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	request := CreateApplicationRequest{}
+	err = c.BindJSON(&request)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	application := NewApplication(c.Param("organizationID"), request.Name, primitive.NewObjectID().Hex())
+	application.Description = request.Description
+	_, err = application.Create(a.MongoDB)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
-	listOptions := metav1.ListOptions{
-		LabelSelector: "conure.io/organization-id=" + c.Param("organizationID") + ",conure.io/application-id=" + c.Param("applicationID") + ",conure.io/environment=" + c.Param("environment"),
+	c.JSON(http.StatusCreated, application)
+}
+
+func (a *ApiHandler) DeployApplication(c *gin.Context) {
+	// Escape the organizationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
+		log.Printf("Error parsing organizationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
 	}
-	namespace := c.Param("organizationID") + "-" + c.Param("applicationID") + "-" + c.Param("environment")
-	apps, err := clientset.Vela.CoreV1beta1().Applications(namespace).List(c, listOptions)
+	// Escape the applicationID
+	if _, err := primitive.ObjectIDFromHex(c.Param("applicationID")); err != nil {
+		log.Printf("Error parsing applicationID: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+
+	handler, err := NewApplicationHandler(a.MongoDB)
+	if err != nil {
+		log.Printf("Error creating application handler: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	err = handler.GetApplicationByID(c.Param("applicationID"))
 	if err != nil {
 		log.Printf("Error getting application: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	if len(apps.Items) == 0 {
-		c.JSON(http.StatusNotFound, gin.H{})
-		return
-	}
-	app := apps.Items[0]
-
-	listOptions = metav1.ListOptions{
-		LabelSelector: "app.oam.dev/app-revision-hash=" + app.Status.LatestRevision.RevisionHash,
-	}
-	revisions, err := clientset.Vela.CoreV1beta1().ApplicationRevisions(app.Namespace).List(c, listOptions)
+	env, err := handler.Model.GetEnvironmentByName(a.MongoDB, c.Param("environment"))
 	if err != nil {
-		log.Printf("Error getting application revision: %v\n", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error": err.Error(),
-		})
+		log.Printf("Error getting environment: %v\n", err)
+		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	if revisions.Items == nil {
-		log.Fatal("Error getting application revision: revision not found")
+	manifest, err := BuildApplicationManifest(handler.Model, env, a.MongoDB)
+	if err != nil {
+		log.Printf("Error building application manifest: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
 	}
-	rev := revisions.Items[0]
-
-	var appResponse ApplicationResponse
-	appResponse.FromVelaClientsetToResponse(&app, &rev)
-
-	r := ApplicationDetailsResponse{
-		Application: appResponse,
+	provider, err := NewProviderDispatcher(handler.Model, env)
+	if err != nil {
+		log.Printf("Error creating provider dispatcher: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
 	}
-	c.JSON(http.StatusOK, r)
+	err = provider.DeployApplication(manifest)
+	if err != nil {
+		log.Printf("Error deploying application: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Application deployed",
+	})
 }
