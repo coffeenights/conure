@@ -25,7 +25,7 @@ func GenerateRouter() *gin.Engine {
 	}
 
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery(), cors.Default())
+	router.Use(gin.Logger(), gin.Recovery(), getCorsMiddleware(conf.CorsOrigins))
 	appHandler := apps.NewApiHandler()
 	authHandler := auth.NewAuthHandler(conf, mongo)
 	variablesHandler := variables.NewVariablesHandler(conf, mongo, keyStorage)
@@ -33,4 +33,13 @@ func GenerateRouter() *gin.Engine {
 	auth.GenerateRoutes("/auth", router, authHandler)
 	variables.GenerateRoutes("/variables", router, variablesHandler)
 	return router
+}
+
+func getCorsMiddleware(origins string) gin.HandlerFunc {
+	return cors.New(cors.Config{
+		AllowOrigins:     []string{origins},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization"},
+		AllowCredentials: true,
+	})
 }

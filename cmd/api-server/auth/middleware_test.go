@@ -47,7 +47,7 @@ func TestCheckCurrentUserValidToken(t *testing.T) {
 
 	// Create a request with an invalid Authorization header
 	req, _ := http.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer invalid-token")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: "invalid-token"})
 
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -64,7 +64,7 @@ func TestCheckCurrentUserValidToken(t *testing.T) {
 
 	// Create a request with an invalid format on Authorization header
 	req, _ = http.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "invalid-token")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: ""})
 
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -74,6 +74,7 @@ func TestCheckCurrentUserValidToken(t *testing.T) {
 	// Create a request with an invalid format on Authorization header
 	req, _ = http.NewRequest("GET", "/test", nil)
 	req.Header.Set("Authorization", "InvalidFormat invalid-token")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: "InvalidFormat invalid-token"})
 
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -88,7 +89,7 @@ func TestCheckCurrentUserValidToken(t *testing.T) {
 	token, err := GenerateToken(1*time.Hour, payload, config.JWTSecret)
 	require.NoError(t, err)
 	req, _ = http.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
@@ -100,11 +101,10 @@ func TestCheckCurrentUserValidToken(t *testing.T) {
 	token, err = GenerateToken(1*time.Hour, payload, config.JWTSecret)
 	require.NoError(t, err)
 	req, _ = http.NewRequest("GET", "/test", nil)
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code, "(valid token) should return 200 OK")
-
 }
