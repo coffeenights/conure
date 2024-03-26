@@ -162,7 +162,7 @@ func TestCreateComponent(t *testing.T) {
 
 	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/"
 	body := map[string]interface{}{
-		"name":        "TestComponent",
+		"id":          "TestComponent",
 		"type":        "service",
 		"description": "Test component description",
 		"properties": map[string]interface{}{
@@ -186,8 +186,8 @@ func TestCreateComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
-	if response.ID != "TestComponent" {
-		t.Errorf("Expected component name to be TestComponent, got: %v", response.ID)
+	if response.Component.ID != "TestComponent" {
+		t.Errorf("Expected component name to be TestComponent, got: %v", response.Component.ID)
 	}
 	// Clean up Component
 	comp := Component{
@@ -229,7 +229,7 @@ func TestDetailComponent(t *testing.T) {
 	}
 	defer comp.Delete(app.MongoDB)
 
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID + "/"
 	req, _ := http.NewRequest("GET", url, nil)
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
