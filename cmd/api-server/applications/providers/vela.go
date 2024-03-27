@@ -8,6 +8,7 @@ import (
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	corev1 "k8s.io/api/core/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -257,7 +258,13 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 		Object: manifest,
 	}
 	result, err := client.Resource(deploymentRes).Namespace(p.Namespace).Create(context.Background(), deployment, metav1.CreateOptions{})
-	if err != nil {
+	var statusError *k8sErrors.StatusError
+	if errors.As(err, &statusError) {
+		if statusError.ErrStatus.Code == 409 {
+			log.Printf("Application already exists\n")
+			return ErrApplicationExists
+		}
+	} else if err != nil {
 		return err
 	}
 	log.Printf("Created deployment %q.\n", result.GetName())

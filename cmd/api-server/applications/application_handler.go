@@ -2,7 +2,6 @@ package applications
 
 import (
 	"github.com/coffeenights/conure/cmd/api-server/database"
-	"log"
 )
 
 type Properties interface {
@@ -53,10 +52,10 @@ func (ah *ApplicationHandler) GetApplicationByID(appID string) error {
 	return nil
 }
 
-func (ah *ApplicationHandler) Status(environment *Environment) ProviderStatus {
+func (ah *ApplicationHandler) Status(environment *Environment) (ProviderStatus, error) {
 	status, err := NewProviderStatus(ah.Model, environment)
 	if err != nil {
-		log.Panicf("Error getting provider status: %v\n", err)
+		return nil, err
 	}
-	return status
+	return status, nil
 }
