@@ -154,7 +154,12 @@ func ApplicationList(db *database.MongoDB, organizationID string) ([]*Applicatio
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.Background())
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err = cursor.Close(ctx)
+		if err != nil {
+			log.Panicf("Error closing cursor: %v\n", err)
+		}
+	}(cursor, context.Background())
 	var applications []*Application
 	for cursor.Next(context.Background()) {
 		var app Application
@@ -264,14 +269,19 @@ func (a *Application) SoftDelete(mongo *database.MongoDB) error {
 	return nil
 }
 
-func (a *Application) ListComponents(mongo *database.MongoDB) ([]Component, error) {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ComponentCollection)
+func (a *Application) ListComponents(db *database.MongoDB) ([]Component, error) {
+	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
 	filter := bson.M{"applicationID": a.ID, "deletedAt": bson.M{"$exists": false}}
 	cursor, err := collection.Find(context.Background(), filter)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.Background())
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err := cursor.Close(ctx)
+		if err != nil {
+			log.Panicf("Error closing cursor: %v\n", err)
+		}
+	}(cursor, context.Background())
 	var components []Component
 	for cursor.Next(context.Background()) {
 		var comp Component
