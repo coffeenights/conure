@@ -1,13 +1,14 @@
 package applications
 
 import (
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
 
 func (a *ApiHandler) DetailOrganization(c *gin.Context) {
 	organizationID := c.Param("organizationID")
-	org := Organization{}
+	org := models.Organization{}
 	_, err := org.GetById(a.MongoDB, organizationID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{})

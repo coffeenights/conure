@@ -3,6 +3,7 @@ package applications
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"net/http"
 	"net/http/httptest"
@@ -12,8 +13,8 @@ import (
 func TestListApplications(t *testing.T) {
 	router, app := setupRouter()
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization for ListApplications",
 	}
@@ -23,11 +24,11 @@ func TestListApplications(t *testing.T) {
 	}
 
 	// Create test application
-	app1, err := NewApplication(oID, "TestListApplications", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	app1, err := models.NewApplication(oID, "TestListApplications", primitive.NewObjectID().Hex()).Create(app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	app2, err := NewApplication(oID, "TestListApplications2", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	app2, err := models.NewApplication(oID, "TestListApplications2", primitive.NewObjectID().Hex()).Create(app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,8 +57,8 @@ func TestListApplications(t *testing.T) {
 func TestListApplications_Empty(t *testing.T) {
 	router, app := setupRouter()
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization for ListApplications_Empty",
 	}
@@ -80,8 +81,8 @@ func TestListApplications_Empty(t *testing.T) {
 func TestDetailApplication(t *testing.T) {
 	router, app := setupRouter()
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization for DetailApplication",
 	}
@@ -91,7 +92,7 @@ func TestDetailApplication(t *testing.T) {
 	}
 
 	// Create test application
-	app1, err := NewApplication(oID, "TestDetailApplication", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	app1, err := models.NewApplication(oID, "TestDetailApplication", primitive.NewObjectID().Hex()).Create(app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,8 +117,8 @@ func TestDetailApplication(t *testing.T) {
 func TestCreateApplication(t *testing.T) {
 	router, app := setupRouter()
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization for CreateApplication",
 	}
@@ -149,8 +150,8 @@ func TestCreateApplication(t *testing.T) {
 func TestCreateApplication_Empty(t *testing.T) {
 	router, app := setupRouter()
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization for CreateApplication",
 	}

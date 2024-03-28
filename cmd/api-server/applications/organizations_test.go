@@ -3,6 +3,7 @@ package applications
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -12,8 +13,8 @@ import (
 func TestDetailOrganization(t *testing.T) {
 	router, app := setupRouter()
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization",
 	}
@@ -54,7 +55,7 @@ func TestCreateOrganization(t *testing.T) {
 	if resp.Code != http.StatusCreated {
 		t.Errorf("Expected response code 201, got: %v", resp.Code)
 	}
-	org := Organization{}
+	org := models.Organization{}
 	response := OrganizationResponse{}
 	err = json.Unmarshal(resp.Body.Bytes(), &response)
 	if err != nil {

@@ -1,4 +1,4 @@
-package applications
+package models
 
 import (
 	_ "github.com/joho/godotenv/autoload"
@@ -7,7 +7,7 @@ import (
 )
 
 func TestOrganization_Create(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +21,7 @@ func TestOrganization_Create(t *testing.T) {
 }
 
 func TestOrganization_GetById(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +39,7 @@ func TestOrganization_GetById(t *testing.T) {
 }
 
 func TestOrganization_Update(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestOrganization_Update(t *testing.T) {
 }
 
 func TestOrganization_Delete(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestOrganization_Delete(t *testing.T) {
 }
 
 func TestOrganization_SoftDelete(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +113,7 @@ func TestOrganization_SoftDelete(t *testing.T) {
 }
 
 func TestApplication_Create(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func TestApplication_Create(t *testing.T) {
 }
 
 func TestApplication_GetById(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestApplication_GetById(t *testing.T) {
 }
 
 func TestApplication_Update(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestApplication_Update(t *testing.T) {
 }
 
 func TestApplication_SoftDelete(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestApplication_SoftDelete(t *testing.T) {
 }
 
 func Test_ApplicationList(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +229,7 @@ func Test_ApplicationList(t *testing.T) {
 }
 
 func TestApplication_ListNotDeleted(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +266,7 @@ func TestApplication_ListNotDeleted(t *testing.T) {
 }
 
 func TestComponent_CreateList(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +299,7 @@ func TestComponent_CreateList(t *testing.T) {
 }
 
 func TestApplication_CreateEnvironment(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestApplication_CreateEnvironment(t *testing.T) {
 }
 
 func TestApplication_DeleteEnvironmentByID(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +346,7 @@ func TestApplication_DeleteEnvironmentByID(t *testing.T) {
 }
 
 func TestApplication_DeleteEnvironmentByName(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +376,7 @@ func TestApplication_DeleteEnvironmentByName(t *testing.T) {
 }
 
 func TestApplication_GetEnvironmentByName(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +403,7 @@ func TestApplication_GetEnvironmentByName(t *testing.T) {
 }
 
 func TestApplication_GetEnvironmentByName_NotFound(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +422,7 @@ func TestApplication_GetEnvironmentByName_NotFound(t *testing.T) {
 }
 
 func TestApplication_DeleteEnvironment_NotExist(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +438,7 @@ func TestApplication_DeleteEnvironment_NotExist(t *testing.T) {
 }
 
 func TestComponent_GetByID(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +468,7 @@ func TestComponent_GetByID(t *testing.T) {
 }
 
 func TestComponent_Create(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -492,7 +492,7 @@ func TestComponent_Create(t *testing.T) {
 }
 
 func TestComponent_Create_Duplicate(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}

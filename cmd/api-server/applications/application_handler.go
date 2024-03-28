@@ -2,6 +2,7 @@ package applications
 
 import (
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
 type Properties interface {
@@ -16,29 +17,29 @@ type Trait struct {
 type ApplicationHandler struct {
 	ID             string
 	OrganizationID string
-	Model          *Application
+	Model          *models.Application
 	DB             *database.MongoDB
 }
 
 func NewApplicationHandler(db *database.MongoDB) (*ApplicationHandler, error) {
 	return &ApplicationHandler{
-		Model: &Application{},
+		Model: &models.Application{},
 		DB:    db,
 	}, nil
 }
 
 func ListOrganizationApplications(organizationID string, db *database.MongoDB) ([]*ApplicationHandler, error) {
-	models, err := ApplicationList(db, organizationID)
+	apps, err := models.ApplicationList(db, organizationID)
 	if err != nil {
 		return nil, err
 	}
-	handlers := make([]*ApplicationHandler, len(models))
-	for i, model := range models {
+	handlers := make([]*ApplicationHandler, len(apps))
+	for i, app := range apps {
 		handler, err := NewApplicationHandler(db)
 		if err != nil {
 			return nil, err
 		}
-		handler.Model = model
+		handler.Model = app
 		handlers[i] = handler
 	}
 	return handlers, nil
@@ -52,7 +53,7 @@ func (ah *ApplicationHandler) GetApplicationByID(appID string) error {
 	return nil
 }
 
-func (ah *ApplicationHandler) Status(environment *Environment) (ProviderStatus, error) {
+func (ah *ApplicationHandler) Status(environment *models.Environment) (ProviderStatus, error) {
 	status, err := NewProviderStatus(ah.Model, environment)
 	if err != nil {
 		return nil, err

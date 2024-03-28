@@ -3,6 +3,7 @@ package applications
 import (
 	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/internal/config"
 )
 
@@ -20,7 +21,7 @@ type ProviderStatus interface {
 	GetSourceProperties(componentID string) (*providers.SourceProperties, error)
 }
 
-func NewProviderStatus(application *Application, environment *Environment) (ProviderStatus, error) {
+func NewProviderStatus(application *models.Application, environment *models.Environment) (ProviderStatus, error) {
 	appConfig := config.LoadConfig(apiConfig.Config{})
 	providerType := ProviderType(appConfig.ProviderSource)
 
@@ -39,7 +40,7 @@ type ProviderDispatcher interface {
 	DeployApplication(manifest map[string]interface{}) error
 }
 
-func NewProviderDispatcher(application *Application, environment *Environment) (ProviderDispatcher, error) {
+func NewProviderDispatcher(application *models.Application, environment *models.Environment) (ProviderDispatcher, error) {
 	appConfig := config.LoadConfig(apiConfig.Config{})
 	providerType := ProviderType(appConfig.ProviderSource)
 

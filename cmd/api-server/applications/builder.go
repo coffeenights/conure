@@ -3,9 +3,10 @@ package applications
 import (
 	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
-func BuildApplicationManifest(application *Application, environment *Environment, db *database.MongoDB) (map[string]interface{}, error) {
+func BuildApplicationManifest(application *models.Application, environment *models.Environment, db *database.MongoDB) (map[string]interface{}, error) {
 	object := map[string]interface{}{
 		"apiVersion": "core.oam.dev/v1beta1",
 		"kind":       "Application",

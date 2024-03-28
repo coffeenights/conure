@@ -3,6 +3,7 @@ package applications
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"net/http"
@@ -16,7 +17,7 @@ func TestCreateEnvironment(t *testing.T) {
 		Name: "staging",
 	}
 	orgID := primitive.NewObjectID().Hex()
-	app, err := NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
+	app, err := models.NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
 	if err != nil {
 		t.Fatalf("Failed to create application: %v", err)
 	}
@@ -70,7 +71,7 @@ func TestCreateEnvironment_NotExist(t *testing.T) {
 func TestDeleteEnvironment(t *testing.T) {
 	router, api := setupRouter()
 	orgID := primitive.NewObjectID().Hex()
-	app, err := NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
+	app, err := models.NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
 	if err != nil {
 		t.Fatalf("Failed to create application: %v", err)
 	}

@@ -3,6 +3,7 @@ package applications
 import (
 	"errors"
 	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
@@ -16,7 +17,7 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	org := Organization{}
+	org := models.Organization{}
 	_, err := org.GetById(a.MongoDB, c.Param("organizationID"))
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
@@ -81,7 +82,7 @@ func (a *ApiHandler) CreateApplication(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	org := Organization{}
+	org := models.Organization{}
 	_, err := org.GetById(a.MongoDB, c.Param("organizationID"))
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
@@ -95,7 +96,7 @@ func (a *ApiHandler) CreateApplication(c *gin.Context) {
 		})
 		return
 	}
-	application := NewApplication(c.Param("organizationID"), request.Name, primitive.NewObjectID().Hex())
+	application := models.NewApplication(c.Param("organizationID"), request.Name, primitive.NewObjectID().Hex())
 	application.Description = request.Description
 	_, err = application.Create(a.MongoDB)
 	if err != nil {

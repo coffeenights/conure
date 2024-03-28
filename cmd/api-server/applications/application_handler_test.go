@@ -1,21 +1,22 @@
 package applications
 
 import (
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"testing"
 )
 
 func TestListOrganizationApplications(t *testing.T) {
-	client, err := setupDB()
+	client, err := models.SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
 	orgID := primitive.NewObjectID()
-	app1, err := NewApplication(orgID.Hex(), "TestListOrganizationApplications1", primitive.NewObjectID().Hex()).Create(client)
+	app1, err := models.NewApplication(orgID.Hex(), "TestListOrganizationApplications1", primitive.NewObjectID().Hex()).Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
-	app2, err := NewApplication(orgID.Hex(), "TestListOrganizationApplications2", primitive.NewObjectID().Hex()).Create(client)
+	app2, err := models.NewApplication(orgID.Hex(), "TestListOrganizationApplications2", primitive.NewObjectID().Hex()).Create(client)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -37,7 +38,7 @@ func TestListOrganizationApplications(t *testing.T) {
 }
 
 func TestListOrganizationApplications_NotFound(t *testing.T) {
-	client, err := setupDB()
+	client, err := models.SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
