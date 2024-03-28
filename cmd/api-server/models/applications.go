@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"go.mongodb.org/mongo-driver/bson"
@@ -359,8 +360,9 @@ func (c *Component) Create(db *database.MongoDB) (*Component, error) {
 
 	r, err := collection.InsertOne(context.Background(), c)
 	if err != nil {
-		switch err.(type) {
-		case mongo.WriteException:
+		var writeException mongo.WriteException
+		switch {
+		case errors.As(err, &writeException):
 			if err.(mongo.WriteException).WriteErrors[0].Code == 11000 {
 				return nil, ErrDuplicateDocument
 			}
