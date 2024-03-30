@@ -85,7 +85,7 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 
 	req, _ := http.NewRequest("GET", "/variables/"+orgID.Hex(), nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -99,7 +99,7 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 
 	req, _ = http.NewRequest("GET", "/variables/fakeOrg", nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -109,7 +109,7 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 
 	req, _ = http.NewRequest("GET", "/variables/"+primitive.NewObjectID().Hex(), nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -190,7 +190,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	url := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1)
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -205,7 +205,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	fakeURL := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), "fakeEnv")
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -226,7 +226,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), "fakeApp", env1)
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -237,7 +237,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	fakeURL = fmt.Sprintf(urlFormat, "fakeOrg", primitive.NewObjectID().Hex(), env1)
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -248,7 +248,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), primitive.NewObjectID().Hex(), env1)
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -323,7 +323,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	url := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1, comp1.Hex())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -338,7 +338,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	fakeURL := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1, primitive.NewObjectID().Hex())
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -350,7 +350,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1, "fakeComp")
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -361,7 +361,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	fakeURL = fmt.Sprintf(urlFormat, "fakeOrg", app1.Hex(), env1, primitive.NewObjectID().Hex())
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -381,7 +381,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), "fakeApp", env1, comp1.Hex())
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -392,7 +392,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), primitive.NewObjectID().Hex(), env1, comp1.Hex())
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -443,7 +443,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	req, _ := http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -465,7 +465,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	req, _ = http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -479,7 +479,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	req, _ = http.NewRequest("POST", "/variables/org1", bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -498,7 +498,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	req, _ = http.NewRequest("POST", "/variables/invalidID", bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -512,7 +512,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 	jsonVar, _ = json.Marshal(newVar)
 	req, _ = http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -528,7 +528,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 	jsonVar, _ = json.Marshal(newVar)
 	req, _ = http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -581,7 +581,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	url := fmt.Sprintf(urlFormat, orgID1.Hex(), appID1.Hex(), "env1")
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -605,7 +605,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 
 	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -621,7 +621,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 
 	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -644,7 +644,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	jsonVar, _ = json.Marshal(newVar)
 	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -660,7 +660,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	jsonVar, _ = json.Marshal(newVar)
 	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -715,7 +715,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	url := fmt.Sprintf(urlFormat, orgID1.Hex(), appID1.Hex(), "env1", compID1.Hex())
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -740,7 +740,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 
 	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -757,7 +757,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 
 	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -767,7 +767,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 
 	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -787,24 +787,24 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	fakeURL := fmt.Sprintf(urlFormat, orgID1.Hex(), appID1.Hex(), "env1", "fakeComp")
 	req, _ = http.NewRequest("POST", fakeURL, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
-	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
 
 	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), "fakeApp", "env1", compID1.Hex())
 	req, _ = http.NewRequest("POST", fakeURL, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
-	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
 
 	newVar = models.Variable{
 		Name: "newVarX",
@@ -812,7 +812,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	jsonVar, _ = json.Marshal(newVar)
 	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -828,7 +828,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	jsonVar, _ = json.Marshal(newVar)
 	req, _ = http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)

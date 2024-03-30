@@ -144,7 +144,7 @@ func TestHandler_Me(t *testing.T) {
 	// Create a request with correct token
 	req, _ := http.NewRequest("GET", "/auth/me", nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -184,7 +184,7 @@ func TestHandler_Me(t *testing.T) {
 
 	req, _ = http.NewRequest("GET", "/auth/me", nil)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -230,7 +230,7 @@ func TestHandler_ChangePassword(t *testing.T) {
 
 	req, _ := http.NewRequest("PATCH", "/auth/change-password", bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -254,7 +254,7 @@ func TestHandler_ChangePassword(t *testing.T) {
 	jsonData, _ = json.Marshal(changePasswordRequest)
 	req, _ = http.NewRequest("PATCH", "/auth/change-password", bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -270,7 +270,7 @@ func TestHandler_ChangePassword(t *testing.T) {
 	jsonData, _ = json.Marshal(changePasswordRequest)
 	req, _ = http.NewRequest("PATCH", "/auth/change-password", bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
@@ -282,7 +282,7 @@ func TestHandler_ChangePassword(t *testing.T) {
 	jsonData, _ = json.Marshal(changePasswordRequest)
 	req, _ = http.NewRequest("PATCH", "/auth/change-password", bytes.NewBuffer(jsonData))
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)

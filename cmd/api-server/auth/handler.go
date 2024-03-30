@@ -66,6 +66,8 @@ func (h *Handler) Login(c *gin.Context) {
 		log.Println("Failed to update last login at")
 	}
 
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("auth", jwt, int(ttl.Seconds()), "/", h.Config.FrontendDomain, h.Config.CookieSecure, true)
 	c.JSON(http.StatusOK, gin.H{"token": jwt})
 }
 
