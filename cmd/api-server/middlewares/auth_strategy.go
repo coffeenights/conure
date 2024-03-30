@@ -1,13 +1,13 @@
 package middlewares
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
 type AuthStrategy interface {
-	ValidateUser(token string, config *apiConfig.Config, mongo *database.MongoDB) (auth.User, error)
+	ValidateUser(token string, config *apiConfig.Config, mongo *database.MongoDB) (models.User, error)
 }
 
 var strategies = map[string]AuthStrategy{
@@ -15,11 +15,11 @@ var strategies = map[string]AuthStrategy{
 	"external": &ExternalAuthStrategy{},
 }
 
-func ValidateUser(token string, config *apiConfig.Config, mongo *database.MongoDB) (auth.User, error) {
+func ValidateUser(token string, config *apiConfig.Config, mongo *database.MongoDB) (models.User, error) {
 	authSystem := config.AuthStrategySystem
 	strategy, ok := strategies[authSystem]
 	if !ok {
-		return auth.User{}, ErrUnsupportedStrategy
+		return models.User{}, ErrUnsupportedStrategy
 	}
 	return strategy.ValidateUser(token, config, mongo)
 }
