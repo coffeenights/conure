@@ -10,4 +10,7 @@ type Config struct {
 	AESStorageStrategy string `env:"AES_STORAGE_STRATEGY"`
 	AuthServiceURL     string `env:"AUTH_SERVICE_URL"`
 	AuthStrategySystem string `env:"AUTH_STRATEGY_SYSTEM"`
+	FrontendDomain     string `env:"FRONTEND_DOMAIN"`
+	CookieSecure       bool   `env:"COOKIE_SECURE"`
+	CorsOrigins        string `env:"CORS_ORIGINS"`
 }
