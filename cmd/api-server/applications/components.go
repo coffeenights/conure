@@ -2,6 +2,7 @@ package applications
 
 import (
 	"errors"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
@@ -98,7 +99,19 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 
 	var response ComponentStatusResponse
 
-	status := handler.Status(env)
+	status, err := handler.Status(env)
+	if errors.Is(err, k8sUtils.ErrApplicationNotFound) {
+		log.Printf("Error getting status: %v\n", err)
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
+			"error": err.Error(),
+		})
+		return
+	} else if err != nil {
+		log.Printf("Error getting status: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+
+	}
 	response.Properties.ResourcesProperties, err = status.GetResourcesProperties(component.ID)
 	if err != nil {
 		log.Printf("Error getting resources properties: %v\n", err)

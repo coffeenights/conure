@@ -1,6 +1,8 @@
 package applications
 
 import (
+	"errors"
+	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
@@ -150,6 +152,12 @@ func (a *ApiHandler) DeployApplication(c *gin.Context) {
 		return
 	}
 	err = provider.DeployApplication(manifest)
+	if errors.Is(err, providers.ErrApplicationExists) {
+		c.JSON(http.StatusConflict, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
 	if err != nil {
 		log.Printf("Error deploying application: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
