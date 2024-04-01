@@ -1,9 +1,9 @@
 package applications
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/cmd/api-server/providers"
 )
 
 func BuildApplicationManifest(application *models.Application, environment *models.Environment, db *database.MongoDB) (map[string]interface{}, error) {

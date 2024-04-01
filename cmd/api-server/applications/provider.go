@@ -1,9 +1,9 @@
 package applications
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/cmd/api-server/providers"
 	"github.com/coffeenights/conure/internal/config"
 )
 

@@ -2,8 +2,8 @@ package applications
 
 import (
 	"errors"
-	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/cmd/api-server/providers"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
