@@ -1,8 +1,8 @@
 package applications
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/cmd/api-server/providers"
 	k8sV1 "k8s.io/api/apps/v1"
 	"time"
 )
