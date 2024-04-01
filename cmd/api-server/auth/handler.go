@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"log"
 	"net/http"
 	"time"
@@ -31,7 +32,7 @@ func (h *Handler) Login(c *gin.Context) {
 		return
 	}
 
-	user := User{}
+	user := models.User{}
 	err = user.GetByEmail(h.MongoDB, loginRequest.Email)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": ErrEmailPasswordValid.Error()})
@@ -71,7 +72,7 @@ func (h *Handler) Login(c *gin.Context) {
 }
 
 func (h *Handler) Me(c *gin.Context) {
-	user := c.MustGet("currentUser").(User)
+	user := c.MustGet("currentUser").(models.User)
 	c.JSON(http.StatusOK, user)
 }
 
@@ -82,13 +83,13 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	err = ValidatePasswords(changePasswordRequest.Password, changePasswordRequest.Password2)
+	err = models.ValidatePasswords(changePasswordRequest.Password, changePasswordRequest.Password2)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	user := c.MustGet("currentUser").(User)
+	user := c.MustGet("currentUser").(models.User)
 	matched, err := ComparePasswordAndHash(changePasswordRequest.OldPassword, user.Password)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

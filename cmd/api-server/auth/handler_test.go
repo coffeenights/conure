@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -38,7 +39,7 @@ func TestHandler_Login(t *testing.T) {
 	setupTestHandler(router, mongo, config)
 
 	hashed, _ := GenerateFromPassword(testPassword)
-	user := User{
+	user := models.User{
 		Email:    "test@test.com",
 		Client:   "test-client",
 		Password: hashed,
@@ -62,7 +63,7 @@ func TestHandler_Login(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &response)
 	assert.Equal(t, http.StatusOK, resp.Code, "(login correct) should return 200 OK")
 	assert.NotEmpty(t, response["token"], "(login correct) should return a token")
-	u := User{}
+	u := models.User{}
 	_ = u.GetByEmail(mongo, user.Email)
 	assert.NotNil(t, u.LastLoginAt, "(login correct) should update last login time")
 
@@ -129,7 +130,7 @@ func TestHandler_Me(t *testing.T) {
 	setupTestHandler(router, mongo, config)
 
 	hashed, _ := GenerateFromPassword(testPassword)
-	user := User{
+	user := models.User{
 		Email:    "test@test.com",
 		Client:   "test-client",
 		Password: hashed,
@@ -148,7 +149,7 @@ func TestHandler_Me(t *testing.T) {
 	resp := httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
 
-	response := User{}
+	response := models.User{}
 	_ = json.Unmarshal(resp.Body.Bytes(), &response)
 	assert.Equal(t, http.StatusOK, resp.Code, "(correct user) should return 200 OK")
 	assert.Equal(t, user.Email, response.Email, "(correct user) should return the correct user")
@@ -164,14 +165,14 @@ func TestHandler_Me(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, resp.Code, "(without token) should return 401 Unauthorized")
 
 	// Create a request with inactive user
-	user = User{
+	user = models.User{
 		Email:    "test1@test.com",
 		Client:   "test-client",
 		Password: hashed,
 		IsActive: false,
 	}
 	_ = user.Create(mongo)
-	collection := mongo.Client.Database(mongo.DBName).Collection(UserCollection)
+	collection := mongo.Client.Database(mongo.DBName).Collection(models.UserCollection)
 	filter := bson.M{"email": "test1@test.com"}
 	update := bson.M{"$set": bson.M{"isActive": false}}
 	_, _ = collection.UpdateOne(context.Background(), filter, update)
@@ -211,7 +212,7 @@ func TestHandler_ChangePassword(t *testing.T) {
 	setupTestHandler(router, mongo, config)
 
 	hashed, _ := GenerateFromPassword(testPassword)
-	user := User{
+	user := models.User{
 		Email:    "test@test.com",
 		Client:   "test-client",
 		Password: hashed,
@@ -238,7 +239,7 @@ func TestHandler_ChangePassword(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &response)
 	assert.Equal(t, http.StatusOK, resp.Code, "(update correct) should return 200 OK")
 	assert.NotEmpty(t, response["message"], "(update correct) should return a message")
-	u := User{}
+	u := models.User{}
 	_ = u.GetByEmail(mongo, user.Email)
 	assert.NotEqualf(t, user.Password, u.Password, "(update correct) should update the password")
 
@@ -259,7 +260,7 @@ func TestHandler_ChangePassword(t *testing.T) {
 	router.ServeHTTP(resp, req)
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "(invalid password) should return 400 Bad Request")
-	u = User{}
+	u = models.User{}
 	_ = u.GetById(mongo, user.ID.Hex())
 	assert.Equalf(t, user.Password, u.Password, "(invalid password) should not update the password")
 

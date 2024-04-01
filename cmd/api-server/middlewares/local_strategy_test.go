@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"errors"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"testing"
 	"time"
 
@@ -24,7 +25,7 @@ func TestValidateUserLocal(t *testing.T) {
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
 	defer cleanUpDB(mongo)
 
-	user := auth.User{
+	user := models.User{
 		Email:  "test@test.com",
 		Client: "test-client",
 	}

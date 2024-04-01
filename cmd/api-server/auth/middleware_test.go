@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -33,7 +34,7 @@ func TestCheckCurrentUserValidToken(t *testing.T) {
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
 	defer cleanUpDB(mongo)
 
-	user := User{
+	user := models.User{
 		Email:  "test@test.com",
 		Client: "test-client",
 	}

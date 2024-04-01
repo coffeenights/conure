@@ -2,13 +2,13 @@ package variables
 
 import (
 	"encoding/hex"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 )
@@ -28,8 +28,8 @@ func NewVariablesHandler(config *apiConfig.Config, mongo *database.MongoDB, keyS
 }
 
 func (h *Handler) ListOrganizationVariables(c *gin.Context) {
-	var variable Variable
-	user := c.MustGet("currentUser").(auth.User)
+	var variable models.Variable
+	user := c.MustGet("currentUser").(models.User)
 
 	client := user.Client
 	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
@@ -54,8 +54,8 @@ func (h *Handler) ListOrganizationVariables(c *gin.Context) {
 }
 
 func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
-	var variable Variable
-	user := c.MustGet("currentUser").(auth.User)
+	var variable models.Variable
+	user := c.MustGet("currentUser").(models.User)
 
 	client := user.Client
 	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
@@ -87,8 +87,8 @@ func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 }
 
 func (h *Handler) ListComponentVariables(c *gin.Context) {
-	var variable Variable
-	user := c.MustGet("currentUser").(auth.User)
+	var variable models.Variable
+	user := c.MustGet("currentUser").(models.User)
 
 	client := user.Client
 	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
@@ -124,8 +124,8 @@ func (h *Handler) ListComponentVariables(c *gin.Context) {
 }
 
 func (h *Handler) CreateVariable(c *gin.Context) {
-	var variable Variable
-	user := c.MustGet("currentUser").(auth.User)
+	var variable models.Variable
+	user := c.MustGet("currentUser").(models.User)
 	client := user.Client
 
 	if err := c.ShouldBindJSON(&variable); err != nil {
@@ -145,17 +145,17 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 		return
 	}
 	variable.OrganizationID = orgID
-	variable.Type = OrganizationType
+	variable.Type = models.OrganizationType
 
 	envID := c.Param("environmentID")
 	if envID != "" {
-		variable.Type = EnvironmentType
+		variable.Type = models.EnvironmentType
 		variable.EnvironmentID = &envID
 	}
 
 	compID := c.Param("componentID")
 	if compID != "" {
-		variable.Type = ComponentType
+		variable.Type = models.ComponentType
 		compID, err := primitive.ObjectIDFromHex(c.Param("componentID"))
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
@@ -196,35 +196,35 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	c.JSON(http.StatusCreated, variable)
 }
 
-func checkVariable(h *Handler, variable Variable) error {
+func checkVariable(h *Handler, variable models.Variable) error {
 	// When creating a new variable, the application ID is required for component and environment types
-	if (variable.Type == ComponentType || variable.Type == EnvironmentType) && (variable.
+	if (variable.Type == models.ComponentType || variable.Type == models.EnvironmentType) && (variable.
 		ApplicationID == nil || variable.EnvironmentID == nil) {
 		return ErrVariableTypeRequiresApplicationID
 	}
 	// When creating a new variable, the componentID is required for component types
-	if variable.Type == ComponentType && (variable.
+	if variable.Type == models.ComponentType && (variable.
 		ApplicationID == nil || variable.EnvironmentID == nil || variable.ComponentID == nil) {
 		return ErrVariableTypeRequiresComponentID
 	}
 
-	variableDB := Variable{}
-	if variable.Type == OrganizationType {
+	variableDB := models.Variable{}
+	if variable.Type == models.OrganizationType {
 		err := variableDB.GetByOrgAndName(h.MongoDB, variable.Client, variable.OrganizationID, variable.Name)
 		if err == nil {
 			return ErrVariableAlreadyExists
 		}
 	}
-	if variable.Type == EnvironmentType {
-		err := variableDB.GetByAppIDAndEnvAndName(h.MongoDB, variable.Client, *variable.ApplicationID, EnvironmentType,
+	if variable.Type == models.EnvironmentType {
+		err := variableDB.GetByAppIDAndEnvAndName(h.MongoDB, variable.Client, *variable.ApplicationID, models.EnvironmentType,
 			variable.EnvironmentID, variable.Name)
 		if err == nil {
 			return ErrVariableAlreadyExists
 		}
 	}
-	if variable.Type == ComponentType {
+	if variable.Type == models.ComponentType {
 		err := variableDB.GetByAppIDAndEnvAndCompAndName(h.MongoDB, variable.Client, *variable.ApplicationID,
-			ComponentType, variable.EnvironmentID, variable.ComponentID, variable.Name)
+			models.ComponentType, variable.EnvironmentID, variable.ComponentID, variable.Name)
 		if err == nil {
 			return ErrVariableAlreadyExists
 		}

@@ -3,8 +3,6 @@ package applications
 import (
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
-	"github.com/coffeenights/conure/internal/config"
-	"log"
 )
 
 type ApiHandler struct {
@@ -12,14 +10,9 @@ type ApiHandler struct {
 	Config  *apiConfig.Config
 }
 
-func NewApiHandler() *ApiHandler {
-	appConfig := config.LoadConfig(apiConfig.Config{})
-	mongo, err := database.ConnectToMongoDB(appConfig.MongoDBURI, appConfig.MongoDBName)
-	if err != nil {
-		log.Fatal(err)
-	}
+func NewApiHandler(config *apiConfig.Config, mongo *database.MongoDB) *ApiHandler {
 	return &ApiHandler{
 		MongoDB: mongo,
-		Config:  appConfig,
+		Config:  config,
 	}
 }

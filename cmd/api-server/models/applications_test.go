@@ -1,13 +1,14 @@
-package applications
+package models
 
 import (
+	"errors"
 	_ "github.com/joho/godotenv/autoload"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"testing"
 )
 
 func TestOrganization_Create(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,7 +22,7 @@ func TestOrganization_Create(t *testing.T) {
 }
 
 func TestOrganization_GetById(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +40,7 @@ func TestOrganization_GetById(t *testing.T) {
 }
 
 func TestOrganization_Update(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +64,7 @@ func TestOrganization_Update(t *testing.T) {
 }
 
 func TestOrganization_Delete(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +87,7 @@ func TestOrganization_Delete(t *testing.T) {
 }
 
 func TestOrganization_SoftDelete(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,7 +114,7 @@ func TestOrganization_SoftDelete(t *testing.T) {
 }
 
 func TestApplication_Create(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,9 +122,11 @@ func TestApplication_Create(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to create application: %v", err)
 	}
-	got, _ := app.GetByID(client, app.ID.Hex())
+	var got Application
+	err = got.GetByID(client, app.ID.Hex())
 	if got.Name != app.Name {
 		t.Errorf("Got %v, want %v", got.Name, app.Name)
+
 	}
 	err = app.Delete(client)
 	if err != nil {
@@ -132,7 +135,7 @@ func TestApplication_Create(t *testing.T) {
 }
 
 func TestApplication_GetById(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +143,8 @@ func TestApplication_GetById(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, _ := app.GetByID(client, app.ID.Hex())
+	var got Application
+	_ = got.GetByID(client, app.ID.Hex())
 	if got.Name != app.Name {
 		t.Errorf("Got %v, want %v", got.Name, app.Name)
 	}
@@ -150,8 +154,26 @@ func TestApplication_GetById(t *testing.T) {
 	}
 }
 
+func TestApplication_GetById_NotExist(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := Application{}
+	err = got.GetByID(client, primitive.NewObjectID().Hex())
+	if err == nil {
+		t.Errorf("Got nil, want error")
+	}
+	if !errors.Is(err, ErrDocumentNotFound) {
+		t.Errorf("Got %v, want %v", err, ErrDocumentNotFound)
+	}
+}
+
 func TestApplication_Update(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +186,8 @@ func TestApplication_Update(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to update application: %v", err)
 	}
-	got, _ := app.GetByID(client, app.ID.Hex())
+	var got Application
+	_ = got.GetByID(client, app.ID.Hex())
 	if got.Name != app.Name {
 		t.Errorf("Got %v, want %v", got.Name, app.Name)
 	}
@@ -175,7 +198,7 @@ func TestApplication_Update(t *testing.T) {
 }
 
 func TestApplication_SoftDelete(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +210,7 @@ func TestApplication_SoftDelete(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to soft delete application: %v", err)
 	}
-	_, err = app.GetByID(client, app.ID.Hex())
+	err = app.GetByID(client, app.ID.Hex())
 	if err == nil {
 		t.Errorf("Got 1 document, want 0")
 	}
@@ -198,7 +221,7 @@ func TestApplication_SoftDelete(t *testing.T) {
 }
 
 func Test_ApplicationList(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +252,7 @@ func Test_ApplicationList(t *testing.T) {
 }
 
 func TestApplication_ListNotDeleted(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -266,7 +289,7 @@ func TestApplication_ListNotDeleted(t *testing.T) {
 }
 
 func TestComponent_CreateList(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -299,7 +322,7 @@ func TestComponent_CreateList(t *testing.T) {
 }
 
 func TestApplication_CreateEnvironment(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +339,7 @@ func TestApplication_CreateEnvironment(t *testing.T) {
 }
 
 func TestApplication_DeleteEnvironmentByID(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,7 +359,7 @@ func TestApplication_DeleteEnvironmentByID(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to delete environment: %v", err)
 	}
-	if _, err = app.GetByID(client, app.ID.Hex()); err != nil {
+	if err = app.GetByID(client, app.ID.Hex()); err != nil {
 		t.Errorf("Failed to get application: %v", err)
 	}
 	if len(app.Environments) != 1 {
@@ -346,7 +369,7 @@ func TestApplication_DeleteEnvironmentByID(t *testing.T) {
 }
 
 func TestApplication_DeleteEnvironmentByName(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -366,7 +389,7 @@ func TestApplication_DeleteEnvironmentByName(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to delete environment: %v", err)
 	}
-	if _, err = app.GetByID(client, app.ID.Hex()); err != nil {
+	if err = app.GetByID(client, app.ID.Hex()); err != nil {
 		t.Errorf("Failed to get application: %v", err)
 	}
 	if len(app.Environments) != 1 {
@@ -376,7 +399,7 @@ func TestApplication_DeleteEnvironmentByName(t *testing.T) {
 }
 
 func TestApplication_GetEnvironmentByName(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,7 +426,7 @@ func TestApplication_GetEnvironmentByName(t *testing.T) {
 }
 
 func TestApplication_GetEnvironmentByName_NotFound(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +445,7 @@ func TestApplication_GetEnvironmentByName_NotFound(t *testing.T) {
 }
 
 func TestApplication_DeleteEnvironment_NotExist(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +461,7 @@ func TestApplication_DeleteEnvironment_NotExist(t *testing.T) {
 }
 
 func TestComponent_GetByID(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +491,7 @@ func TestComponent_GetByID(t *testing.T) {
 }
 
 func TestComponent_Create(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -492,7 +515,7 @@ func TestComponent_Create(t *testing.T) {
 }
 
 func TestComponent_Create_Duplicate(t *testing.T) {
-	client, err := setupDB()
+	client, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
 	}

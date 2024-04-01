@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/coffeenights/conure/cmd/api-server/auth"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,7 +16,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
-	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 )
@@ -53,34 +54,34 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 	defer cleanUpDB(mongo)
 	keyStorage := NewLocalSecretKey("secret.key")
 
-	user := auth.User{
+	user := models.User{
 		Email:  "test@test.com",
 		Client: "test-client",
 	}
 	_ = user.Create(mongo)
 	orgID := primitive.NewObjectID()
-	orgVar := &Variable{
+	orgVar := &models.Variable{
 		OrganizationID: orgID,
 		Name:           "var1",
 		Value:          "value1",
 		IsEncrypted:    false,
 		Client:         "test-client",
-		Type:           OrganizationType,
+		Type:           models.OrganizationType,
 	}
 	_, _ = orgVar.Create(mongo)
 
-	orgVar2 := &Variable{
+	orgVar2 := &models.Variable{
 		OrganizationID: orgID,
 		Name:           "var2",
 		Value:          encryptValue(keyStorage, "value2"),
 		IsEncrypted:    true,
 		Client:         "test-client",
-		Type:           OrganizationType,
+		Type:           models.OrganizationType,
 	}
 	_, _ = orgVar2.Create(mongo)
 
 	setupTestHandler(router, mongo, config, keyStorage)
-	var variables []Variable
+	var variables []models.Variable
 
 	req, _ := http.NewRequest("GET", "/variables/"+orgID.Hex(), nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -149,7 +150,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 
 	keyStorage := NewLocalSecretKey("secret.key")
 
-	user := auth.User{
+	user := models.User{
 		Email:  "test@test.com",
 		Client: "test-client",
 	}
@@ -158,7 +159,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	orgID1 := primitive.NewObjectID()
 	app1 := primitive.NewObjectID()
 	env1 := "env1"
-	orgVar := &Variable{
+	orgVar := &models.Variable{
 		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
@@ -166,11 +167,11 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 		Value:          "value1",
 		IsEncrypted:    false,
 		Client:         "test-client",
-		Type:           EnvironmentType,
+		Type:           models.EnvironmentType,
 	}
 	_, _ = orgVar.Create(mongo)
 
-	orgVar2 := &Variable{
+	orgVar2 := &models.Variable{
 		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
@@ -178,12 +179,12 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 		Value:          encryptValue(keyStorage, "value2"),
 		IsEncrypted:    true,
 		Client:         "test-client",
-		Type:           EnvironmentType,
+		Type:           models.EnvironmentType,
 	}
 	_, _ = orgVar2.Create(mongo)
 
 	setupTestHandler(router, mongo, config, keyStorage)
-	var variables []Variable
+	var variables []models.Variable
 
 	urlFormat := "/variables/%s/%s/e/%s"
 	url := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1)
@@ -279,7 +280,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 
 	keyStorage := NewLocalSecretKey("secret.key")
 
-	user := auth.User{
+	user := models.User{
 		Email:  "test@test.com",
 		Client: "test-client",
 	}
@@ -289,7 +290,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	app1 := primitive.NewObjectID()
 	env1 := "env1"
 	comp1 := primitive.NewObjectID()
-	orgVar := &Variable{
+	orgVar := &models.Variable{
 		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
@@ -298,11 +299,11 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 		Value:          "value1",
 		IsEncrypted:    false,
 		Client:         "test-client",
-		Type:           ComponentType,
+		Type:           models.ComponentType,
 	}
 	_, _ = orgVar.Create(mongo)
 
-	orgVar2 := &Variable{
+	orgVar2 := &models.Variable{
 		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
@@ -311,12 +312,12 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 		Value:          encryptValue(keyStorage, "value2"),
 		IsEncrypted:    true,
 		Client:         "test-client",
-		Type:           ComponentType,
+		Type:           models.ComponentType,
 	}
 	_, _ = orgVar2.Create(mongo)
 
 	setupTestHandler(router, mongo, config, keyStorage)
-	var variables []Variable
+	var variables []models.Variable
 
 	urlFormat := "/variables/%s/%s/e/%s/c/%s"
 	url := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1, comp1.Hex())
@@ -423,21 +424,21 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	keyStorage := NewLocalSecretKey("secret.key")
 
-	user := auth.User{
+	user := models.User{
 		Email:  "test@test.com",
 		Client: "test-client",
 	}
 	_ = user.Create(mongo)
 
 	setupTestHandler(router, mongo, config, keyStorage)
-	newVar := Variable{
+	newVar := models.Variable{
 		Name:        "newVar",
 		Value:       "value2",
 		IsEncrypted: true,
 	}
 
 	jsonVar, _ := json.Marshal(newVar)
-	var result Variable
+	var result models.Variable
 	orgID1 := primitive.NewObjectID()
 
 	req, _ := http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
@@ -450,11 +451,11 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
 	assert.Equal(t, orgID1, result.OrganizationID, "should return the correct organization")
-	assert.Equal(t, OrganizationType, result.Type, "should return the correct type of variable")
+	assert.Equal(t, models.OrganizationType, result.Type, "should return the correct type of variable")
 	assert.NotEqual(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.True(t, result.IsEncrypted, "should return the correct type of variable")
 
-	newVar = Variable{
+	newVar = models.Variable{
 		Name:        "newVar2",
 		Value:       "value2",
 		IsEncrypted: false,
@@ -472,7 +473,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
 	assert.Equal(t, orgID1, result.OrganizationID, "should return the correct organization")
-	assert.Equal(t, OrganizationType, result.Type, "should return the correct type of variable")
+	assert.Equal(t, models.OrganizationType, result.Type, "should return the correct type of variable")
 	assert.Equal(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.False(t, result.IsEncrypted, "should return the correct type of variable")
 
@@ -505,7 +506,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
 
-	newVar = Variable{
+	newVar = models.Variable{
 		Name: "newVarX",
 	}
 	jsonVar, _ = json.Marshal(newVar)
@@ -519,7 +520,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
 
-	newVar = Variable{
+	newVar = models.Variable{
 		Name:        "Incorrect Variable $$$",
 		Value:       "value2",
 		IsEncrypted: false,
@@ -558,14 +559,14 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 
 	keyStorage := NewLocalSecretKey("secret.key")
 
-	user := auth.User{
+	user := models.User{
 		Email:  "test@test.com",
 		Client: "test-client",
 	}
 	_ = user.Create(mongo)
 
 	setupTestHandler(router, mongo, config, keyStorage)
-	newVar := Variable{
+	newVar := models.Variable{
 		Name:        "newVar",
 		Value:       "value2",
 		IsEncrypted: true,
@@ -574,7 +575,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	appID1 := primitive.NewObjectID()
 
 	jsonVar, _ := json.Marshal(newVar)
-	var result Variable
+	var result models.Variable
 
 	urlFormat := "/variables/%s/%s/e/%s"
 	url := fmt.Sprintf(urlFormat, orgID1.Hex(), appID1.Hex(), "env1")
@@ -590,11 +591,11 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	assert.Equal(t, orgID1, result.OrganizationID, "should return the correct organization")
 	assert.Equal(t, appID1, *result.ApplicationID, "should return the correct application")
 	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
-	assert.Equal(t, EnvironmentType, result.Type, "should return the correct type of variable")
+	assert.Equal(t, models.EnvironmentType, result.Type, "should return the correct type of variable")
 	assert.NotEqual(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.True(t, result.IsEncrypted, "should return the correct type of variable")
 
-	newVar = Variable{
+	newVar = models.Variable{
 		Name:        "newVar2",
 		Value:       "value2",
 		IsEncrypted: false,
@@ -614,7 +615,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	assert.Equal(t, orgID1, result.OrganizationID, "should return the correct organization")
 	assert.Equal(t, appID1, *result.ApplicationID, "should return the correct application")
 	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
-	assert.Equal(t, EnvironmentType, result.Type, "should return the correct type of variable")
+	assert.Equal(t, models.EnvironmentType, result.Type, "should return the correct type of variable")
 	assert.Equal(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.False(t, result.IsEncrypted, "should return the correct type of variable")
 
@@ -637,7 +638,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, resp.Code, "should return 401 Unauthorized")
 
-	newVar = Variable{
+	newVar = models.Variable{
 		Name: "newVarX",
 	}
 	jsonVar, _ = json.Marshal(newVar)
@@ -651,7 +652,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
 
-	newVar = Variable{
+	newVar = models.Variable{
 		Name:        "Incorrect Variable $$$",
 		Value:       "value2",
 		IsEncrypted: false,
@@ -690,14 +691,14 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 
 	keyStorage := NewLocalSecretKey("secret.key")
 
-	user := auth.User{
+	user := models.User{
 		Email:  "test@test.com",
 		Client: "test-client",
 	}
 	_ = user.Create(mongo)
 
 	setupTestHandler(router, mongo, config, keyStorage)
-	newVar := Variable{
+	newVar := models.Variable{
 		Name:        "newVar",
 		Value:       "value2",
 		IsEncrypted: true,
@@ -708,7 +709,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	compID1 := primitive.NewObjectID()
 
 	jsonVar, _ := json.Marshal(newVar)
-	var result Variable
+	var result models.Variable
 
 	urlFormat := "/variables/%s/%s/e/%s/c/%s"
 	url := fmt.Sprintf(urlFormat, orgID1.Hex(), appID1.Hex(), "env1", compID1.Hex())
@@ -725,11 +726,11 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	assert.Equal(t, appID1, *result.ApplicationID, "should return the correct application")
 	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
 	assert.Equal(t, compID1, *result.ComponentID, "should return the correct component")
-	assert.Equal(t, ComponentType, result.Type, "should return the correct type of variable")
+	assert.Equal(t, models.ComponentType, result.Type, "should return the correct type of variable")
 	assert.NotEqual(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.True(t, result.IsEncrypted, "should return the correct type of variable")
 
-	newVar = Variable{
+	newVar = models.Variable{
 		Name:        "newVar2",
 		Value:       "value2",
 		IsEncrypted: false,
@@ -750,7 +751,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	assert.Equal(t, appID1, *result.ApplicationID, "should return the correct application")
 	assert.Equal(t, "env1", *result.EnvironmentID, "should return the correct environment")
 	assert.Equal(t, compID1, *result.ComponentID, "should return the correct component")
-	assert.Equal(t, ComponentType, result.Type, "should return the correct type of variable")
+	assert.Equal(t, models.ComponentType, result.Type, "should return the correct type of variable")
 	assert.Equal(t, newVar.Value, result.Value, "should return the encrypted value")
 	assert.False(t, result.IsEncrypted, "should return the correct type of variable")
 
@@ -805,7 +806,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
 
-	newVar = Variable{
+	newVar = models.Variable{
 		Name: "newVarX",
 	}
 	jsonVar, _ = json.Marshal(newVar)
@@ -819,7 +820,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
 
-	newVar = Variable{
+	newVar = models.Variable{
 		Name:        "Incorrect Variable $$$",
 		Value:       "value2",
 		IsEncrypted: false,

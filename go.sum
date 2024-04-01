@@ -556,8 +556,6 @@ github.com/daixiang0/gci v0.2.8/go.mod h1:+4dZ7TISfSmqfAGv59ePaHfNzgGtIkHAhhdKgg
 github.com/daixiang0/gci v0.2.9/go.mod h1:+4dZ7TISfSmqfAGv59ePaHfNzgGtIkHAhhdKggP1JAc=
 github.com/daixiang0/gci v0.8.1/go.mod h1:EpVfrztufwVgQRXjnX4zuNinEpLj5OmMjtu/+MB0V0c=
 github.com/danieljoos/wincred v1.1.0/go.mod h1:XYlo+eRTsVA9aHGp7NGjFkPla4m+DCL7hqDjlFjiygg=
-github.com/dapr/go-sdk v1.7.0 h1:SJC8layk2eKuJ8N+S84DtYpP4fgVugu8sUAliGu6/nM=
-github.com/dapr/go-sdk v1.7.0/go.mod h1:kWMKJ39k2smLVnB6v5Y6dMbwfj1Z3XBxa4Q2dCFzf2U=
 github.com/dave/dst v0.26.2/go.mod h1:UMDJuIRPfyUCC78eFuB+SV/WI8oDeyFDvM/JR6NI3IU=
 github.com/dave/gopackages v0.0.0-20170318123100-46e7023ec56e/go.mod h1:i00+b/gKdIDIxuLDFob7ustLAVqhsZRk2qVZrArELGQ=
 github.com/dave/jennifer v1.2.0/go.mod h1:fIb+770HOpJ2fmN9EPPKOqm1vMGhB+TwXKMZhrIygKg=

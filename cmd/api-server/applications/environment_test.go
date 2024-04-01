@@ -3,6 +3,7 @@ package applications
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"net/http"
@@ -16,7 +17,7 @@ func TestCreateEnvironment(t *testing.T) {
 		Name: "staging",
 	}
 	orgID := primitive.NewObjectID().Hex()
-	app, err := NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
+	app, err := models.NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
 	if err != nil {
 		t.Fatalf("Failed to create application: %v", err)
 	}
@@ -35,7 +36,7 @@ func TestCreateEnvironment(t *testing.T) {
 	if resp.Code != http.StatusCreated {
 		t.Errorf("Expected response code 201, got: %v", resp.Code)
 	}
-	_, err = app.GetByID(api.MongoDB, app.ID.Hex())
+	err = app.GetByID(api.MongoDB, app.ID.Hex())
 	if err != nil {
 		t.Errorf("Failed to get application: %v", err)
 	}
@@ -70,7 +71,7 @@ func TestCreateEnvironment_NotExist(t *testing.T) {
 func TestDeleteEnvironment(t *testing.T) {
 	router, api := setupRouter()
 	orgID := primitive.NewObjectID().Hex()
-	app, err := NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
+	app, err := models.NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
 	if err != nil {
 		t.Fatalf("Failed to create application: %v", err)
 	}
@@ -88,7 +89,7 @@ func TestDeleteEnvironment(t *testing.T) {
 	if resp.Code != http.StatusOK {
 		t.Errorf("Expected response code 200, got: %v", resp.Code)
 	}
-	_, err = app.GetByID(api.MongoDB, app.ID.Hex())
+	err = app.GetByID(api.MongoDB, app.ID.Hex())
 	if err != nil {
 		t.Errorf("Failed to get application: %v", err)
 	}

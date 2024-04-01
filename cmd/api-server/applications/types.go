@@ -1,13 +1,14 @@
 package applications
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/applications/providers"
+	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/cmd/api-server/providers"
 	k8sV1 "k8s.io/api/apps/v1"
 	"time"
 )
 
 type ApplicationResponse struct {
-	*Application
+	*models.Application
 }
 
 type ApplicationListResponse struct {
@@ -47,7 +48,7 @@ func (r *ServiceComponentStatusResponse) FromClientsetToResponse(deployment k8sV
 }
 
 type ComponentResponse struct {
-	*Component
+	*models.Component
 }
 
 type ComponentListResponse struct {
@@ -79,8 +80,8 @@ type CreateOrganizationRequest struct {
 	AccountID string `json:"account_id" validate:"required"`
 }
 
-func (r *CreateOrganizationRequest) ParseRequestToModel() *Organization {
-	return &Organization{
+func (r *CreateOrganizationRequest) ParseRequestToModel() *models.Organization {
+	return &models.Organization{
 		Name:      r.Name,
 		AccountID: r.AccountID,
 	}
@@ -94,7 +95,7 @@ type OrganizationResponse struct {
 	AccountID string    `json:"account_id"`
 }
 
-func (r *OrganizationResponse) ParseModelToResponse(organization *Organization) {
+func (r *OrganizationResponse) ParseModelToResponse(organization *models.Organization) {
 	r.ID = organization.ID.Hex()
 	r.Name = organization.Name
 	r.Status = string(organization.Status)
@@ -111,5 +112,5 @@ type EnvironmentListResponse struct {
 }
 
 type EnvironmentResponse struct {
-	*Environment
+	*models.Environment
 }

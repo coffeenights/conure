@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	"encoding/json"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"io"
 	"net/http"
 
@@ -12,9 +13,9 @@ import (
 
 type ExternalAuthStrategy struct{}
 
-func (e *ExternalAuthStrategy) ValidateUser(token string, config *apiConfig.Config, _ *database.MongoDB) (auth.User,
+func (e *ExternalAuthStrategy) ValidateUser(token string, config *apiConfig.Config, _ *database.MongoDB) (models.User,
 	error) {
-	user := auth.User{}
+	user := models.User{}
 	req, err := http.NewRequest("GET", config.AuthServiceURL, nil)
 	if err != nil {
 		return user, auth.ErrUnauthorized

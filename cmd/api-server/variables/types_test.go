@@ -1,11 +1,14 @@
 package variables
 
-import "testing"
+import (
+	"github.com/coffeenights/conure/cmd/api-server/models"
+	"testing"
+)
 
 func TestIsValid(t *testing.T) {
 	tests := []struct {
 		name string
-		vt   VariableType
+		vt   models.VariableType
 		want bool
 	}{
 		{

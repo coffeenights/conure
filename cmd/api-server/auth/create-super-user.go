@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"log"
 
 	"github.com/coffeenights/conure/cmd/api-server/database"
@@ -12,10 +13,10 @@ func CreateSuperuser(mongo *database.MongoDB) {
 	password := GenerateRandomPassword(10)
 	hashedPassword, err := GenerateFromPassword(password)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
-	user := User{
+	user := models.User{
 		Email:    email,
 		Password: hashedPassword,
 		Client:   client,
@@ -41,7 +42,7 @@ func ResetSuperuserPassword(mongo *database.MongoDB) {
 		panic(err)
 	}
 
-	user := User{
+	user := models.User{
 		Email:    email,
 		Password: hashedPassword,
 		Client:   client,

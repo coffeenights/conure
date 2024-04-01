@@ -3,6 +3,7 @@ package applications
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"net/http"
 	"net/http/httptest"
@@ -12,10 +13,10 @@ import (
 func TestListComponents(t *testing.T) {
 	router, app := setupRouter()
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
-		Name:      "Test Organization for ListApplications",
+		Name:      "Test Organization for ListComponents",
 	}
 	oID, err := org.Create(app.MongoDB) // lint:ignore
 	if err != nil {
@@ -24,7 +25,7 @@ func TestListComponents(t *testing.T) {
 	defer org.Delete(app.MongoDB)
 
 	// Create test application
-	application, err := NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +36,7 @@ func TestListComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	comp, err := NewComponent(application, "TestListComponents", "service").Create(app.MongoDB)
+	comp, err := models.NewComponent(application, "TestListComponents", "service").Create(app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
@@ -65,8 +66,8 @@ func TestListComponents_NotExist(t *testing.T) {
 	router, app := setupRouter()
 
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization for ListApplications",
 	}
@@ -91,8 +92,8 @@ func TestListComponents_Empty(t *testing.T) {
 	router, app := setupRouter()
 
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization for ListApplications",
 	}
@@ -103,7 +104,7 @@ func TestListComponents_Empty(t *testing.T) {
 	defer org.Delete(app.MongoDB)
 
 	// Create test application
-	application, err := NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,8 +138,8 @@ func TestCreateComponent(t *testing.T) {
 	router, app := setupRouter()
 
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization for ListApplications",
 	}
@@ -149,7 +150,7 @@ func TestCreateComponent(t *testing.T) {
 	defer org.Delete(app.MongoDB)
 
 	// Create test application
-	application, err := NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +191,7 @@ func TestCreateComponent(t *testing.T) {
 		t.Errorf("Expected component name to be TestComponent, got: %v", response.Component.ID)
 	}
 	// Clean up Component
-	comp := Component{
+	comp := models.Component{
 		ID: response.ID,
 	}
 	_ = comp.Delete(app.MongoDB)
@@ -200,8 +201,8 @@ func TestDetailComponent(t *testing.T) {
 	router, app := setupRouter()
 
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization for ListApplications",
 	}
@@ -212,7 +213,7 @@ func TestDetailComponent(t *testing.T) {
 	defer org.Delete(app.MongoDB)
 
 	// Create test application
-	application, err := NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +224,7 @@ func TestDetailComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	comp, err := NewComponent(application, "TestDetailComponent", "service").Create(app.MongoDB)
+	comp, err := models.NewComponent(application, "TestDetailComponent", "service").Create(app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
@@ -252,8 +253,8 @@ func TestDetailComponent_NotFound(t *testing.T) {
 	router, app := setupRouter()
 
 	// Create test organization
-	org := Organization{
-		Status:    OrgActive,
+	org := models.Organization{
+		Status:    models.OrgActive,
 		AccountID: "testOrgId",
 		Name:      "Test Organization for ListApplications",
 	}
@@ -264,7 +265,7 @@ func TestDetailComponent_NotFound(t *testing.T) {
 	defer org.Delete(app.MongoDB)
 
 	// Create test application
-	application, err := NewApplication(oID, "TestDetailComponents_NotFound", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", primitive.NewObjectID().Hex()).Create(app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}

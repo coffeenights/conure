@@ -2,6 +2,7 @@ package applications
 
 import (
 	"errors"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/gin-gonic/gin"
 	"log"
@@ -9,18 +10,17 @@ import (
 )
 
 func (a *ApiHandler) ListComponents(c *gin.Context) {
-	handler, err := NewApplicationHandler(a.MongoDB)
-	if err != nil {
-		log.Printf("Error creating application handler: %v\n", err)
+	application := &models.Application{}
+	err := application.GetByID(a.MongoDB, c.Param("applicationID"))
+	if errors.Is(err, models.ErrDocumentNotFound) {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("Error getting application: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if err != nil {
-		c.AbortWithStatus(http.StatusNotFound)
-		return
-	}
-	components, err := handler.Model.ListComponents(a.MongoDB)
+	components, err := application.ListComponents(a.MongoDB)
 	if err != nil {
 		log.Printf("Error getting components: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
@@ -43,13 +43,17 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if err != nil {
+	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	if errors.Is(err, models.ErrDocumentNotFound) {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
-	component := &Component{}
+	component := &models.Component{}
 	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
 		if err.Error() == "mongo: no documents in result" {
@@ -72,13 +76,17 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if err != nil {
+	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	if errors.Is(err, models.ErrDocumentNotFound) {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
-	component := &Component{}
+	component := &models.Component{}
 	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
 		if err.Error() == "mongo: no documents in result" {
@@ -92,7 +100,7 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 
 	// Get environment
 	env, err := handler.Model.GetEnvironmentByName(a.MongoDB, c.Param("environment"))
-	if errors.Is(err, ErrDocumentNotFound) {
+	if errors.Is(err, models.ErrDocumentNotFound) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
@@ -148,9 +156,13 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	app, err := handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if err != nil {
+	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	if errors.Is(err, models.ErrDocumentNotFound) {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 	var request CreateComponentRequest
@@ -160,12 +172,12 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-	component := NewComponent(app, request.ID, request.Type)
+	component := models.NewComponent(handler.Model, request.ID, request.Type)
 	component.Description = request.Description
 	component.Properties = request.Properties
 	component.Traits = request.Traits
 	_, err = component.Create(a.MongoDB)
-	if errors.Is(err, ErrDuplicateDocument) {
+	if errors.Is(err, models.ErrDuplicateDocument) {
 		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
 			"error": err.Error(),
 		})

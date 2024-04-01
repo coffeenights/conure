@@ -1,9 +1,10 @@
-package applications
+package models
 
 import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"go.mongodb.org/mongo-driver/bson"
@@ -154,7 +155,12 @@ func ApplicationList(db *database.MongoDB, organizationID string) ([]*Applicatio
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.Background())
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err = cursor.Close(ctx)
+		if err != nil {
+			log.Panicf("Error closing cursor: %v\n", err)
+		}
+	}(cursor, context.Background())
 	var applications []*Application
 	for cursor.Next(context.Background()) {
 		var app Application
@@ -208,23 +214,25 @@ func (a *Application) Create(mongo *database.MongoDB) (*Application, error) {
 	return a, nil
 }
 
-func (a *Application) GetByID(mongo *database.MongoDB, ID string) (*Application, error) {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+func (a *Application) GetByID(db *database.MongoDB, ID string) error {
+	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
 	oID, err := primitive.ObjectIDFromHex(ID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	filter := bson.M{"_id": oID, "deletedAt": bson.M{"$exists": false}}
 	err = collection.FindOne(context.Background(), filter).Decode(a)
-	if err != nil {
-		return nil, err
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return ErrDocumentNotFound
+	} else if err != nil {
+		return err
 	}
 	log.Println("Found a single document: ", a)
-	return a, nil
+	return nil
 }
 
-func (a *Application) Update(mongo *database.MongoDB) error {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+func (a *Application) Update(db *database.MongoDB) error {
+	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
 	filter := bson.M{"_id": a.ID}
 	update := bson.D{
 		{"$set", a},
@@ -237,8 +245,8 @@ func (a *Application) Update(mongo *database.MongoDB) error {
 	return nil
 }
 
-func (a *Application) Delete(mongo *database.MongoDB) error {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+func (a *Application) Delete(db *database.MongoDB) error {
+	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
 	filter := bson.D{{"_id", a.ID}}
 	deleteResult, err := collection.DeleteOne(context.Background(), filter)
 	if err != nil {
@@ -248,8 +256,8 @@ func (a *Application) Delete(mongo *database.MongoDB) error {
 	return nil
 }
 
-func (a *Application) SoftDelete(mongo *database.MongoDB) error {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+func (a *Application) SoftDelete(db *database.MongoDB) error {
+	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
 	filter := bson.D{{"_id", a.ID}}
 	update := bson.D{
 		{"$set", bson.D{
@@ -264,14 +272,19 @@ func (a *Application) SoftDelete(mongo *database.MongoDB) error {
 	return nil
 }
 
-func (a *Application) ListComponents(mongo *database.MongoDB) ([]Component, error) {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ComponentCollection)
+func (a *Application) ListComponents(db *database.MongoDB) ([]Component, error) {
+	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
 	filter := bson.M{"applicationID": a.ID, "deletedAt": bson.M{"$exists": false}}
 	cursor, err := collection.Find(context.Background(), filter)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(context.Background())
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err := cursor.Close(ctx)
+		if err != nil {
+			log.Panicf("Error closing cursor: %v\n", err)
+		}
+	}(cursor, context.Background())
 	var components []Component
 	for cursor.Next(context.Background()) {
 		var comp Component
@@ -287,18 +300,18 @@ func (a *Application) ListComponents(mongo *database.MongoDB) ([]Component, erro
 	return components, nil
 }
 
-func (a *Application) CreateEnvironment(mongo *database.MongoDB, name string) (*Environment, error) {
+func (a *Application) CreateEnvironment(db *database.MongoDB, name string) (*Environment, error) {
 	env := NewEnvironment(name)
 	a.Environments = append(a.Environments, *env)
-	err := a.Update(mongo)
+	err := a.Update(db)
 	if err != nil {
 		return nil, err
 	}
 	return env, nil
 }
 
-func (a *Application) DeleteEnvironmentByID(mongo *database.MongoDB, envID string) error {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+func (a *Application) DeleteEnvironmentByID(db *database.MongoDB, envID string) error {
+	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
 	filter := bson.M{"_id": a.ID}
 	update := bson.M{"$pull": bson.M{"environments": bson.M{"_id": envID}}}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
@@ -311,8 +324,8 @@ func (a *Application) DeleteEnvironmentByID(mongo *database.MongoDB, envID strin
 	return nil
 }
 
-func (a *Application) DeleteEnvironmentByName(mongo *database.MongoDB, envName string) error {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ApplicationCollection)
+func (a *Application) DeleteEnvironmentByName(db *database.MongoDB, envName string) error {
+	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
 	filter := bson.M{"_id": a.ID}
 	update := bson.M{"$pull": bson.M{"environments": bson.M{"name": envName}}}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
@@ -349,8 +362,9 @@ func (c *Component) Create(db *database.MongoDB) (*Component, error) {
 
 	r, err := collection.InsertOne(context.Background(), c)
 	if err != nil {
-		switch err.(type) {
-		case mongo.WriteException:
+		var writeException mongo.WriteException
+		switch {
+		case errors.As(err, &writeException):
 			if err.(mongo.WriteException).WriteErrors[0].Code == 11000 {
 				return nil, ErrDuplicateDocument
 			}
@@ -361,8 +375,8 @@ func (c *Component) Create(db *database.MongoDB) (*Component, error) {
 	return c, nil
 }
 
-func (c *Component) Delete(mongo *database.MongoDB) error {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ComponentCollection)
+func (c *Component) Delete(db *database.MongoDB) error {
+	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
 	filter := bson.D{{"_id", c.ID}}
 	deleteResult, err := collection.DeleteOne(context.Background(), filter)
 	if err != nil {
@@ -372,8 +386,8 @@ func (c *Component) Delete(mongo *database.MongoDB) error {
 	return nil
 }
 
-func (c *Component) GetByID(mongo *database.MongoDB, ID string) (*Component, error) {
-	collection := mongo.Client.Database(mongo.DBName).Collection(ComponentCollection)
+func (c *Component) GetByID(db *database.MongoDB, ID string) (*Component, error) {
+	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
 	filter := bson.M{"_id": ID, "deletedAt": bson.M{"$exists": false}}
 	err := collection.FindOne(context.Background(), filter).Decode(c)
 	if err != nil {

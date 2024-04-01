@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"testing"
 
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
@@ -72,8 +73,8 @@ func TestResetSuperuserPassword(t *testing.T) {
 					t.Errorf("SequenceInt() recover = %v, wantPanic = %v", r, tt.wantError)
 				}
 			}()
-			u := &User{}
-			u2 := &User{}
+			u := &models.User{}
+			u2 := &models.User{}
 			if !tt.wantError {
 				CreateSuperuser(mongo)
 				_ = u.GetByEmail(mongo, "admin@conure.io")

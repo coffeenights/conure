@@ -1,4 +1,4 @@
-package variables
+package models
 
 import (
 	"context"
@@ -11,6 +11,18 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
+
+const (
+	OrganizationType VariableType = "organization"
+	EnvironmentType  VariableType = "environment"
+	ComponentType    VariableType = "component"
+)
+
+type VariableType string
+
+func (vt VariableType) IsValid() bool {
+	return vt == OrganizationType || vt == EnvironmentType || vt == ComponentType
+}
 
 const VariableCollection string = "variables"
 

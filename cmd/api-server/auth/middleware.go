@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -35,7 +36,7 @@ func CheckCurrentUser(config *apiConfig.Config, mongo *database.MongoDB) gin.Han
 		}
 
 		// get the user data and add it to the context
-		user := User{}
+		user := models.User{}
 		err = user.GetByEmail(mongo, claims.Data.Email)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
