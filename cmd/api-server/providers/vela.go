@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 	"log"
 )
 
@@ -245,11 +244,6 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 		log.Printf("Error getting clientset: %v\n", err)
 		return err
 	}
-
-	client, err := dynamic.NewForConfig(clientset.Config)
-	if err != nil {
-		return err
-	}
 	// Create namespace if necessary
 	err = p.createNamespace(clientset)
 
@@ -257,7 +251,7 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 	deployment := &unstructured.Unstructured{
 		Object: manifest,
 	}
-	result, err := client.Resource(deploymentRes).Namespace(p.Namespace).Create(context.Background(), deployment, metav1.CreateOptions{})
+	result, err := clientset.Dynamic.Resource(deploymentRes).Namespace(p.Namespace).Create(context.Background(), deployment, metav1.CreateOptions{})
 	var statusError *k8sErrors.StatusError
 	if errors.As(err, &statusError) {
 		if statusError.ErrStatus.Code == 409 {
