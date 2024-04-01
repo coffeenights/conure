@@ -10,18 +10,13 @@ import (
 )
 
 func (a *ApiHandler) ListComponents(c *gin.Context) {
-	handler, err := NewApplicationHandler(a.MongoDB)
-	if err != nil {
-		log.Printf("Error creating application handler: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
-		return
-	}
-	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	var application *models.Application
+	application, err := application.GetByID(a.MongoDB, c.Param("applicationID"))
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	components, err := handler.Model.ListComponents(a.MongoDB)
+	components, err := application.ListComponents(a.MongoDB)
 	if err != nil {
 		log.Printf("Error getting components: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
