@@ -18,7 +18,6 @@ func setupRouter() (*gin.Engine, *ApiHandler) {
 		log.Panic(err)
 	}
 	app := NewApiHandler(appConfig, db)
-	app.MongoDB.DBName += "-test"
 	GenerateRoutes("/organizations", router, app)
 	return router, app
 }
