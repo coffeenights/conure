@@ -36,7 +36,7 @@ func TestCreateEnvironment(t *testing.T) {
 	if resp.Code != http.StatusCreated {
 		t.Errorf("Expected response code 201, got: %v", resp.Code)
 	}
-	_, err = app.GetByID(api.MongoDB, app.ID.Hex())
+	err = app.GetByID(api.MongoDB, app.ID.Hex())
 	if err != nil {
 		t.Errorf("Failed to get application: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestDeleteEnvironment(t *testing.T) {
 	if resp.Code != http.StatusOK {
 		t.Errorf("Expected response code 200, got: %v", resp.Code)
 	}
-	_, err = app.GetByID(api.MongoDB, app.ID.Hex())
+	err = app.GetByID(api.MongoDB, app.ID.Hex())
 	if err != nil {
 		t.Errorf("Failed to get application: %v", err)
 	}

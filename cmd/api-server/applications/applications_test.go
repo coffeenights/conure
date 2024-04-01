@@ -114,6 +114,31 @@ func TestDetailApplication(t *testing.T) {
 	_ = org.Delete(app.MongoDB)
 }
 
+func TestDetailApplication_NotFound(t *testing.T) {
+	router, app := setupRouter()
+	// Create test organization
+	org := models.Organization{
+		Status:    models.OrgActive,
+		AccountID: "testOrgId",
+		Name:      "Test Organization for DetailApplication_NotFound",
+	}
+	oID, err := org.Create(app.MongoDB) // lint:ignore
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "/organizations/" + oID + "/a/" + primitive.NewObjectID().Hex() + "/e/test-detail-application/"
+	req, _ := http.NewRequest("GET", url, nil)
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusNotFound {
+		t.Errorf("Expected response code 404, got: %v", resp.Code)
+	}
+	_ = org.Delete(app.MongoDB)
+
+}
+
 func TestCreateApplication(t *testing.T) {
 	router, app := setupRouter()
 	// Create test organization

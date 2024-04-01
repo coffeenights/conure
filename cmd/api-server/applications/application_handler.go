@@ -46,7 +46,7 @@ func ListOrganizationApplications(organizationID string, db *database.MongoDB) (
 }
 
 func (ah *ApplicationHandler) GetApplicationByID(appID string) error {
-	_, err := ah.Model.GetByID(ah.DB, appID)
+	err := ah.Model.GetByID(ah.DB, appID)
 	if err != nil {
 		return err
 	}

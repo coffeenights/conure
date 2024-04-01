@@ -10,10 +10,14 @@ import (
 )
 
 func (a *ApiHandler) ListComponents(c *gin.Context) {
-	var application *models.Application
-	application, err := application.GetByID(a.MongoDB, c.Param("applicationID"))
-	if err != nil {
+	application := &models.Application{}
+	err := application.GetByID(a.MongoDB, c.Param("applicationID"))
+	if errors.Is(err, models.ErrDocumentNotFound) {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 	components, err := application.ListComponents(a.MongoDB)
@@ -39,9 +43,13 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if err != nil {
+	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	if errors.Is(err, models.ErrDocumentNotFound) {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
@@ -68,9 +76,13 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	_, err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if err != nil {
+	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	if errors.Is(err, models.ErrDocumentNotFound) {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
@@ -144,9 +156,13 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	app, err := handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if err != nil {
+	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	if errors.Is(err, models.ErrDocumentNotFound) {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	} else if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 	var request CreateComponentRequest
@@ -156,7 +172,7 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-	component := models.NewComponent(app, request.ID, request.Type)
+	component := models.NewComponent(handler.Model, request.ID, request.Type)
 	component.Description = request.Description
 	component.Properties = request.Properties
 	component.Traits = request.Traits

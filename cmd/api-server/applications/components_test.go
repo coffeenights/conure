@@ -16,7 +16,7 @@ func TestListComponents(t *testing.T) {
 	org := models.Organization{
 		Status:    models.OrgActive,
 		AccountID: "testOrgId",
-		Name:      "Test Organization for ListApplications",
+		Name:      "Test Organization for ListComponents",
 	}
 	oID, err := org.Create(app.MongoDB) // lint:ignore
 	if err != nil {
