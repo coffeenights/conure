@@ -14,6 +14,12 @@ func (a *ApiHandler) DetailOrganization(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
+	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this organization",
+		})
+		return
+	}
 	response := OrganizationResponse{
 		Organization: &org,
 	}
