@@ -11,41 +11,41 @@ import (
 )
 
 func TestListComponents(t *testing.T) {
-	router, app := setupRouter()
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: "testOrgId",
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for ListComponents",
 	}
-	oID, err := org.Create(app.MongoDB) // lint:ignore
+	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer org.Delete(app.MongoDB)
+	defer org.Delete(testConf.app.MongoDB)
 
 	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer application.Delete(app.MongoDB)
+	defer application.Delete(testConf.app.MongoDB)
 
-	_, err = application.CreateEnvironment(app.MongoDB, "staging")
+	_, err = application.CreateEnvironment(testConf.app.MongoDB, "staging")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	comp, err := models.NewComponent(application, "TestListComponents", "service").Create(app.MongoDB)
+	comp, err := models.NewComponent(application, "TestListComponents", "service").Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
-	defer comp.Delete(app.MongoDB)
+	defer comp.Delete(testConf.app.MongoDB)
 
 	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c/"
 	req, _ := http.NewRequest("GET", url, nil)
+	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
+	testConf.router.ServeHTTP(resp, req)
 
 	// Assert
 	if resp.Code != http.StatusOK {
@@ -63,24 +63,24 @@ func TestListComponents(t *testing.T) {
 }
 
 func TestListComponents_NotExist(t *testing.T) {
-	router, app := setupRouter()
 
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: "testOrgId",
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for ListApplications",
 	}
-	oID, err := org.Create(app.MongoDB) // lint:ignore
+	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer org.Delete(app.MongoDB)
+	defer org.Delete(testConf.app.MongoDB)
 
 	url := "/organizations/" + oID + "/a/" + primitive.NewObjectID().Hex() + "/e/test-env/c/"
 	req, _ := http.NewRequest("GET", url, nil)
+	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
+	testConf.router.ServeHTTP(resp, req)
 
 	// Assert
 	if resp.Code != http.StatusNotFound {
@@ -89,36 +89,36 @@ func TestListComponents_NotExist(t *testing.T) {
 }
 
 func TestListComponents_Empty(t *testing.T) {
-	router, app := setupRouter()
 
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: "testOrgId",
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for ListApplications",
 	}
-	oID, err := org.Create(app.MongoDB) // lint:ignore
+	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer org.Delete(app.MongoDB)
+	defer org.Delete(testConf.app.MongoDB)
 
 	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer application.Delete(app.MongoDB)
+	defer application.Delete(testConf.app.MongoDB)
 
-	_, err = application.CreateEnvironment(app.MongoDB, "staging")
+	_, err = application.CreateEnvironment(testConf.app.MongoDB, "staging")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c/"
 	req, _ := http.NewRequest("GET", url, nil)
+	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
+	testConf.router.ServeHTTP(resp, req)
 
 	// Assert
 	if resp.Code != http.StatusOK {
@@ -135,28 +135,26 @@ func TestListComponents_Empty(t *testing.T) {
 }
 
 func TestCreateComponent(t *testing.T) {
-	router, app := setupRouter()
-
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: "testOrgId",
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for ListApplications",
 	}
-	oID, err := org.Create(app.MongoDB) // lint:ignore
+	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer org.Delete(app.MongoDB)
+	defer org.Delete(testConf.app.MongoDB)
 
 	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer application.Delete(app.MongoDB)
+	defer application.Delete(testConf.app.MongoDB)
 
-	env, err := application.CreateEnvironment(app.MongoDB, "staging")
+	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,8 +173,9 @@ func TestCreateComponent(t *testing.T) {
 	payload, err := json.Marshal(body)
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(payload))
 	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
+	testConf.router.ServeHTTP(resp, req)
 
 	// Assert
 	if resp.Code != http.StatusCreated {
@@ -194,46 +193,45 @@ func TestCreateComponent(t *testing.T) {
 	comp := models.Component{
 		ID: response.ID,
 	}
-	_ = comp.Delete(app.MongoDB)
+	_ = comp.Delete(testConf.app.MongoDB)
 }
 
 func TestDetailComponent(t *testing.T) {
-	router, app := setupRouter()
-
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: "testOrgId",
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for ListApplications",
 	}
-	oID, err := org.Create(app.MongoDB) // lint:ignore
+	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer org.Delete(app.MongoDB)
+	defer org.Delete(testConf.app.MongoDB)
 
 	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer application.Delete(app.MongoDB)
+	defer application.Delete(testConf.app.MongoDB)
 
-	env, err := application.CreateEnvironment(app.MongoDB, "staging")
+	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	comp, err := models.NewComponent(application, "TestDetailComponent", "service").Create(app.MongoDB)
+	comp, err := models.NewComponent(application, "TestDetailComponent", "service").Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
-	defer comp.Delete(app.MongoDB)
+	defer comp.Delete(testConf.app.MongoDB)
 
 	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID + "/"
 	req, _ := http.NewRequest("GET", url, nil)
+	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
+	testConf.router.ServeHTTP(resp, req)
 
 	// Assert
 	if resp.Code != http.StatusOK {
@@ -250,36 +248,35 @@ func TestDetailComponent(t *testing.T) {
 }
 
 func TestDetailComponent_NotFound(t *testing.T) {
-	router, app := setupRouter()
-
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: "testOrgId",
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for ListApplications",
 	}
-	oID, err := org.Create(app.MongoDB) // lint:ignore
+	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer org.Delete(app.MongoDB)
+	defer org.Delete(testConf.app.MongoDB)
 
 	// Create test application
-	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", primitive.NewObjectID().Hex()).Create(app.MongoDB)
+	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer application.Delete(app.MongoDB)
+	defer application.Delete(testConf.app.MongoDB)
 
-	env, err := application.CreateEnvironment(app.MongoDB, "staging")
+	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/asdasd/"
 	req, _ := http.NewRequest("GET", url, nil)
+	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
+	testConf.router.ServeHTTP(resp, req)
 
 	// Assert
 	if resp.Code != http.StatusNotFound {
