@@ -23,6 +23,12 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
+	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this organization",
+		})
+		return
+	}
 	handlers, err := ListOrganizationApplications(c.Param("organizationID"), a.MongoDB)
 	if err != nil {
 		log.Printf("Error getting applications list: %v\n", err)
@@ -71,6 +77,13 @@ func (a *ApiHandler) DetailApplication(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
+
+	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this application",
+		})
+		return
+	}
 	response := ApplicationResponse{
 		Application: handler.Model,
 	}
@@ -88,6 +101,12 @@ func (a *ApiHandler) CreateApplication(c *gin.Context) {
 	_, err := org.GetById(a.MongoDB, c.Param("organizationID"))
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this organization",
+		})
 		return
 	}
 	request := CreateApplicationRequest{}
@@ -134,6 +153,12 @@ func (a *ApiHandler) DeployApplication(c *gin.Context) {
 	if err != nil {
 		log.Printf("Error getting application: %v\n", err)
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this application",
+		})
 		return
 	}
 	env, err := handler.Model.GetEnvironmentByName(a.MongoDB, c.Param("environment"))

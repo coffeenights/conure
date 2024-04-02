@@ -14,7 +14,7 @@ func TestListApplications(t *testing.T) {
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: primitive.NewObjectID(),
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for ListApplications",
 	}
 	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
@@ -58,7 +58,7 @@ func TestListApplications_Empty(t *testing.T) {
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: primitive.NewObjectID(),
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for ListApplications_Empty",
 	}
 	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
@@ -82,7 +82,7 @@ func TestDetailApplication(t *testing.T) {
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: primitive.NewObjectID(),
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for DetailApplication",
 	}
 	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
@@ -91,7 +91,7 @@ func TestDetailApplication(t *testing.T) {
 	}
 
 	// Create test application
-	app1, err := models.NewApplication(oID, "TestDetailApplication", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
+	app1, err := models.NewApplication(oID, "TestDetailApplication", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestDetailApplication_NotFound(t *testing.T) {
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: primitive.NewObjectID(),
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for DetailApplication_NotFound",
 	}
 	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
@@ -143,7 +143,7 @@ func TestCreateApplication(t *testing.T) {
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: primitive.NewObjectID(),
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for CreateApplication",
 	}
 	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
@@ -176,7 +176,7 @@ func TestCreateApplication_Empty(t *testing.T) {
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: primitive.NewObjectID(),
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization for CreateApplication",
 	}
 	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
