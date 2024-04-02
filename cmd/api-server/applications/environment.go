@@ -17,7 +17,6 @@ func (a *ApiHandler) CreateEnvironment(c *gin.Context) {
 		return
 	}
 
-	//TODO: Fake the user first, after integrating the auth, we will get the user from the token
 	appHandler, err := NewApplicationHandler(a.MongoDB)
 	if err != nil {
 		log.Printf("Error creating application handler: %v\n", err)
