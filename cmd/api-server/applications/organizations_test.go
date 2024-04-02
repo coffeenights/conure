@@ -11,21 +11,21 @@ import (
 )
 
 func TestDetailOrganization(t *testing.T) {
-	router, app := setupRouter()
 	// Create test organization
 	org := models.Organization{
 		Status:    models.OrgActive,
-		AccountID: "testOrgId",
+		AccountID: testConf.authUser.ID,
 		Name:      "Test Organization",
 	}
-	oID, err := org.Create(app.MongoDB) // lint:ignore
+	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
 	if err != nil {
 		t.Fatal(err)
 	}
 	url := "/organizations/" + oID + "/"
 	req, _ := http.NewRequest("GET", url, nil)
+	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, req)
+	testConf.router.ServeHTTP(resp, req)
 
 	// Assert
 	if resp.Code != http.StatusOK {
@@ -34,11 +34,8 @@ func TestDetailOrganization(t *testing.T) {
 }
 
 func TestCreateOrganization(t *testing.T) {
-	router, app := setupRouter()
-
 	createRequest := &CreateOrganizationRequest{
-		Name:      "POST Test Organization",
-		AccountID: "333455",
+		Name: "POST Test Organization",
 	}
 	jsonData, err := json.Marshal(createRequest)
 	if err != nil {
@@ -49,8 +46,9 @@ func TestCreateOrganization(t *testing.T) {
 		log.Fatal(err)
 	}
 	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, request)
+	testConf.router.ServeHTTP(resp, request)
 	// Assert
 	if resp.Code != http.StatusCreated {
 		t.Errorf("Expected response code 201, got: %v", resp.Code)
@@ -61,7 +59,7 @@ func TestCreateOrganization(t *testing.T) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, err = org.GetById(app.MongoDB, response.ID)
+	_, err = org.GetById(testConf.app.MongoDB, response.ID.Hex())
 	if err != nil {
 		log.Fatal(err)
 	}
