@@ -24,7 +24,7 @@ func TestListComponents(t *testing.T) {
 	defer org.Delete(testConf.app.MongoDB)
 
 	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestListComponents_Empty(t *testing.T) {
 	defer org.Delete(testConf.app.MongoDB)
 
 	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +148,7 @@ func TestCreateComponent(t *testing.T) {
 	defer org.Delete(testConf.app.MongoDB)
 
 	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +210,7 @@ func TestDetailComponent(t *testing.T) {
 	defer org.Delete(testConf.app.MongoDB)
 
 	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
+	application, err := models.NewApplication(oID, "TestListComponents", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,7 +261,7 @@ func TestDetailComponent_NotFound(t *testing.T) {
 	defer org.Delete(testConf.app.MongoDB)
 
 	// Create test application
-	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
+	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}

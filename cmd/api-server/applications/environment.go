@@ -1,6 +1,7 @@
 package applications
 
 import (
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
@@ -27,6 +28,12 @@ func (a *ApiHandler) CreateEnvironment(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
+	if appHandler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this application",
+		})
+		return
+	}
 
 	if _, err = appHandler.Model.CreateEnvironment(a.MongoDB, request.Name); err != nil {
 		log.Printf("Error creating environment: %v\n", err)
@@ -45,6 +52,12 @@ func (a *ApiHandler) DeleteEnvironment(c *gin.Context) {
 	}
 	if err = appHandler.GetApplicationByID(c.Param("applicationID")); err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if appHandler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this application",
+		})
 		return
 	}
 

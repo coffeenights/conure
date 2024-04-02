@@ -2,6 +2,7 @@ package applications
 
 import (
 	"context"
+	"errors"
 	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/models"
@@ -76,7 +77,12 @@ func setup() {
 		Client:   client,
 	}
 	err = user.Create(app.MongoDB)
-	if err != nil {
+	if errors.Is(err, models.ErrEmailExists) {
+		err = user.GetByEmail(app.MongoDB, email)
+		if err != nil {
+			log.Panic(err)
+		}
+	} else if err != nil {
 		log.Panic(err)
 	}
 

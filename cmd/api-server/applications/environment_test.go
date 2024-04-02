@@ -16,7 +16,7 @@ func TestCreateEnvironment(t *testing.T) {
 		Name: "staging",
 	}
 	orgID := primitive.NewObjectID().Hex()
-	app, err := models.NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
+	app, err := models.NewApplication(orgID, "test-app", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatalf("Failed to create application: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestCreateEnvironment_NotExist(t *testing.T) {
 
 func TestDeleteEnvironment(t *testing.T) {
 	orgID := primitive.NewObjectID().Hex()
-	app, err := models.NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(testConf.app.MongoDB)
+	app, err := models.NewApplication(orgID, "test-app", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatalf("Failed to create application: %v", err)
 	}
