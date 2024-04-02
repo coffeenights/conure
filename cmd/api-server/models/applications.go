@@ -28,12 +28,12 @@ const (
 )
 
 type Organization struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty"`
-	Status    OrganizationStatus `bson:"status"`
-	AccountID string             `bson:"accountId"`
-	Name      string             `bson:"name"`
-	CreatedAt time.Time          `bson:"createdAt"`
-	DeletedAt time.Time          `bson:"deletedAt,omitempty"`
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Status    OrganizationStatus `bson:"status" json:"status"`
+	AccountID primitive.ObjectID `bson:"accountId" json:"accountId"`
+	Name      string             `bson:"name" json:"name"`
+	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
+	DeletedAt time.Time          `bson:"deletedAt,omitempty" json:"-"`
 }
 
 func (o *Organization) String() string {
