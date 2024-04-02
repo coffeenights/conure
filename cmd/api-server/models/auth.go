@@ -92,6 +92,16 @@ func (u *User) UpdateLastLoginAt(mongo *database.MongoDB) error {
 	return nil
 }
 
+func (u *User) Delete(mongo *database.MongoDB) error {
+	collection := mongo.Client.Database(mongo.DBName).Collection(UserCollection)
+	filter := bson.M{"_id": u.ID}
+	_, err := collection.DeleteOne(context.Background(), filter)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func ValidateEmail(email string) error {
 	pattern := `^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`
 	if matched, err := regexp.MatchString(pattern, email); err != nil {
