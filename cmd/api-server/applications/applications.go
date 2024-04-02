@@ -31,7 +31,9 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 	}
 
 	response := ApplicationListResponse{}
-	response.Organization.ParseModelToResponse(&org)
+	response.Organization = OrganizationResponse{
+		Organization: &org,
+	}
 	applicationResponses := make([]ApplicationResponse, len(handlers))
 	for i, handler := range handlers {
 		r := ApplicationResponse{
