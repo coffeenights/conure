@@ -53,12 +53,17 @@ func (o *Organization) Create(mongo *database.MongoDB) (string, error) {
 	return insertResult.InsertedID.(primitive.ObjectID).Hex(), nil
 }
 
-func (o *Organization) GetById(mongo *database.MongoDB, ID string) (*Organization, error) {
-	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
-	oID, _ := primitive.ObjectIDFromHex(ID)
-	filter := bson.M{"_id": oID, "status": bson.M{"$ne": OrgDeleted}}
-	err := collection.FindOne(context.Background(), filter).Decode(o)
+func (o *Organization) GetById(db *database.MongoDB, ID string) (*Organization, error) {
+	collection := db.Client.Database(db.DBName).Collection(OrganizationCollection)
+	oID, err := primitive.ObjectIDFromHex(ID)
 	if err != nil {
+		return nil, err
+	}
+	filter := bson.M{"_id": oID, "status": bson.M{"$ne": OrgDeleted}}
+	err = collection.FindOne(context.Background(), filter).Decode(o)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return nil, ErrDocumentNotFound
+	} else if err != nil {
 		return nil, err
 	}
 	log.Println("Found a single document: ", o)

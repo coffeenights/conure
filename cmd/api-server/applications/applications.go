@@ -19,9 +19,14 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 	}
 	org := models.Organization{}
 	_, err := org.GetById(a.MongoDB, c.Param("organizationID"))
-	if err != nil {
+	if errors.Is(err, models.ErrDocumentNotFound) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
+	} else if err != nil {
+		log.Printf("Error getting organization: %v\n", err)
+		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+
 	}
 	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
 		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
