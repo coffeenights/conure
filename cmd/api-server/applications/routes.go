@@ -1,12 +1,12 @@
 package applications
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/auth"
+	"github.com/coffeenights/conure/cmd/api-server/middlewares"
 	"github.com/gin-gonic/gin"
 )
 
 func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *ApiHandler) {
-	applications := r.Group(relativePath, auth.CheckCurrentUser(appHandler.Config, appHandler.MongoDB))
+	applications := r.Group(relativePath, middlewares.CheckAuthenticatedUser(appHandler.Config, appHandler.MongoDB))
 	{
 		applications.POST("/", appHandler.CreateOrganization)
 		applications.GET("/:organizationID/", appHandler.DetailOrganization)
