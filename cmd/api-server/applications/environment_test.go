@@ -12,16 +12,15 @@ import (
 )
 
 func TestCreateEnvironment(t *testing.T) {
-	router, api := setupRouter()
 	createRequest := &CreateEnvironmentRequest{
 		Name: "staging",
 	}
 	orgID := primitive.NewObjectID().Hex()
-	app, err := models.NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
+	app, err := models.NewApplication(orgID, "test-app", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatalf("Failed to create application: %v", err)
 	}
-	defer app.Delete(api.MongoDB)
+	defer app.Delete(testConf.app.MongoDB)
 	jsonData, err := json.Marshal(createRequest)
 	if err != nil {
 		log.Fatalf("Failed to marshal request: %v", err)
@@ -31,12 +30,13 @@ func TestCreateEnvironment(t *testing.T) {
 		log.Fatalf("Failed to create request: %v", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, request)
+	testConf.router.ServeHTTP(resp, request)
 	if resp.Code != http.StatusCreated {
 		t.Errorf("Expected response code 201, got: %v", resp.Code)
 	}
-	err = app.GetByID(api.MongoDB, app.ID.Hex())
+	err = app.GetByID(testConf.app.MongoDB, app.ID.Hex())
 	if err != nil {
 		t.Errorf("Failed to get application: %v", err)
 	}
@@ -46,7 +46,6 @@ func TestCreateEnvironment(t *testing.T) {
 }
 
 func TestCreateEnvironment_NotExist(t *testing.T) {
-	router, _ := setupRouter()
 	createRequest := &CreateEnvironmentRequest{
 		Name: "staging",
 	}
@@ -61,22 +60,22 @@ func TestCreateEnvironment_NotExist(t *testing.T) {
 		log.Fatalf("Failed to create request: %v", err)
 	}
 	request.Header.Set("Content-Type", "application/json")
+	request.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, request)
+	testConf.router.ServeHTTP(resp, request)
 	if resp.Code != http.StatusNotFound {
 		t.Errorf("Expected response code 404, got: %v", resp.Code)
 	}
 }
 
 func TestDeleteEnvironment(t *testing.T) {
-	router, api := setupRouter()
 	orgID := primitive.NewObjectID().Hex()
-	app, err := models.NewApplication(orgID, "test-app", primitive.NewObjectID().Hex()).Create(api.MongoDB)
+	app, err := models.NewApplication(orgID, "test-app", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatalf("Failed to create application: %v", err)
 	}
-	defer app.Delete(api.MongoDB)
-	env, err := app.CreateEnvironment(api.MongoDB, "staging")
+	defer app.Delete(testConf.app.MongoDB)
+	env, err := app.CreateEnvironment(testConf.app.MongoDB, "staging")
 	if err != nil {
 		t.Fatalf("Failed to create environment: %v", err)
 	}
@@ -84,12 +83,13 @@ func TestDeleteEnvironment(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Failed to create request: %v", err)
 	}
+	request.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
-	router.ServeHTTP(resp, request)
+	testConf.router.ServeHTTP(resp, request)
 	if resp.Code != http.StatusOK {
 		t.Errorf("Expected response code 200, got: %v", resp.Code)
 	}
-	err = app.GetByID(api.MongoDB, app.ID.Hex())
+	err = app.GetByID(testConf.app.MongoDB, app.ID.Hex())
 	if err != nil {
 		t.Errorf("Failed to get application: %v", err)
 	}

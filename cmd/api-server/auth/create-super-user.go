@@ -23,7 +23,7 @@ func CreateSuperuser(mongo *database.MongoDB) {
 	}
 	err = user.Create(mongo)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	log.Println("x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x")
@@ -49,11 +49,11 @@ func ResetSuperuserPassword(mongo *database.MongoDB) {
 	}
 	err = user.GetByEmail(mongo, email)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 	err = user.UpdatePassword(mongo, hashedPassword)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
 
 	log.Println("x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x")

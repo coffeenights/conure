@@ -76,31 +76,17 @@ type CreateComponentRequest struct {
 }
 
 type CreateOrganizationRequest struct {
-	Name      string `json:"name" validate:"required"`
-	AccountID string `json:"account_id" validate:"required"`
+	Name string `json:"name" validate:"required"`
 }
 
 func (r *CreateOrganizationRequest) ParseRequestToModel() *models.Organization {
 	return &models.Organization{
-		Name:      r.Name,
-		AccountID: r.AccountID,
+		Name: r.Name,
 	}
 }
 
 type OrganizationResponse struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	AccountID string    `json:"account_id"`
-}
-
-func (r *OrganizationResponse) ParseModelToResponse(organization *models.Organization) {
-	r.ID = organization.ID.Hex()
-	r.Name = organization.Name
-	r.Status = string(organization.Status)
-	r.CreatedAt = organization.CreatedAt
-	r.AccountID = organization.AccountID
+	*models.Organization
 }
 
 type CreateEnvironmentRequest struct {

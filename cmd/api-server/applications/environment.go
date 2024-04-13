@@ -1,6 +1,7 @@
 package applications
 
 import (
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
@@ -16,7 +17,6 @@ func (a *ApiHandler) CreateEnvironment(c *gin.Context) {
 		return
 	}
 
-	//TODO: Fake the user first, after integrating the auth, we will get the user from the token
 	appHandler, err := NewApplicationHandler(a.MongoDB)
 	if err != nil {
 		log.Printf("Error creating application handler: %v\n", err)
@@ -25,6 +25,12 @@ func (a *ApiHandler) CreateEnvironment(c *gin.Context) {
 	}
 	if err = appHandler.GetApplicationByID(c.Param("applicationID")); err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if appHandler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this application",
+		})
 		return
 	}
 
@@ -45,6 +51,12 @@ func (a *ApiHandler) DeleteEnvironment(c *gin.Context) {
 	}
 	if err = appHandler.GetApplicationByID(c.Param("applicationID")); err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	if appHandler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this application",
+		})
 		return
 	}
 

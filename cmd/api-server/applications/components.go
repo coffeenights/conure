@@ -20,6 +20,12 @@ func (a *ApiHandler) ListComponents(c *gin.Context) {
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
+	if application.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this application",
+		})
+		return
+	}
 	components, err := application.ListComponents(a.MongoDB)
 	if err != nil {
 		log.Printf("Error getting components: %v\n", err)
@@ -53,6 +59,13 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 		return
 	}
 
+	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this application",
+		})
+		return
+	}
+
 	component := &models.Component{}
 	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
@@ -83,6 +96,12 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 	} else if err != nil {
 		log.Printf("Error getting application: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this application",
+		})
 		return
 	}
 
@@ -163,6 +182,12 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 	} else if err != nil {
 		log.Printf("Error getting application: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
+		return
+	}
+	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+			"error": "You are not allowed to access this application",
+		})
 		return
 	}
 	var request CreateComponentRequest
