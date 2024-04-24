@@ -2,6 +2,8 @@ package models
 
 import (
 	"context"
+	"errors"
+	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"regexp"
 	"time"
@@ -35,7 +37,7 @@ type Variable struct {
 	OrganizationID primitive.ObjectID  `bson:"organizationId,omitempty" json:"organization_id,omitempty"`
 	ApplicationID  *primitive.ObjectID `bson:"applicationId,omitempty" json:"application_id,omitempty"`
 	EnvironmentID  *string             `bson:"environmentId,omitempty" json:"environment_id,omitempty"`
-	ComponentID    *primitive.ObjectID `bson:"componentId,omitempty" json:"component_id,omitempty"`
+	ComponentID    *string             `bson:"componentId,omitempty" json:"component_id,omitempty"`
 	IsEncrypted    bool                `bson:"isEncrypted" json:"is_encrypted"`
 	CreatedAt      time.Time           `bson:"createdAt" json:"created_at"`
 	UpdatedAt      time.Time           `bson:"updatedAt" json:"updated_at"`
@@ -122,7 +124,7 @@ func (v *Variable) ListByEnv(mongo *database.MongoDB, client string, organizatio
 	return variables, nil
 }
 
-func (v *Variable) ListByComp(mongo *database.MongoDB, client string, organizationID, applicationID primitive.ObjectID, environmentID string, componentID primitive.ObjectID) ([]Variable, error) {
+func (v *Variable) ListByComp(mongo *database.MongoDB, client string, organizationID, applicationID primitive.ObjectID, environmentID string, componentID string) ([]Variable, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{"name", 1}})
@@ -160,11 +162,26 @@ func (v *Variable) GetByAppIDAndEnvAndName(mongo *database.MongoDB, client strin
 	return nil
 }
 
-func (v *Variable) GetByAppIDAndEnvAndCompAndName(mongo *database.MongoDB, client string, applicationID primitive.ObjectID, t VariableType, environmentID *string, componentID *primitive.ObjectID, name string) error {
+func (v *Variable) GetByAppIDAndEnvAndCompAndName(mongo *database.MongoDB, client string, applicationID primitive.ObjectID, t VariableType, environmentID *string, componentID *string, name string) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
 	err := collection.FindOne(context.Background(), primitive.M{"client": client, "applicationId": applicationID,
 		"type": t, "name": name, "environmentId": environmentID, "componentId": componentID}).Decode(v)
 	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (v *Variable) GetByID(db *database.MongoDB, id string) error {
+	collection := db.Client.Database(db.DBName).Collection(VariableCollection)
+	objectID, err := primitive.ObjectIDFromHex(id)
+	if err != nil {
+		return err
+	}
+	err = collection.FindOne(context.Background(), primitive.M{"_id": objectID}).Decode(v)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return ErrDocumentNotFound
+	} else if err != nil {
 		return err
 	}
 	return nil
