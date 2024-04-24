@@ -65,7 +65,6 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 		Name:           "var1",
 		Value:          "value1",
 		IsEncrypted:    false,
-		Client:         "test-client",
 		Type:           models.OrganizationType,
 	}
 	_, _ = orgVar.Create(mongo)
@@ -75,7 +74,6 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 		Name:           "var2",
 		Value:          encryptValue(keyStorage, "value2"),
 		IsEncrypted:    true,
-		Client:         "test-client",
 		Type:           models.OrganizationType,
 	}
 	_, _ = orgVar2.Create(mongo)
@@ -166,7 +164,6 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 		Name:           "var1",
 		Value:          "value1",
 		IsEncrypted:    false,
-		Client:         "test-client",
 		Type:           models.EnvironmentType,
 	}
 	_, _ = orgVar.Create(mongo)
@@ -178,7 +175,6 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 		Name:           "var2",
 		Value:          encryptValue(keyStorage, "value2"),
 		IsEncrypted:    true,
-		Client:         "test-client",
 		Type:           models.EnvironmentType,
 	}
 	_, _ = orgVar2.Create(mongo)
@@ -298,7 +294,6 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 		Name:           "var1",
 		Value:          "value1",
 		IsEncrypted:    false,
-		Client:         "test-client",
 		Type:           models.ComponentType,
 	}
 	_, _ = orgVar.Create(mongo)
@@ -311,7 +306,6 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 		Name:           "var2",
 		Value:          encryptValue(keyStorage, "value2"),
 		IsEncrypted:    true,
-		Client:         "test-client",
 		Type:           models.ComponentType,
 	}
 	_, _ = orgVar2.Create(mongo)

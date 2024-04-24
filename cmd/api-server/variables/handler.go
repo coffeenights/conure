@@ -29,16 +29,14 @@ func NewVariablesHandler(config *apiConfig.Config, mongo *database.MongoDB, keyS
 
 func (h *Handler) ListOrganizationVariables(c *gin.Context) {
 	var variable models.Variable
-	user := c.MustGet("currentUser").(models.User)
 
-	client := user.Client
 	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
 		return
 	}
 
-	variables, err := variable.ListByOrg(h.MongoDB, client, organizationID)
+	variables, err := variable.ListByOrg(h.MongoDB, organizationID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -55,9 +53,7 @@ func (h *Handler) ListOrganizationVariables(c *gin.Context) {
 
 func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 	var variable models.Variable
-	user := c.MustGet("currentUser").(models.User)
 
-	client := user.Client
 	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
@@ -71,7 +67,7 @@ func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 
 	environmentID := c.Param("environmentID")
 
-	variables, err := variable.ListByEnv(h.MongoDB, client, organizationID, applicationID, environmentID)
+	variables, err := variable.ListByEnv(h.MongoDB, organizationID, applicationID, environmentID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -88,9 +84,7 @@ func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 
 func (h *Handler) ListComponentVariables(c *gin.Context) {
 	var variable models.Variable
-	user := c.MustGet("currentUser").(models.User)
 
-	client := user.Client
 	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
@@ -104,7 +98,7 @@ func (h *Handler) ListComponentVariables(c *gin.Context) {
 	componentID := c.Param("componentID")
 	environmentID := c.Param("environmentID")
 
-	variables, err := variable.ListByComp(h.MongoDB, client, organizationID, applicationID, environmentID, componentID)
+	variables, err := variable.ListByComp(h.MongoDB, organizationID, applicationID, environmentID, componentID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -121,8 +115,6 @@ func (h *Handler) ListComponentVariables(c *gin.Context) {
 
 func (h *Handler) CreateVariable(c *gin.Context) {
 	var variable models.Variable
-	user := c.MustGet("currentUser").(models.User)
-	client := user.Client
 
 	if err := c.ShouldBindJSON(&variable); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -134,7 +126,6 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 		return
 	}
 
-	variable.Client = client
 	orgID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
@@ -245,20 +236,20 @@ func checkVariable(h *Handler, variable models.Variable) error {
 
 	variableDB := models.Variable{}
 	if variable.Type == models.OrganizationType {
-		err := variableDB.GetByOrgAndName(h.MongoDB, variable.Client, variable.OrganizationID, variable.Name)
+		err := variableDB.GetByOrgAndName(h.MongoDB, variable.OrganizationID, variable.Name)
 		if err == nil {
 			return ErrVariableAlreadyExists
 		}
 	}
 	if variable.Type == models.EnvironmentType {
-		err := variableDB.GetByAppIDAndEnvAndName(h.MongoDB, variable.Client, *variable.ApplicationID, models.EnvironmentType,
+		err := variableDB.GetByAppIDAndEnvAndName(h.MongoDB, *variable.ApplicationID, models.EnvironmentType,
 			variable.EnvironmentID, variable.Name)
 		if err == nil {
 			return ErrVariableAlreadyExists
 		}
 	}
 	if variable.Type == models.ComponentType {
-		err := variableDB.GetByAppIDAndEnvAndCompAndName(h.MongoDB, variable.Client, *variable.ApplicationID,
+		err := variableDB.GetByAppIDAndEnvAndCompAndName(h.MongoDB, *variable.ApplicationID,
 			models.ComponentType, variable.EnvironmentID, variable.ComponentID, variable.Name)
 		if err == nil {
 			return ErrVariableAlreadyExists
