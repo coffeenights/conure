@@ -21,7 +21,7 @@ func TestDetailOrganization(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := "/organizations/" + oID + "/"
+	url := "/organizations/" + oID
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()

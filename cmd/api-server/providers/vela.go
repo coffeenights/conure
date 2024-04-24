@@ -11,6 +11,7 @@ import (
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"log"
 )
@@ -33,6 +34,7 @@ const (
 	EnvironmentLabel    = "conure.io/environment"
 	CreatedByLabel      = "conure.io/created-by"
 	NamespaceLabel      = "conure.io/namespace"
+	ComponentIDLabel    = "app.oam.dev/component"
 )
 
 type ProviderStatusVela struct {
@@ -180,6 +182,34 @@ func (p *ProviderStatusVela) GetSourceProperties(componentID string) (*SourcePro
 	return &source, nil
 }
 
+func (p *ProviderStatusVela) GetActivity(componentID string) error {
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		return err
+	}
+	labels := map[string]string{
+		ApplicationIDLabel:  p.ApplicationID,
+		OrganizationIDLabel: p.OrganizationID,
+		NamespaceLabel:      p.Namespace,
+		ComponentIDLabel:    componentID,
+	}
+	deployments, err := k8sUtils.GetDeploymentByLabels(clientset.K8s, p.Namespace, labels)
+	if err != nil {
+		return err
+	}
+	deploymentSelector := fields.SelectorFromSet(fields.Set{
+		"involvedObject.kind": "Deployment",
+		"involvedObject.name": componentID,
+		"involvedObject.uid":  string(deployments[0].UID),
+	})
+	listOptions := metav1.ListOptions{
+		FieldSelector: deploymentSelector.String(),
+	}
+	events, err := clientset.K8s.CoreV1().Events(p.Namespace).List(context.Background(), listOptions)
+	_ = events
+	return nil
+}
+
 func getNetworkPropertiesFromService(clientset *k8sUtils.GenericClientset, namespace string, labels map[string]string, properties *NetworkProperties) error {
 	services, err := k8sUtils.GetServicesByLabels(clientset, namespace, labels)
 	if err != nil {
@@ -253,13 +283,17 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 	}
 	result, err := clientset.Dynamic.Resource(deploymentRes).Namespace(p.Namespace).Create(context.Background(), deployment, metav1.CreateOptions{})
 	var statusError *k8sErrors.StatusError
-	if errors.As(err, &statusError) {
-		if statusError.ErrStatus.Code == 409 {
-			log.Printf("Application already exists\n")
-			return ErrApplicationExists
+	if err != nil {
+		if errors.As(err, &statusError) {
+			if statusError.ErrStatus.Code == 409 {
+				log.Printf("Application already exists\n")
+				return ErrApplicationExists
+			} else {
+				return err
+			}
+		} else {
+			return err
 		}
-	} else if err != nil {
-		return err
 	}
 	log.Printf("Created deployment %q.\n", result.GetName())
 	return nil

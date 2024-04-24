@@ -39,7 +39,7 @@ func TestListApplications(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := "/organizations/" + oID + "/a/"
+	url := "/organizations/" + oID + "/a"
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
@@ -65,7 +65,7 @@ func TestListApplications_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := "/organizations/" + oID + "/a/"
+	url := "/organizations/" + oID + "/a"
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
@@ -100,7 +100,7 @@ func TestDetailApplication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := "/organizations/" + oID + "/a/" + app1.ID.Hex() + "/e/" + envName + "/"
+	url := "/organizations/" + oID + "/a/" + app1.ID.Hex() + "/e/" + envName
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
@@ -125,7 +125,7 @@ func TestDetailApplication_NotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := "/organizations/" + oID + "/a/" + primitive.NewObjectID().Hex() + "/e/test-detail-application/"
+	url := "/organizations/" + oID + "/a/" + primitive.NewObjectID().Hex() + "/e/test-detail-application"
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
@@ -150,7 +150,7 @@ func TestCreateApplication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := "/organizations/" + oID + "/a/"
+	url := "/organizations/" + oID + "/a"
 	body := map[string]interface{}{
 		"name": "TestCreateApplication",
 	}
@@ -183,7 +183,7 @@ func TestCreateApplication_Empty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := "/organizations/" + oID + "/a/"
+	url := "/organizations/" + oID + "/a"
 	req, _ := http.NewRequest("POST", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()

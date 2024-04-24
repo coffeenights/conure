@@ -41,7 +41,7 @@ func TestListComponents(t *testing.T) {
 	}
 	defer comp.Delete(testConf.app.MongoDB)
 
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c/"
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c"
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
@@ -76,7 +76,7 @@ func TestListComponents_NotExist(t *testing.T) {
 	}
 	defer org.Delete(testConf.app.MongoDB)
 
-	url := "/organizations/" + oID + "/a/" + primitive.NewObjectID().Hex() + "/e/test-env/c/"
+	url := "/organizations/" + oID + "/a/" + primitive.NewObjectID().Hex() + "/e/test-env/c"
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
@@ -114,7 +114,7 @@ func TestListComponents_Empty(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c/"
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c"
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
@@ -159,7 +159,7 @@ func TestCreateComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/"
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c"
 	body := map[string]interface{}{
 		"id":          "TestComponent",
 		"type":        "service",
@@ -227,7 +227,7 @@ func TestDetailComponent(t *testing.T) {
 	}
 	defer comp.Delete(testConf.app.MongoDB)
 
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID + "/"
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
@@ -272,7 +272,7 @@ func TestDetailComponent_NotFound(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/asdasd/"
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/asdasd"
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()

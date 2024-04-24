@@ -25,7 +25,7 @@ func TestCreateEnvironment(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Failed to marshal request: %v", err)
 	}
-	request, err := http.NewRequest("POST", "/organizations/"+orgID+"/a/"+app.ID.Hex()+"/e/", bytes.NewBuffer(jsonData))
+	request, err := http.NewRequest("POST", "/organizations/"+orgID+"/a/"+app.ID.Hex()+"/e", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Fatalf("Failed to create request: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestCreateEnvironment_NotExist(t *testing.T) {
 	if err != nil {
 		log.Fatalf("Failed to marshal request: %v", err)
 	}
-	request, err := http.NewRequest("POST", "/organizations/"+orgID+"/a/"+appID+"/e/", bytes.NewBuffer(jsonData))
+	request, err := http.NewRequest("POST", "/organizations/"+orgID+"/a/"+appID+"/e", bytes.NewBuffer(jsonData))
 	if err != nil {
 		log.Fatalf("Failed to create request: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestDeleteEnvironment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create environment: %v", err)
 	}
-	request, err := http.NewRequest("DELETE", "/organizations/"+orgID+"/a/"+app.ID.Hex()+"/e/"+env.Name+"/", nil)
+	request, err := http.NewRequest("DELETE", "/organizations/"+orgID+"/a/"+app.ID.Hex()+"/e/"+env.Name, nil)
 	if err != nil {
 		log.Fatalf("Failed to create request: %v", err)
 	}
