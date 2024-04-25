@@ -3,6 +3,7 @@ package routes
 import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"log"
 
 	apps "github.com/coffeenights/conure/cmd/api-server/applications"
 	"github.com/coffeenights/conure/cmd/api-server/auth"
@@ -22,6 +23,13 @@ func GenerateRouter() *gin.Engine {
 	var keyStorage variables.SecretKeyStorage
 	if conf.AESStorageStrategy == "local" {
 		keyStorage = variables.NewLocalSecretKey("secret.key")
+		_, err := keyStorage.Load()
+		if err != nil {
+			err = keyStorage.Generate()
+			if err != nil {
+				log.Panic(err)
+			}
+		}
 	}
 
 	router := gin.New()
