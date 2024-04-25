@@ -37,7 +37,7 @@ type Variable struct {
 	OrganizationID primitive.ObjectID  `bson:"organizationId,omitempty" json:"organization_id,omitempty"`
 	ApplicationID  *primitive.ObjectID `bson:"applicationId,omitempty" json:"application_id,omitempty"`
 	EnvironmentID  *string             `bson:"environmentId,omitempty" json:"environment_id,omitempty"`
-	ComponentID    *string             `bson:"componentId,omitempty" json:"component_id,omitempty"`
+	ComponentID    *primitive.ObjectID `bson:"componentId,omitempty" json:"component_id,omitempty"`
 	IsEncrypted    bool                `bson:"isEncrypted" json:"is_encrypted"`
 	CreatedAt      time.Time           `bson:"createdAt" json:"created_at"`
 	UpdatedAt      time.Time           `bson:"updatedAt" json:"updated_at"`

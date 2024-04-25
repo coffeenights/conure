@@ -74,7 +74,7 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 			return
 		}
 		log.Printf("Error getting components: %v\n", err)
-		c.AbortWithStatus(http.StatusNotFound)
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 	var response ComponentResponse

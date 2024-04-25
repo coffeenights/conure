@@ -125,19 +125,20 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	client := user.Client
 
 	if err := c.ShouldBindJSON(&variable); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 
 	if !variable.ValidateName() {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrVariableNameNotValid.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": ErrVariableNameNotValid.Error()})
 		return
 	}
 
 	variable.Client = client
 	orgID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		log.Print(err)
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 	variable.OrganizationID = orgID
@@ -152,11 +153,17 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	compID := c.Param("componentID")
 	if compID != "" {
 		variable.Type = models.ComponentType
+		compID, err := primitive.ObjectIDFromHex(c.Param("componentID"))
+		if err != nil {
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
 		variable.ComponentID = &compID
 	}
 
 	if !variable.Type.IsValid() {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": ErrVariableTypeNotValid.Error()})
+		log.Print(err)
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 
@@ -166,14 +173,14 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 
 		if err != nil {
 			log.Print(err)
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
 		variable.ApplicationID = &appID
 	}
 
 	if err := checkVariable(h, variable); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 
