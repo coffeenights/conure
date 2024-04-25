@@ -34,7 +34,8 @@ const (
 	EnvironmentLabel    = "conure.io/environment"
 	CreatedByLabel      = "conure.io/created-by"
 	NamespaceLabel      = "conure.io/namespace"
-	ComponentIDLabel    = "app.oam.dev/component"
+	ComponentNameLabel  = "app.oam.dev/component"
+	ComponentIDLabel    = "conure.io/component-id"
 )
 
 type ProviderStatusVela struct {
@@ -72,10 +73,10 @@ func (p *ProviderStatusVela) GetApplicationStatus() (string, error) {
 	return string(p.VelaApplication.Status.Phase), nil
 }
 
-func (p *ProviderStatusVela) getVelaComponent(componentID string) (*VelaComponent, error) {
+func (p *ProviderStatusVela) getVelaComponent(componentName string) (*VelaComponent, error) {
 	velaComponent := &VelaComponent{}
 	for _, componentSpec := range p.VelaApplication.Spec.Components {
-		if componentSpec.Name == componentID {
+		if componentSpec.Name == componentName {
 			velaComponent.ComponentSpec = &componentSpec
 			break
 		}
@@ -84,7 +85,7 @@ func (p *ProviderStatusVela) getVelaComponent(componentID string) (*VelaComponen
 		return nil, ErrComponentNotFound
 	}
 	for _, componentStatus := range p.VelaApplication.Status.Services {
-		if componentStatus.Name == componentID {
+		if componentStatus.Name == componentName {
 			velaComponent.ComponentStatus = &componentStatus
 			break
 		}
@@ -95,9 +96,9 @@ func (p *ProviderStatusVela) getVelaComponent(componentID string) (*VelaComponen
 	return velaComponent, nil
 }
 
-func (p *ProviderStatusVela) GetNetworkProperties(componentID string) (*NetworkProperties, error) {
+func (p *ProviderStatusVela) GetNetworkProperties(componentName string) (*NetworkProperties, error) {
 	var properties NetworkProperties
-	velaComponent, err := p.getVelaComponent(componentID)
+	velaComponent, err := p.getVelaComponent(componentName)
 	if err != nil {
 		return nil, err
 	}
@@ -131,9 +132,9 @@ func (p *ProviderStatusVela) GetNetworkProperties(componentID string) (*NetworkP
 	return &properties, nil
 }
 
-func (p *ProviderStatusVela) GetResourcesProperties(componentID string) (*ResourcesProperties, error) {
+func (p *ProviderStatusVela) GetResourcesProperties(componentName string) (*ResourcesProperties, error) {
 	var resources ResourcesProperties
-	velaComponent, err := p.getVelaComponent(componentID)
+	velaComponent, err := p.getVelaComponent(componentName)
 	if err != nil {
 		return nil, err
 	}
@@ -161,13 +162,13 @@ func (p *ProviderStatusVela) GetResourcesProperties(componentID string) (*Resour
 	return &resources, nil
 }
 
-func (p *ProviderStatusVela) GetStorageProperties(componentID string) (*StorageProperties, error) {
+func (p *ProviderStatusVela) GetStorageProperties(componentName string) (*StorageProperties, error) {
 	return nil, nil
 }
 
-func (p *ProviderStatusVela) GetSourceProperties(componentID string) (*SourceProperties, error) {
+func (p *ProviderStatusVela) GetSourceProperties(componentName string) (*SourceProperties, error) {
 	var source SourceProperties
-	velaComponent, err := p.getVelaComponent(componentID)
+	velaComponent, err := p.getVelaComponent(componentName)
 	if err != nil {
 		return nil, err
 	}
