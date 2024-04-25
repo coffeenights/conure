@@ -286,9 +286,6 @@ func decryptValue(storage SecretKeyStorage, value string) string {
 	}
 
 	decryptedValue := decrypt(value, hex.EncodeToString(key))
-	if err != nil {
-		log.Panic(err)
-	}
 
 	return decryptedValue
 }
