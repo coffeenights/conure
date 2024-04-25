@@ -122,7 +122,7 @@ func (v *Variable) ListByEnv(mongo *database.MongoDB, organizationID, applicatio
 	return variables, nil
 }
 
-func (v *Variable) ListByComp(mongo *database.MongoDB, organizationID, applicationID primitive.ObjectID, environmentID string, componentID string) ([]Variable, error) {
+func (v *Variable) ListByComp(mongo *database.MongoDB, organizationID, applicationID primitive.ObjectID, environmentID string, componentID primitive.ObjectID) ([]Variable, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{"name", 1}})
@@ -159,7 +159,7 @@ func (v *Variable) GetByAppIDAndEnvAndName(mongo *database.MongoDB, applicationI
 	return nil
 }
 
-func (v *Variable) GetByAppIDAndEnvAndCompAndName(mongo *database.MongoDB, applicationID primitive.ObjectID, t VariableType, environmentID *string, componentID *string, name string) error {
+func (v *Variable) GetByAppIDAndEnvAndCompAndName(mongo *database.MongoDB, applicationID primitive.ObjectID, t VariableType, environmentID *string, componentID *primitive.ObjectID, name string) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
 	err := collection.FindOne(context.Background(), primitive.M{"applicationId": applicationID,
 		"type": t, "name": name, "environmentId": environmentID, "componentId": componentID}).Decode(v)
