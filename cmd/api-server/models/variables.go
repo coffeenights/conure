@@ -30,7 +30,6 @@ const VariableCollection string = "variables"
 
 type Variable struct {
 	ID             primitive.ObjectID  `bson:"_id,omitempty" json:"id"`
-	Client         string              `bson:"client" json:"client"`
 	Name           string              `bson:"name" json:"name" binding:"required"`
 	Value          string              `bson:"value" json:"value" binding:"required"`
 	Type           VariableType        `bson:"type" json:"type"`
@@ -89,12 +88,11 @@ func (v *Variable) Delete(mongo *database.MongoDB) error {
 	return nil
 }
 
-func (v *Variable) ListByOrg(mongo *database.MongoDB, client string, organizationID primitive.ObjectID) ([]Variable, error) {
+func (v *Variable) ListByOrg(mongo *database.MongoDB, organizationID primitive.ObjectID) ([]Variable, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{"name", 1}})
-	cursor, err := collection.Find(context.Background(), primitive.M{"client": client,
-		"organizationId": organizationID, "type": OrganizationType}, findOptions)
+	cursor, err := collection.Find(context.Background(), primitive.M{"organizationId": organizationID, "type": OrganizationType}, findOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -106,11 +104,11 @@ func (v *Variable) ListByOrg(mongo *database.MongoDB, client string, organizatio
 	return variables, nil
 }
 
-func (v *Variable) ListByEnv(mongo *database.MongoDB, client string, organizationID, applicationID primitive.ObjectID, environmentID string) ([]Variable, error) {
+func (v *Variable) ListByEnv(mongo *database.MongoDB, organizationID, applicationID primitive.ObjectID, environmentID string) ([]Variable, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{"name", 1}})
-	cursor, err := collection.Find(context.Background(), primitive.M{"client": client,
+	cursor, err := collection.Find(context.Background(), primitive.M{
 		"organizationId": organizationID, "type": EnvironmentType, "applicationId": applicationID,
 		"environmentId": environmentID}, findOptions)
 	if err != nil {
@@ -124,11 +122,11 @@ func (v *Variable) ListByEnv(mongo *database.MongoDB, client string, organizatio
 	return variables, nil
 }
 
-func (v *Variable) ListByComp(mongo *database.MongoDB, client string, organizationID, applicationID primitive.ObjectID, environmentID string, componentID string) ([]Variable, error) {
+func (v *Variable) ListByComp(mongo *database.MongoDB, organizationID, applicationID primitive.ObjectID, environmentID string, componentID string) ([]Variable, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
 	findOptions := options.Find()
 	findOptions.SetSort(bson.D{{"name", 1}})
-	cursor, err := collection.Find(context.Background(), primitive.M{"client": client,
+	cursor, err := collection.Find(context.Background(), primitive.M{
 		"organizationId": organizationID, "type": ComponentType, "applicationId": applicationID,
 		"environmentId": environmentID, "componentId": componentID}, findOptions)
 	if err != nil {
@@ -142,19 +140,18 @@ func (v *Variable) ListByComp(mongo *database.MongoDB, client string, organizati
 	return variables, nil
 }
 
-func (v *Variable) GetByOrgAndName(mongo *database.MongoDB, client string, organizationID primitive.ObjectID, name string) error {
+func (v *Variable) GetByOrgAndName(mongo *database.MongoDB, organizationID primitive.ObjectID, name string) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
-	err := collection.FindOne(context.Background(), primitive.M{"client": client,
-		"organizationId": organizationID, "name": name}).Decode(v)
+	err := collection.FindOne(context.Background(), primitive.M{"organizationId": organizationID, "name": name}).Decode(v)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (v *Variable) GetByAppIDAndEnvAndName(mongo *database.MongoDB, client string, applicationID primitive.ObjectID, t VariableType, environmentID *string, name string) error {
+func (v *Variable) GetByAppIDAndEnvAndName(mongo *database.MongoDB, applicationID primitive.ObjectID, t VariableType, environmentID *string, name string) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
-	err := collection.FindOne(context.Background(), primitive.M{"client": client, "applicationId": applicationID,
+	err := collection.FindOne(context.Background(), primitive.M{"applicationId": applicationID,
 		"type": t, "name": name, "environmentId": environmentID}).Decode(v)
 	if err != nil {
 		return err
@@ -162,9 +159,9 @@ func (v *Variable) GetByAppIDAndEnvAndName(mongo *database.MongoDB, client strin
 	return nil
 }
 
-func (v *Variable) GetByAppIDAndEnvAndCompAndName(mongo *database.MongoDB, client string, applicationID primitive.ObjectID, t VariableType, environmentID *string, componentID *string, name string) error {
+func (v *Variable) GetByAppIDAndEnvAndCompAndName(mongo *database.MongoDB, applicationID primitive.ObjectID, t VariableType, environmentID *string, componentID *string, name string) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
-	err := collection.FindOne(context.Background(), primitive.M{"client": client, "applicationId": applicationID,
+	err := collection.FindOne(context.Background(), primitive.M{"applicationId": applicationID,
 		"type": t, "name": name, "environmentId": environmentID, "componentId": componentID}).Decode(v)
 	if err != nil {
 		return err
