@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	k8sUtils "github.com/coffeenights/conure/internal/k8s"
+	"log"
+
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -13,7 +14,9 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"log"
+
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 )
 
 type VelaComponent struct {
@@ -81,7 +84,7 @@ func (p *ProviderStatusVela) getVelaComponent(componentID string) (*VelaComponen
 		}
 	}
 	if velaComponent.ComponentSpec == nil {
-		return nil, ErrComponentNotFound
+		return nil, conureerrors.ErrComponentNotFound
 	}
 	for _, componentStatus := range p.VelaApplication.Status.Services {
 		if componentStatus.Name == componentID {
@@ -90,7 +93,7 @@ func (p *ProviderStatusVela) getVelaComponent(componentID string) (*VelaComponen
 		}
 	}
 	if velaComponent.ComponentStatus == nil {
-		return nil, ErrComponentNotFound
+		return nil, conureerrors.ErrComponentNotFound
 	}
 	return velaComponent, nil
 }
@@ -287,13 +290,10 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 		if errors.As(err, &statusError) {
 			if statusError.ErrStatus.Code == 409 {
 				log.Printf("Application already exists\n")
-				return ErrApplicationExists
-			} else {
-				return err
+				return conureerrors.ErrApplicationExists
 			}
-		} else {
-			return err
 		}
+		return err
 	}
 	log.Printf("Created deployment %q.\n", result.GetName())
 	return nil
