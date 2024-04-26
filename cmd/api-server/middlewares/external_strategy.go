@@ -2,13 +2,13 @@ package middlewares
 
 import (
 	"encoding/json"
-	"github.com/coffeenights/conure/cmd/api-server/models"
 	"io"
 	"net/http"
 
-	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
 type ExternalAuthStrategy struct{}
@@ -18,7 +18,7 @@ func (e *ExternalAuthStrategy) ValidateUser(token string, config *apiConfig.Conf
 	user := models.User{}
 	req, err := http.NewRequest("GET", config.AuthServiceURL, nil)
 	if err != nil {
-		return user, auth.ErrUnauthorized
+		return user, conureerrors.ErrUnauthorized
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -26,21 +26,21 @@ func (e *ExternalAuthStrategy) ValidateUser(token string, config *apiConfig.Conf
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		return user, auth.ErrUnauthorized
+		return user, conureerrors.ErrUnauthorized
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return user, auth.ErrUnauthorized
+		return user, conureerrors.ErrUnauthorized
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return user, auth.ErrUnauthorized
+		return user, conureerrors.ErrUnauthorized
 	}
 	err = json.Unmarshal(body, &user)
 	if err != nil {
-		return user, auth.ErrUnauthorized
+		return user, conureerrors.ErrUnauthorized
 	}
 
 	return user, nil

@@ -3,11 +3,13 @@ package middlewares
 import (
 	"encoding/json"
 	"errors"
-	"github.com/coffeenights/conure/cmd/api-server/models"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 
 	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
@@ -72,25 +74,25 @@ func TestValidateUserExternal(t *testing.T) {
 			token: "test-token",
 			config: &apiConfig.Config{JWTSecret: "test-secret", AuthStrategySystem: "external",
 				AuthServiceURL: server.URL + "/auth-bad"},
-			expected: auth.ErrUnauthorized,
+			expected: conureerrors.ErrUnauthorized,
 		}, {
 			name:  "Invalid user data",
 			token: token,
 			config: &apiConfig.Config{JWTSecret: "test-secret", AuthStrategySystem: "external",
 				AuthServiceURL: server.URL + "/auth-bad-data"},
-			expected: auth.ErrUnauthorized,
+			expected: conureerrors.ErrUnauthorized,
 		},
 		{
 			name:     "Invalid strategy",
 			token:    "test-token",
 			config:   &apiConfig.Config{JWTSecret: "test-secret", AuthStrategySystem: "fake-strategy", AuthServiceURL: server.URL + "/auth"},
-			expected: ErrUnsupportedStrategy,
+			expected: conureerrors.ErrWrongAuthenticationSystem,
 		}, {
 			name:  "External does not exists",
 			token: token,
 			config: &apiConfig.Config{JWTSecret: "test-secret", AuthStrategySystem: "external",
 				AuthServiceURL: server.URL + "/404"},
-			expected: auth.ErrUnauthorized,
+			expected: conureerrors.ErrUnauthorized,
 		},
 	}
 

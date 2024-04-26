@@ -2,6 +2,7 @@ package middlewares
 
 import (
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
@@ -19,7 +20,7 @@ func ValidateUser(token string, config *apiConfig.Config, mongo *database.MongoD
 	authSystem := config.AuthStrategySystem
 	strategy, ok := strategies[authSystem]
 	if !ok {
-		return models.User{}, ErrUnsupportedStrategy
+		return models.User{}, conureerrors.ErrWrongAuthenticationSystem
 	}
 	return strategy.ValidateUser(token, config, mongo)
 }
