@@ -2,9 +2,12 @@ package models
 
 import (
 	"errors"
+	"testing"
+
 	_ "github.com/joho/godotenv/autoload"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"testing"
+
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 )
 
 func TestOrganization_Create(t *testing.T) {
@@ -13,7 +16,7 @@ func TestOrganization_Create(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountID: "12345", Name: "Test Organization"}
+	org := &Organization{Status: OrgActive, AccountID: primitive.NewObjectID(), Name: "Test Organization"}
 
 	_, err = org.Create(client)
 	if err != nil {
@@ -27,7 +30,7 @@ func TestOrganization_GetById(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountID: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: primitive.NewObjectID()}
 	id, err := org.Create(client)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +48,7 @@ func TestOrganization_Update(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountID: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: primitive.NewObjectID()}
 	id, err := org.Create(client)
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +72,7 @@ func TestOrganization_Delete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountID: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: primitive.NewObjectID()}
 	_, err = org.Create(client)
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +95,7 @@ func TestOrganization_SoftDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountID: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: primitive.NewObjectID()}
 	_, err = org.Create(client)
 	if err != nil {
 		t.Fatal(err)
@@ -167,8 +170,8 @@ func TestApplication_GetById_NotExist(t *testing.T) {
 	if err == nil {
 		t.Errorf("Got nil, want error")
 	}
-	if !errors.Is(err, ErrDocumentNotFound) {
-		t.Errorf("Got %v, want %v", err, ErrDocumentNotFound)
+	if !errors.Is(err, conureerrors.ErrObjectNotFound) {
+		t.Errorf("Got %v, want %v", err, conureerrors.ErrObjectNotFound)
 	}
 }
 
@@ -538,8 +541,8 @@ func TestComponent_Create_Duplicate(t *testing.T) {
 	_, err = comp.Create(client)
 	if err == nil {
 		t.Errorf("Got nil, want error")
-	} else if err != ErrDuplicateDocument {
-		t.Errorf("Got %v, want %v", err, ErrDuplicateDocument)
+	} else if err != conureerrors.ErrObjectAlreadyExists {
+		t.Errorf("Got %v, want %v", err, conureerrors.ErrObjectAlreadyExists)
 	}
 	_ = comp.Delete(client)
 }
