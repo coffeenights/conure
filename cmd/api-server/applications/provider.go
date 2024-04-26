@@ -2,6 +2,7 @@ package applications
 
 import (
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/cmd/api-server/providers"
 	"github.com/coffeenights/conure/internal/config"
@@ -33,7 +34,7 @@ func NewProviderStatus(application *models.Application, environment *models.Envi
 		}
 		return provider, nil
 	}
-	return nil, providers.ErrProviderNotSupported
+	return nil, conureerrors.ErrProviderNotSupported
 }
 
 type ProviderDispatcher interface {
@@ -53,5 +54,5 @@ func NewProviderDispatcher(application *models.Application, environment *models.
 			Environment:    environment.Name,
 		}, nil
 	}
-	return nil, providers.ErrProviderNotSupported
+	return nil, conureerrors.ErrProviderNotSupported
 }

@@ -3,12 +3,14 @@ package applications
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/coffeenights/conure/cmd/api-server/models"
-	"go.mongodb.org/mongo-driver/bson/primitive"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
 func TestCreateEnvironment(t *testing.T) {

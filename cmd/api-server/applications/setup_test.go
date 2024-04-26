@@ -3,16 +3,19 @@ package applications
 import (
 	"context"
 	"errors"
-	"github.com/coffeenights/conure/cmd/api-server/auth"
-	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
-	"github.com/coffeenights/conure/cmd/api-server/models"
-	"github.com/coffeenights/conure/internal/config"
-	"github.com/gin-gonic/gin"
-	_ "github.com/joho/godotenv/autoload"
 	"log"
 	"net/http"
 	"os"
 	"testing"
+
+	"github.com/gin-gonic/gin"
+	_ "github.com/joho/godotenv/autoload"
+
+	"github.com/coffeenights/conure/cmd/api-server/auth"
+	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/internal/config"
 )
 
 type testConfig struct {
@@ -77,7 +80,7 @@ func setup() {
 		Client:   client,
 	}
 	err = user.Create(app.MongoDB)
-	if errors.Is(err, models.ErrEmailExists) {
+	if errors.Is(err, conureerrors.ErrEmailAlreadyExists) {
 		err = user.GetByEmail(app.MongoDB, email)
 		if err != nil {
 			log.Panic(err)
