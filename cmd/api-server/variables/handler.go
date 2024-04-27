@@ -132,7 +132,6 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 
 	orgID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
 	if err != nil {
-		log.Print(err)
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
@@ -157,7 +156,6 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	}
 
 	if !variable.Type.IsValid() {
-		log.Print(err)
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
@@ -167,7 +165,6 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 		appID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
 
 		if err != nil {
-			log.Print(err)
 			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
