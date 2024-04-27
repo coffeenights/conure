@@ -135,25 +135,25 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	response.Properties.ResourcesProperties, err = status.GetResourcesProperties(component.ID)
+	response.Properties.ResourcesProperties, err = status.GetResourcesProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting resources properties: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	response.Properties.NetworkProperties, err = status.GetNetworkProperties(component.ID)
+	response.Properties.NetworkProperties, err = status.GetNetworkProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting network properties: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	response.Properties.StorageProperties, err = status.GetStorageProperties(component.ID)
+	response.Properties.StorageProperties, err = status.GetStorageProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting storage properties: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	response.Properties.SourceProperties, err = status.GetSourceProperties(component.ID)
+	response.Properties.SourceProperties, err = status.GetSourceProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting source properties: %v\n", err)
 		conureerrors.AbortWithError(c, err)
@@ -191,10 +191,14 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
-	component := models.NewComponent(handler.Model, request.ID, request.Type)
-	component.Description = request.Description
-	component.Properties = request.Properties
-	component.Traits = request.Traits
+	component := models.Component{
+		Name:          request.Name,
+		Type:          request.Type,
+		Description:   request.Description,
+		ApplicationID: handler.Model.ID,
+		Properties:    request.Properties,
+		Traits:        request.Traits,
+	}
 	_, err = component.Create(a.MongoDB)
 	if errors.Is(err, conureerrors.ErrObjectAlreadyExists) {
 		conureerrors.AbortWithError(c, err)

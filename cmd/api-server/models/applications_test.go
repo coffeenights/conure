@@ -300,11 +300,15 @@ func TestComponent_CreateList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	comp := NewComponent(app, "testComponent", "service")
-	comp.Properties = map[string]interface{}{
-		"cpu":      "1",
-		"memory":   "1Gi",
-		"replicas": int32(1),
+	comp := Component{
+		ApplicationID: app.ID,
+		Name:          "test-component",
+		Type:          "service",
+		Properties: map[string]interface{}{
+			"cpu":      "1",
+			"memory":   "1Gi",
+			"replicas": int32(1),
+		},
 	}
 	_, err = comp.Create(client)
 	if err != nil {
@@ -472,19 +476,23 @@ func TestComponent_GetByID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	comp := NewComponent(app, "testComponent", "service")
-	comp.Properties = map[string]interface{}{
-		"cpu":      "1",
-		"memory":   "1Gi",
-		"replicas": int32(1),
+	comp := Component{
+		ApplicationID: app.ID,
+		Name:          "test-component",
+		Type:          "service",
+		Properties: map[string]interface{}{
+			"cpu":      "1",
+			"memory":   "1Gi",
+			"replicas": int32(1),
+		},
 	}
+
 	_, err = comp.Create(client)
 	defer comp.Delete(client)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
-	got, err := comp.GetByID(client, comp.ID)
+	got, err := comp.GetByID(client, comp.ID.Hex())
 	if err != nil {
 		t.Errorf("Failed to get component: %v", err)
 	}
@@ -504,11 +512,15 @@ func TestComponent_Create(t *testing.T) {
 	}
 	defer app.Delete(client)
 
-	comp := NewComponent(app, "testComponent", "service")
-	comp.Properties = map[string]interface{}{
-		"cpu":      "1",
-		"memory":   "1Gi",
-		"replicas": int32(1),
+	comp := Component{
+		ApplicationID: app.ID,
+		Name:          "test-component",
+		Type:          "service",
+		Properties: map[string]interface{}{
+			"cpu":      "1",
+			"memory":   "1Gi",
+			"replicas": int32(1),
+		},
 	}
 	_, err = comp.Create(client)
 	if err != nil {
@@ -528,11 +540,15 @@ func TestComponent_Create_Duplicate(t *testing.T) {
 	}
 	defer app.Delete(client)
 
-	comp := NewComponent(app, "testComponent", "service")
-	comp.Properties = map[string]interface{}{
-		"cpu":      "1",
-		"memory":   "1Gi",
-		"replicas": int32(1),
+	comp := Component{
+		ApplicationID: app.ID,
+		Name:          "test-component",
+		Type:          "service",
+		Properties: map[string]interface{}{
+			"cpu":      "1",
+			"memory":   "1Gi",
+			"replicas": int32(1),
+		},
 	}
 	_, err = comp.Create(client)
 	if err != nil {
@@ -541,7 +557,7 @@ func TestComponent_Create_Duplicate(t *testing.T) {
 	_, err = comp.Create(client)
 	if err == nil {
 		t.Errorf("Got nil, want error")
-	} else if err != conureerrors.ErrObjectAlreadyExists {
+	} else if !errors.Is(err, conureerrors.ErrObjectAlreadyExists) {
 		t.Errorf("Got %v, want %v", err, conureerrors.ErrObjectAlreadyExists)
 	}
 	_ = comp.Delete(client)

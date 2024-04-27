@@ -32,13 +32,13 @@ func (h *Handler) ListOrganizationVariables(c *gin.Context) {
 
 	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
 		return
 	}
 
 	variables, err := variable.ListByOrg(h.MongoDB, organizationID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	// Decrypt the values of the variables
@@ -56,12 +56,12 @@ func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 
 	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
 		return
 	}
 	applicationID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
 		return
 	}
 
@@ -69,7 +69,7 @@ func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 
 	variables, err := variable.ListByEnv(h.MongoDB, organizationID, applicationID, environmentID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	// Decrypt the values of the variables
@@ -87,20 +87,24 @@ func (h *Handler) ListComponentVariables(c *gin.Context) {
 
 	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
 		return
 	}
 	applicationID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
 		return
 	}
-	componentID := c.Param("componentID")
+	componentID, err := primitive.ObjectIDFromHex(c.Param("componentID"))
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		return
+	}
 	environmentID := c.Param("environmentID")
 
 	variables, err := variable.ListByComp(h.MongoDB, organizationID, applicationID, environmentID, componentID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 	// Decrypt the values of the variables
@@ -117,18 +121,18 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	var variable models.Variable
 
 	if err := c.ShouldBindJSON(&variable); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 
 	if !variable.ValidateName() {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrVariableNameNotValid.Error()})
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": ErrVariableNameNotValid.Error()})
 		return
 	}
 
 	orgID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrInvalidIDValue.Error()})
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 	variable.OrganizationID = orgID
@@ -143,11 +147,16 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	compID := c.Param("componentID")
 	if compID != "" {
 		variable.Type = models.ComponentType
+		compID, err := primitive.ObjectIDFromHex(c.Param("componentID"))
+		if err != nil {
+			c.AbortWithStatus(http.StatusBadRequest)
+			return
+		}
 		variable.ComponentID = &compID
 	}
 
 	if !variable.Type.IsValid() {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": ErrVariableTypeNotValid.Error()})
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 
@@ -156,15 +165,14 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 		appID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
 
 		if err != nil {
-			log.Print(err)
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			c.AbortWithStatus(http.StatusBadRequest)
 			return
 		}
 		variable.ApplicationID = &appID
 	}
 
 	if err := checkVariable(h, variable); err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 
@@ -275,9 +283,6 @@ func decryptValue(storage SecretKeyStorage, value string) string {
 	}
 
 	decryptedValue := decrypt(value, hex.EncodeToString(key))
-	if err != nil {
-		log.Panic(err)
-	}
 
 	return decryptedValue
 }

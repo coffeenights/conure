@@ -285,7 +285,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	orgID1 := primitive.NewObjectID()
 	app1 := primitive.NewObjectID()
 	env1 := "env1"
-	comp1 := "comp1"
+	comp1 := primitive.NewObjectID()
 	orgVar := &models.Variable{
 		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
@@ -314,7 +314,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	var variables []models.Variable
 
 	urlFormat := "/variables/%s/%s/e/%s/c/%s"
-	url := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1, comp1)
+	url := fmt.Sprintf(urlFormat, orgID1.Hex(), app1.Hex(), env1, comp1.Hex())
 	req, _ := http.NewRequest("GET", url, nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
@@ -350,7 +350,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	router.ServeHTTP(resp, req)
 	_ = json.Unmarshal(resp.Body.Bytes(), &variables)
 
-	assert.Equal(t, http.StatusOK, resp.Code, "should return 200 OK")
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 OK")
 
 	fakeURL = fmt.Sprintf(urlFormat, "fakeOrg", app1.Hex(), env1, primitive.NewObjectID().Hex())
 	req, _ = http.NewRequest("GET", fakeURL, nil)
@@ -383,7 +383,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 Bad Request")
 
-	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), primitive.NewObjectID().Hex(), env1, comp1)
+	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), primitive.NewObjectID().Hex(), env1, comp1.Hex())
 	req, _ = http.NewRequest("GET", fakeURL, nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
@@ -700,13 +700,13 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 
 	orgID1 := primitive.NewObjectID()
 	appID1 := primitive.NewObjectID()
-	compID1 := "comp1"
+	compID1 := primitive.NewObjectID()
 
 	jsonVar, _ := json.Marshal(newVar)
 	var result models.Variable
 
 	urlFormat := "/variables/%s/%s/e/%s/c/%s"
-	url := fmt.Sprintf(urlFormat, orgID1.Hex(), appID1.Hex(), "env1", compID1)
+	url := fmt.Sprintf(urlFormat, orgID1.Hex(), appID1.Hex(), "env1", compID1.Hex())
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
@@ -787,7 +787,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	router.ServeHTTP(resp, req)
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
-	assert.Equal(t, http.StatusCreated, resp.Code, "should return 201 Created")
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 badRequest")
 
 	fakeURL = fmt.Sprintf(urlFormat, orgID1.Hex(), "fakeApp", "env1", compID1)
 	req, _ = http.NewRequest("POST", fakeURL, bytes.NewBuffer(jsonVar))

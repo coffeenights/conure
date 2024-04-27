@@ -347,7 +347,8 @@ func (a *Application) DeleteEnvironmentByName(db *database.MongoDB, envName stri
 }
 
 type Component struct {
-	ID            string                   `json:"id" bson:"_id"`
+	ID            primitive.ObjectID       `json:"id,omitempty" bson:"_id,omitempty"`
+	Name          string                   `json:"name" bson:"name"`
 	Type          string                   `json:"type" bson:"type"`
 	Description   string                   `json:"description" bson:"description"`
 	ApplicationID primitive.ObjectID       `json:"application_id" bson:"applicationID"`
@@ -357,13 +358,6 @@ type Component struct {
 	DeletedAt     time.Time                `json:"-" bson:"deletedAt,omitempty"`
 }
 
-func NewComponent(a *Application, id string, componentType string) *Component {
-	return &Component{
-		ApplicationID: a.ID,
-		ID:            id,
-		Type:          componentType,
-	}
-}
 func (c *Component) Create(db *database.MongoDB) (*Component, error) {
 	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
 	c.CreatedAt = time.Now()
@@ -379,7 +373,7 @@ func (c *Component) Create(db *database.MongoDB) (*Component, error) {
 		}
 		return nil, err
 	}
-	c.ID = r.InsertedID.(string)
+	c.ID = r.InsertedID.(primitive.ObjectID)
 	return c, nil
 }
 
@@ -396,8 +390,12 @@ func (c *Component) Delete(db *database.MongoDB) error {
 
 func (c *Component) GetByID(db *database.MongoDB, ID string) (*Component, error) {
 	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
-	filter := bson.M{"_id": ID, "deletedAt": bson.M{"$exists": false}}
-	err := collection.FindOne(context.Background(), filter).Decode(c)
+	oID, err := primitive.ObjectIDFromHex(ID)
+	if err != nil {
+		return nil, err
+	}
+	filter := bson.M{"_id": oID, "deletedAt": bson.M{"$exists": false}}
+	err = collection.FindOne(context.Background(), filter).Decode(c)
 	if err != nil {
 		return nil, err
 	}

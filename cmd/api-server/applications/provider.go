@@ -16,10 +16,10 @@ const (
 
 type ProviderStatus interface {
 	GetApplicationStatus() (string, error)
-	GetNetworkProperties(componentID string) (*providers.NetworkProperties, error)
-	GetResourcesProperties(componentID string) (*providers.ResourcesProperties, error)
-	GetStorageProperties(componentID string) (*providers.StorageProperties, error)
-	GetSourceProperties(componentID string) (*providers.SourceProperties, error)
+	GetNetworkProperties(componentName string) (*providers.NetworkProperties, error)
+	GetResourcesProperties(componentName string) (*providers.ResourcesProperties, error)
+	GetStorageProperties(componentName string) (*providers.StorageProperties, error)
+	GetSourceProperties(componentName string) (*providers.SourceProperties, error)
 }
 
 func NewProviderStatus(application *models.Application, environment *models.Environment) (ProviderStatus, error) {
