@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/models"
 	"log"
 	"net/http"
 	"time"
@@ -9,7 +8,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
 type Handler struct {
@@ -28,24 +29,24 @@ func (h *Handler) Login(c *gin.Context) {
 	loginRequest := LoginRequest{}
 	err := c.ShouldBindJSON(&loginRequest)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 
 	user := models.User{}
 	err = user.GetByEmail(h.MongoDB, loginRequest.Email)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": ErrEmailPasswordValid.Error()})
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidCredentials)
 		return
 	}
 
 	matched, err := ComparePasswordAndHash(loginRequest.Password, user.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	if !matched {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": ErrEmailPasswordValid.Error()})
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidCredentials)
 		return
 	}
 
@@ -56,7 +57,7 @@ func (h *Handler) Login(c *gin.Context) {
 	ttl := time.Duration(h.Config.JWTExpiration) * time.Hour * 24
 	jwt, err := GenerateToken(ttl, payload, h.Config.JWTSecret)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 
@@ -80,34 +81,34 @@ func (h *Handler) ChangePassword(c *gin.Context) {
 	changePasswordRequest := ChangePasswordRequest{}
 	err := c.ShouldBindJSON(&changePasswordRequest)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	err = models.ValidatePasswords(changePasswordRequest.Password, changePasswordRequest.Password2)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 
 	user := c.MustGet("currentUser").(models.User)
 	matched, err := ComparePasswordAndHash(changePasswordRequest.OldPassword, user.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	if !matched {
-		c.JSON(http.StatusBadRequest, gin.H{"error": ErrOldPasswordInvalid.Error()})
+		conureerrors.AbortWithError(c, conureerrors.ErrOldPasswordInvalid)
 		return
 	}
 
 	hashedPassword, err := GenerateFromPassword(changePasswordRequest.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
 		return
 	}
 	err = user.UpdatePassword(h.MongoDB, hashedPassword)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		conureerrors.AbortWithError(c, conureerrors.ErrDatabaseError)
 		return
 	}
 

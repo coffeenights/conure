@@ -3,15 +3,17 @@ package models
 import (
 	"context"
 	"errors"
-	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"regexp"
 	"time"
 
-	"github.com/coffeenights/conure/cmd/api-server/database"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/database"
 )
 
 const (
@@ -177,7 +179,7 @@ func (v *Variable) GetByID(db *database.MongoDB, id string) error {
 	}
 	err = collection.FindOne(context.Background(), primitive.M{"_id": objectID}).Decode(v)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return ErrDocumentNotFound
+		return conureerrors.ErrObjectNotFound
 	} else if err != nil {
 		return err
 	}

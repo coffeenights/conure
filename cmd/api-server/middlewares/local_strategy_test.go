@@ -2,13 +2,14 @@ package middlewares
 
 import (
 	"errors"
-	"github.com/coffeenights/conure/cmd/api-server/models"
 	"testing"
 	"time"
 
 	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
 func TestValidateUserLocal(t *testing.T) {
@@ -48,13 +49,13 @@ func TestValidateUserLocal(t *testing.T) {
 			name:     "Invalid token",
 			token:    "test-token",
 			config:   &apiConfig.Config{JWTSecret: "test-secret", AuthStrategySystem: "local"},
-			expected: auth.ErrUnauthorized,
+			expected: conureerrors.ErrUnauthorized,
 		},
 		{
 			name:     "Invalid strategy",
 			token:    "test-token",
 			config:   &apiConfig.Config{JWTSecret: "test-secret", AuthStrategySystem: "fake-strategy"},
-			expected: ErrUnsupportedStrategy,
+			expected: conureerrors.ErrWrongAuthenticationSystem,
 		},
 	}
 

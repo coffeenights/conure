@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/coffeenights/conure/cmd/api-server/models"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -17,6 +16,7 @@ import (
 
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
 func setupTestHandler(router *gin.Engine, mongo *database.MongoDB, conf *apiConfig.Config) {
@@ -75,7 +75,7 @@ func TestHandler_Login(t *testing.T) {
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
 
-	assert.Equal(t, http.StatusUnauthorized, resp.Code, "(invalid password) should return 401 Unauthorized")
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "(invalid password) should return 400 Bad Request")
 
 	// Create a request with unknown email
 	loginRequest.Email = "fake-email@test.com"
@@ -86,7 +86,7 @@ func TestHandler_Login(t *testing.T) {
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
 
-	assert.Equal(t, http.StatusUnauthorized, resp.Code, "(unknown email) should return 401 Unauthorized")
+	assert.Equal(t, http.StatusBadRequest, resp.Code, "(unknown email) should return 400 Bad Request")
 
 	// Create a request with no email
 	loginRequest.Email = ""

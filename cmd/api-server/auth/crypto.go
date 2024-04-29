@@ -11,6 +11,8 @@ import (
 
 	"github.com/golang-jwt/jwt"
 	"golang.org/x/crypto/argon2"
+
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 )
 
 const (
@@ -84,7 +86,7 @@ func ComparePasswordAndHash(password string, encodedHash string) (bool, error) {
 func decodeHash(encodedHash string) (p *Argon, err error) {
 	values := strings.Split(encodedHash, "$")
 	if len(values) != 6 {
-		return nil, ErrCryptoHandler
+		return nil, conureerrors.ErrCryptoError
 	}
 
 	var version int
@@ -93,7 +95,7 @@ func decodeHash(encodedHash string) (p *Argon, err error) {
 		return nil, err
 	}
 	if version != argon2.Version {
-		return nil, ErrCryptoHandler
+		return nil, conureerrors.ErrCryptoError
 	}
 
 	p = &Argon{}
@@ -140,7 +142,7 @@ func GenerateRandomPassword(i int) string {
 
 func GenerateToken(ttl time.Duration, payload JWTData, JWTSecretKey string) (string, error) {
 	if JWTSecretKey == "" {
-		return "", ErrJWTSecretKey
+		return "", conureerrors.ErrJWTKeyError
 	}
 	now := time.Now().UTC()
 
@@ -156,7 +158,7 @@ func GenerateToken(ttl time.Duration, payload JWTData, JWTSecretKey string) (str
 	tokenString, err := token.SignedString([]byte(JWTSecretKey))
 
 	if err != nil {
-		return "", fmt.Errorf("generating JWT Token failed: %w", err)
+		return "", conureerrors.ErrJWTKeyError
 	}
 
 	return tokenString, nil
@@ -171,12 +173,12 @@ func ValidateToken(tokenString string, JWTSecretKey string) (JWTClaims, error) {
 	})
 	if err != nil {
 		if err.Error() == jwt.ErrSignatureInvalid.Error() {
-			return claims, ErrTokenNotValid
+			return claims, conureerrors.ErrInvalidToken
 		}
-		return claims, err
+		return claims, conureerrors.ErrUnauthorized
 	}
 	if !tokenObject.Valid {
-		return claims, ErrTokenNotValid
+		return claims, conureerrors.ErrInvalidToken
 	}
 
 	return claims, nil

@@ -3,6 +3,7 @@ package middlewares
 import (
 	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
@@ -14,12 +15,12 @@ func (l *LocalAuthStrategy) ValidateUser(token string, config *apiConfig.Config,
 	user := models.User{}
 	claims, err := auth.ValidateToken(token, config.JWTSecret)
 	if err != nil {
-		return user, auth.ErrUnauthorized
+		return user, conureerrors.ErrUnauthorized
 	}
 
 	err = user.GetByEmail(mongo, claims.Data.Email)
 	if err != nil {
-		return user, auth.ErrUnauthorized
+		return user, conureerrors.ErrUnauthorized
 	}
 	return user, nil
 }

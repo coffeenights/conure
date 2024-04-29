@@ -2,34 +2,35 @@ package applications
 
 import (
 	"errors"
-	"github.com/coffeenights/conure/cmd/api-server/models"
-	k8sUtils "github.com/coffeenights/conure/internal/k8s"
-	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/models"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 )
 
 func (a *ApiHandler) ListComponents(c *gin.Context) {
 	application := &models.Application{}
 	err := application.GetByID(a.MongoDB, c.Param("applicationID"))
-	if errors.Is(err, models.ErrDocumentNotFound) {
-		c.AbortWithStatus(http.StatusNotFound)
+	if errors.Is(err, conureerrors.ErrObjectNotFound) {
+		conureerrors.AbortWithError(c, err)
 		return
 	} else if err != nil {
 		log.Printf("Error getting application: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	if application.AccountID != c.MustGet("currentUser").(models.User).ID {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"error": "You are not allowed to access this application",
-		})
+		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
 	components, err := application.ListComponents(a.MongoDB)
 	if err != nil {
 		log.Printf("Error getting components: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	var response ComponentListResponse
@@ -46,23 +47,22 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 	handler, err := NewApplicationHandler(a.MongoDB)
 	if err != nil {
 		log.Printf("Error creating application handler: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if errors.Is(err, models.ErrDocumentNotFound) {
-		c.AbortWithStatus(http.StatusNotFound)
+	if errors.Is(err, conureerrors.ErrObjectNotFound) {
+		conureerrors.AbortWithError(c, err)
 		return
 	} else if err != nil {
 		log.Printf("Error getting application: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 
 	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"error": "You are not allowed to access this application",
-		})
+		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
+
 		return
 	}
 
@@ -70,11 +70,11 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
 		if err.Error() == "mongo: no documents in result" {
-			c.AbortWithStatus(http.StatusNotFound)
+			conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 			return
 		}
 		log.Printf("Error getting components: %v\n", err)
-		c.AbortWithStatus(http.StatusBadRequest)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	var response ComponentResponse
@@ -86,22 +86,21 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 	handler, err := NewApplicationHandler(a.MongoDB)
 	if err != nil {
 		log.Printf("Error creating application handler: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if errors.Is(err, models.ErrDocumentNotFound) {
-		c.AbortWithStatus(http.StatusNotFound)
+	if errors.Is(err, conureerrors.ErrObjectNotFound) {
+		conureerrors.AbortWithError(c, err)
 		return
 	} else if err != nil {
 		log.Printf("Error getting application: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"error": "You are not allowed to access this application",
-		})
+		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
+
 		return
 	}
 
@@ -109,18 +108,18 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
 		if err.Error() == "mongo: no documents in result" {
-			c.AbortWithStatus(http.StatusNotFound)
+			conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 			return
 		}
 		log.Printf("Error getting components: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 
 	// Get environment
 	env, err := handler.Model.GetEnvironmentByName(a.MongoDB, c.Param("environment"))
-	if errors.Is(err, models.ErrDocumentNotFound) {
-		c.AbortWithStatus(http.StatusNotFound)
+	if errors.Is(err, conureerrors.ErrObjectNotFound) {
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 
@@ -129,38 +128,35 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 	status, err := handler.Status(env)
 	if errors.Is(err, k8sUtils.ErrApplicationNotFound) {
 		log.Printf("Error getting status: %v\n", err)
-		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{
-			"error": err.Error(),
-		})
+		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 		return
 	} else if err != nil {
 		log.Printf("Error getting status: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
-
 	}
 	response.Properties.ResourcesProperties, err = status.GetResourcesProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting resources properties: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	response.Properties.NetworkProperties, err = status.GetNetworkProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting network properties: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	response.Properties.StorageProperties, err = status.GetStorageProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting storage properties: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	response.Properties.SourceProperties, err = status.GetSourceProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting source properties: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	response.Component.Component = component
@@ -172,29 +168,27 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 	handler, err := NewApplicationHandler(a.MongoDB)
 	if err != nil {
 		log.Printf("Error creating application handler: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if errors.Is(err, models.ErrDocumentNotFound) {
-		c.AbortWithStatus(http.StatusNotFound)
+	if errors.Is(err, conureerrors.ErrObjectNotFound) {
+		conureerrors.AbortWithError(c, err)
 		return
 	} else if err != nil {
 		log.Printf("Error getting application: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"error": "You are not allowed to access this application",
-		})
+		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
 	var request CreateComponentRequest
 	err = c.BindJSON(&request)
 	if err != nil {
 		log.Printf("Error binding request: %v\n", err)
-		c.AbortWithStatus(http.StatusBadRequest)
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	component := models.Component{
@@ -206,14 +200,12 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		Traits:        request.Traits,
 	}
 	_, err = component.Create(a.MongoDB)
-	if errors.Is(err, models.ErrDuplicateDocument) {
-		c.AbortWithStatusJSON(http.StatusConflict, gin.H{
-			"error": err.Error(),
-		})
+	if errors.Is(err, conureerrors.ErrObjectAlreadyExists) {
+		conureerrors.AbortWithError(c, err)
 		return
 	} else if err != nil {
 		log.Printf("Error creating component: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, component)

@@ -1,9 +1,12 @@
 package applications
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/models"
-	"github.com/gin-gonic/gin"
 	"net/http"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
 func (a *ApiHandler) DetailOrganization(c *gin.Context) {
@@ -11,13 +14,11 @@ func (a *ApiHandler) DetailOrganization(c *gin.Context) {
 	org := models.Organization{}
 	_, err := org.GetById(a.MongoDB, organizationID)
 	if err != nil {
-		c.AbortWithStatus(http.StatusNotFound)
+		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 		return
 	}
 	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-			"error": "You are not allowed to access this organization",
-		})
+		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
 	response := OrganizationResponse{
@@ -30,16 +31,14 @@ func (a *ApiHandler) CreateOrganization(c *gin.Context) {
 	request := CreateOrganizationRequest{}
 	err := c.BindJSON(&request)
 	if err != nil {
-		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-			"error": err.Error(),
-		})
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	org := request.ParseRequestToModel()
 	org.AccountID = c.MustGet("currentUser").(models.User).ID
 	_, err = org.Create(a.MongoDB)
 	if err != nil {
-		c.AbortWithStatus(http.StatusBadRequest)
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	response := OrganizationResponse{

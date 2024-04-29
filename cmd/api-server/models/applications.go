@@ -6,13 +6,16 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/coffeenights/conure/cmd/api-server/database"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
 	"io"
 	"log"
 	"time"
+
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/database"
 )
 
 type OrganizationStatus string
@@ -62,7 +65,7 @@ func (o *Organization) GetById(db *database.MongoDB, ID string) (*Organization, 
 	filter := bson.M{"_id": oID, "status": bson.M{"$ne": OrgDeleted}}
 	err = collection.FindOne(context.Background(), filter).Decode(o)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return nil, ErrDocumentNotFound
+		return nil, conureerrors.ErrObjectNotFound
 	} else if err != nil {
 		return nil, err
 	}
@@ -197,7 +200,7 @@ func (a *Application) GetEnvironmentByName(db *database.MongoDB, environmentName
 		return nil, err
 	}
 	if len(results) == 0 {
-		return nil, ErrDocumentNotFound
+		return nil, conureerrors.ErrObjectNotFound
 	}
 	var env Environment
 	bsonBytes, _ := bson.Marshal(results[0]["environments"])
@@ -228,7 +231,7 @@ func (a *Application) GetByID(db *database.MongoDB, ID string) error {
 	filter := bson.M{"_id": oID, "deletedAt": bson.M{"$exists": false}}
 	err = collection.FindOne(context.Background(), filter).Decode(a)
 	if errors.Is(err, mongo.ErrNoDocuments) {
-		return ErrDocumentNotFound
+		return conureerrors.ErrObjectNotFound
 	} else if err != nil {
 		return err
 	}
@@ -324,7 +327,7 @@ func (a *Application) DeleteEnvironmentByID(db *database.MongoDB, envID string) 
 		return err
 	}
 	if updateResult.ModifiedCount == 0 {
-		return ErrDocumentNotFound
+		return conureerrors.ErrObjectNotFound
 	}
 	return nil
 }
@@ -338,7 +341,7 @@ func (a *Application) DeleteEnvironmentByName(db *database.MongoDB, envName stri
 		return err
 	}
 	if updateResult.ModifiedCount == 0 {
-		return ErrDocumentNotFound
+		return conureerrors.ErrObjectNotFound
 	}
 	return nil
 }
@@ -365,7 +368,7 @@ func (c *Component) Create(db *database.MongoDB) (*Component, error) {
 		switch {
 		case errors.As(err, &writeException):
 			if err.(mongo.WriteException).WriteErrors[0].Code == 11000 {
-				return nil, ErrDuplicateDocument
+				return nil, conureerrors.ErrObjectAlreadyExists
 			}
 		}
 		return nil, err

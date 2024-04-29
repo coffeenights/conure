@@ -2,9 +2,12 @@ package models
 
 import (
 	"errors"
+	"testing"
+
 	_ "github.com/joho/godotenv/autoload"
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	"testing"
+
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 )
 
 func TestOrganization_Create(t *testing.T) {
@@ -167,8 +170,8 @@ func TestApplication_GetById_NotExist(t *testing.T) {
 	if err == nil {
 		t.Errorf("Got nil, want error")
 	}
-	if !errors.Is(err, ErrDocumentNotFound) {
-		t.Errorf("Got %v, want %v", err, ErrDocumentNotFound)
+	if !errors.Is(err, conureerrors.ErrObjectNotFound) {
+		t.Errorf("Got %v, want %v", err, conureerrors.ErrObjectNotFound)
 	}
 }
 
@@ -554,8 +557,8 @@ func TestComponent_Create_Duplicate(t *testing.T) {
 	_, err = comp.Create(client)
 	if err == nil {
 		t.Errorf("Got nil, want error")
-	} else if !errors.Is(err, ErrDuplicateDocument) {
-		t.Errorf("Got %v, want %v", err, ErrDuplicateDocument)
+	} else if !errors.Is(err, conureerrors.ErrObjectAlreadyExists) {
+		t.Errorf("Got %v, want %v", err, conureerrors.ErrObjectAlreadyExists)
 	}
 	_ = comp.Delete(client)
 }

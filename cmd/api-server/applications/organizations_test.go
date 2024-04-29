@@ -3,11 +3,12 @@ package applications
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/coffeenights/conure/cmd/api-server/models"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
 func TestDetailOrganization(t *testing.T) {

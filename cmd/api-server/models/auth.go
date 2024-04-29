@@ -8,6 +8,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 )
 
@@ -34,7 +35,7 @@ func (u *User) Create(mongo *database.MongoDB) error {
 	filter := bson.M{"email": u.Email}
 	err := collection.FindOne(context.Background(), filter).Decode(u)
 	if err == nil {
-		return ErrEmailExists
+		return conureerrors.ErrEmailAlreadyExists
 	}
 
 	insertResult, err := collection.InsertOne(context.Background(), u)
@@ -105,29 +106,29 @@ func (u *User) Delete(mongo *database.MongoDB) error {
 func ValidateEmail(email string) error {
 	pattern := `^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`
 	if matched, err := regexp.MatchString(pattern, email); err != nil {
-		return ErrEmailNotValid
+		return conureerrors.ErrInvalidEmail
 	} else if !matched {
-		return ErrEmailNotValid
+		return conureerrors.ErrInvalidEmail
 	}
 	return nil
 }
 
 func ValidatePasswords(password string, password2 string) error {
 	if len(password) < 8 {
-		return ErrPasswordNotValid
+		return conureerrors.ErrInvalidPassword
 	}
 	if !regexp.MustCompile(`[A-Z]`).MatchString(password) {
-		return ErrPasswordNotValid
+		return conureerrors.ErrInvalidPassword
 	}
 	if !regexp.MustCompile(`[a-z]`).MatchString(password) {
-		return ErrPasswordNotValid
+		return conureerrors.ErrInvalidPassword
 	}
 	if !regexp.MustCompile(`[0-9]`).MatchString(password) {
-		return ErrPasswordNotValid
+		return conureerrors.ErrInvalidPassword
 	}
 
 	if password != password2 {
-		return ErrPasswordsNotMatch
+		return conureerrors.ErrPasswordConfirmationMismatch
 	}
 	return nil
 }
