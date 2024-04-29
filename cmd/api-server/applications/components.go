@@ -74,7 +74,7 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 			return
 		}
 		log.Printf("Error getting components: %v\n", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
+		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
 	var response ComponentResponse
@@ -139,25 +139,25 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 		return
 
 	}
-	response.Properties.ResourcesProperties, err = status.GetResourcesProperties(component.ID)
+	response.Properties.ResourcesProperties, err = status.GetResourcesProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting resources properties: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	response.Properties.NetworkProperties, err = status.GetNetworkProperties(component.ID)
+	response.Properties.NetworkProperties, err = status.GetNetworkProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting network properties: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	response.Properties.StorageProperties, err = status.GetStorageProperties(component.ID)
+	response.Properties.StorageProperties, err = status.GetStorageProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting storage properties: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
-	response.Properties.SourceProperties, err = status.GetSourceProperties(component.ID)
+	response.Properties.SourceProperties, err = status.GetSourceProperties(component.Name)
 	if err != nil {
 		log.Printf("Error getting source properties: %v\n", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
@@ -197,10 +197,14 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		c.AbortWithStatus(http.StatusBadRequest)
 		return
 	}
-	component := models.NewComponent(handler.Model, request.ID, request.Type)
-	component.Description = request.Description
-	component.Properties = request.Properties
-	component.Traits = request.Traits
+	component := models.Component{
+		Name:          request.Name,
+		Type:          request.Type,
+		Description:   request.Description,
+		ApplicationID: handler.Model.ID,
+		Properties:    request.Properties,
+		Traits:        request.Traits,
+	}
 	_, err = component.Create(a.MongoDB)
 	if errors.Is(err, models.ErrDuplicateDocument) {
 		c.AbortWithStatusJSON(http.StatusConflict, gin.H{

@@ -39,7 +39,8 @@ func BuildApplicationManifest(application *models.Application, environment *mode
 			"properties": component.Properties,
 			"traits":     component.Traits,
 			"labels": map[string]string{
-				providers.ComponentIDLabel: component.ID,
+				providers.ComponentNameLabel: component.Name,
+				providers.ComponentIDLabel:   component.ID.Hex(),
 			},
 		}
 		componentsManifest = append(componentsManifest, componentManifest)

@@ -35,7 +35,12 @@ func TestListComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	comp, err := models.NewComponent(application, "TestListComponents", "service").Create(testConf.app.MongoDB)
+	comp := models.Component{
+		ApplicationID: application.ID,
+		Name:          "test-component",
+		Type:          "service",
+	}
+	_, err = comp.Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
@@ -161,8 +166,8 @@ func TestCreateComponent(t *testing.T) {
 
 	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c"
 	body := map[string]interface{}{
-		"id":          "TestComponent",
 		"type":        "service",
+		"name":        "test-component",
 		"description": "Test component description",
 		"properties": map[string]interface{}{
 			"image": "nginx:latest",
@@ -186,8 +191,8 @@ func TestCreateComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
-	if response.Component.ID != "TestComponent" {
-		t.Errorf("Expected component name to be TestComponent, got: %v", response.Component.ID)
+	if response.Component.Name != "test-component" {
+		t.Errorf("Expected component name to be test-component, got: %v", response.Component.Name)
 	}
 	// Clean up Component
 	comp := models.Component{
@@ -221,13 +226,18 @@ func TestDetailComponent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	comp, err := models.NewComponent(application, "TestDetailComponent", "service").Create(testConf.app.MongoDB)
+	comp := models.Component{
+		ApplicationID: application.ID,
+		Name:          "test-detail-component",
+		Type:          "service",
+	}
+	_, err = comp.Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
 	defer comp.Delete(testConf.app.MongoDB)
 
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID.Hex()
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
@@ -242,8 +252,8 @@ func TestDetailComponent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to unmarshal response: %v", err)
 	}
-	if response.ID != "TestDetailComponent" {
-		t.Errorf("Expected component name to be TestDetailComponent, got: %v", response.ID)
+	if response.Name != "test-detail-component" {
+		t.Errorf("Expected component name to be test-detail-component, got: %v", response.Name)
 	}
 }
 

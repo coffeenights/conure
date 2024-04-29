@@ -13,7 +13,7 @@ func TestOrganization_Create(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountID: "12345", Name: "Test Organization"}
+	org := &Organization{Status: OrgActive, AccountID: primitive.NewObjectID(), Name: "Test Organization"}
 
 	_, err = org.Create(client)
 	if err != nil {
@@ -27,7 +27,7 @@ func TestOrganization_GetById(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountID: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: primitive.NewObjectID()}
 	id, err := org.Create(client)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestOrganization_Update(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountID: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: primitive.NewObjectID()}
 	id, err := org.Create(client)
 	if err != nil {
 		t.Fatal(err)
@@ -69,7 +69,7 @@ func TestOrganization_Delete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountID: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: primitive.NewObjectID()}
 	_, err = org.Create(client)
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +92,7 @@ func TestOrganization_SoftDelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	org := &Organization{Status: OrgActive, AccountID: "12345"}
+	org := &Organization{Status: OrgActive, AccountID: primitive.NewObjectID()}
 	_, err = org.Create(client)
 	if err != nil {
 		t.Fatal(err)
@@ -297,11 +297,15 @@ func TestComponent_CreateList(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	comp := NewComponent(app, "testComponent", "service")
-	comp.Properties = map[string]interface{}{
-		"cpu":      "1",
-		"memory":   "1Gi",
-		"replicas": int32(1),
+	comp := Component{
+		ApplicationID: app.ID,
+		Name:          "test-component",
+		Type:          "service",
+		Properties: map[string]interface{}{
+			"cpu":      "1",
+			"memory":   "1Gi",
+			"replicas": int32(1),
+		},
 	}
 	_, err = comp.Create(client)
 	if err != nil {
@@ -469,19 +473,23 @@ func TestComponent_GetByID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	comp := NewComponent(app, "testComponent", "service")
-	comp.Properties = map[string]interface{}{
-		"cpu":      "1",
-		"memory":   "1Gi",
-		"replicas": int32(1),
+	comp := Component{
+		ApplicationID: app.ID,
+		Name:          "test-component",
+		Type:          "service",
+		Properties: map[string]interface{}{
+			"cpu":      "1",
+			"memory":   "1Gi",
+			"replicas": int32(1),
+		},
 	}
+
 	_, err = comp.Create(client)
 	defer comp.Delete(client)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
-	got, err := comp.GetByID(client, comp.ID)
+	got, err := comp.GetByID(client, comp.ID.Hex())
 	if err != nil {
 		t.Errorf("Failed to get component: %v", err)
 	}
@@ -501,11 +509,15 @@ func TestComponent_Create(t *testing.T) {
 	}
 	defer app.Delete(client)
 
-	comp := NewComponent(app, "testComponent", "service")
-	comp.Properties = map[string]interface{}{
-		"cpu":      "1",
-		"memory":   "1Gi",
-		"replicas": int32(1),
+	comp := Component{
+		ApplicationID: app.ID,
+		Name:          "test-component",
+		Type:          "service",
+		Properties: map[string]interface{}{
+			"cpu":      "1",
+			"memory":   "1Gi",
+			"replicas": int32(1),
+		},
 	}
 	_, err = comp.Create(client)
 	if err != nil {
@@ -525,11 +537,15 @@ func TestComponent_Create_Duplicate(t *testing.T) {
 	}
 	defer app.Delete(client)
 
-	comp := NewComponent(app, "testComponent", "service")
-	comp.Properties = map[string]interface{}{
-		"cpu":      "1",
-		"memory":   "1Gi",
-		"replicas": int32(1),
+	comp := Component{
+		ApplicationID: app.ID,
+		Name:          "test-component",
+		Type:          "service",
+		Properties: map[string]interface{}{
+			"cpu":      "1",
+			"memory":   "1Gi",
+			"replicas": int32(1),
+		},
 	}
 	_, err = comp.Create(client)
 	if err != nil {
@@ -538,7 +554,7 @@ func TestComponent_Create_Duplicate(t *testing.T) {
 	_, err = comp.Create(client)
 	if err == nil {
 		t.Errorf("Got nil, want error")
-	} else if err != ErrDuplicateDocument {
+	} else if !errors.Is(err, ErrDuplicateDocument) {
 		t.Errorf("Got %v, want %v", err, ErrDuplicateDocument)
 	}
 	_ = comp.Delete(client)
