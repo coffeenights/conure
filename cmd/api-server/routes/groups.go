@@ -15,11 +15,12 @@ import (
 
 func GenerateRouter() *gin.Engine {
 	conf := config.LoadConfig(apiConfig.Config{})
+	log.Println("Connecting to MongoDB")
 	mongo, err := database.ConnectToMongoDB(conf.MongoDBURI, conf.MongoDBName)
 	if err != nil {
-		panic(err)
+		log.Panic(err)
 	}
-
+	log.Println("Connected to MongoDB")
 	var keyStorage variables.SecretKeyStorage
 	if conf.AESStorageStrategy == "local" {
 		keyStorage = variables.NewLocalSecretKey("secret.key")

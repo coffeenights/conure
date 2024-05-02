@@ -10,7 +10,6 @@ spec:
       properties:
         image: "coffeenights/conure-api:latest"
         cmd: ["conure_api"]
-        port: 8080
         workdir: /app
         imagePullPolicy: "Always"
         cpu: "0.2"
@@ -65,3 +64,11 @@ spec:
         storage: 1Gi
         cpu: "0.5"
         memory: 512Mi
+      traits:
+        - type: expose
+          properties:
+            type: "ClusterIP"
+            annotations:
+              service: "backend"
+            port:
+              - 27017

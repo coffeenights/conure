@@ -96,11 +96,14 @@ template: {
 		// +usage=Specify the labels in the workload
 		labels?: [string]: string
 
+		// +usage=If addRevisionLabel is true, the revision label will be added to the underlying pods
+		addRevisionLabel: *true | bool
+
 		// +usage=Specify the annotations in the workload
 		annotations?: [string]: string
 
 		// +usage=Specify the number of replicas for your service
-		replicas: *"1" | int
+		replicas: *1 | int
 
 		// +usage=Specify the storage size for your service
 		storage: string
