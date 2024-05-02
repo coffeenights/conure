@@ -1,0 +1,67 @@
+apiVersion: core.oam.dev/v1beta1
+kind: Application
+metadata:
+  name: api-server
+  namespace: namespace-test
+spec:
+  components:
+    - name: backend-server
+      type: webservice
+      properties:
+        image: "coffeenights/conure-api:latest"
+        cmd: ["conure_api"]
+        port: 8080
+        workdir: /app
+        imagePullPolicy: "Always"
+        cpu: "0.2"
+        memory: "256Mi"
+        env:
+          - name: API_DAPR_GRPC_PORT
+            value: "50007"
+          - name: SERVICES_APPS_API_DAPR_GRPC_PORT
+            value: "50008"
+          - name: SERVICES_APPS_SUBSCRIBER_DAPR_GRPC_PORT
+            value: "50009"
+          - name: DB_URL
+            value: postgres://conure:test123@localhost:54320/conure
+          - name: API_MONGODB_URI
+            value: mongodb://mongo-database:27017
+          - name: API_MONGODB_NAME
+            value: conure
+          - name: JWT_SECRET
+            value: asdasdasd
+          - name: JWT_EXPIRATION_DAYS
+            value: "365"
+          - name: PROVIDER_SOURCE
+            value: vela
+          - name: AES_STORAGE_STRATEGY
+            value: local
+          - name: AUTH_SERVICE_URL
+            value: http://localhost:8080/auth/me
+          - name: AUTH_STRATEGY_SYSTEM
+            value: local
+          - name: FRONTEND_DOMAIN
+            value: localhost
+          - name: COOKIE_SECURE
+            value: "false"
+          - name: CORS_ORIGINS
+            value: http://localhost:5173
+          - name: API_HOST
+            value: "0.0.0.0"
+      traits:
+        - type: expose
+          properties:
+            type: "LoadBalancer"
+            annotations:
+              service: "backend"
+            port:
+              - 8080
+        - type: scaler
+          properties:
+            replicas: 1
+    - name: mongo-database
+      type: mongo
+      properties:
+        storage: 1Gi
+        cpu: "0.5"
+        memory: 512Mi
