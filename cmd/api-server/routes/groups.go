@@ -4,6 +4,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"log"
+	"strings"
 
 	apps "github.com/coffeenights/conure/cmd/api-server/applications"
 	"github.com/coffeenights/conure/cmd/api-server/auth"
@@ -44,11 +45,22 @@ func GenerateRouter() *gin.Engine {
 	return router
 }
 
+func allowOrigin(origin string) bool {
+	conf := config.LoadConfig(apiConfig.Config{})
+	origins := strings.Split(conf.CorsOrigins, ";")
+	for _, o := range origins {
+		if o == origin || o == "*" {
+			return true
+		}
+	}
+	return true
+}
+
 func getCorsMiddleware(origins string) gin.HandlerFunc {
 	return cors.New(cors.Config{
-		AllowOrigins:     []string{origins},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization"},
 		AllowCredentials: true,
+		AllowOriginFunc:  allowOrigin,
 	})
 }
