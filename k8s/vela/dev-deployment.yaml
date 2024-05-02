@@ -9,7 +9,7 @@ spec:
       type: webservice
       properties:
         image: "coffeenights/conure-api:latest"
-        cmd: ["conure_api"]
+        cmd: ["./conure_api"]
         workdir: /app
         imagePullPolicy: "Always"
         cpu: "0.2"
@@ -47,6 +47,8 @@ spec:
             value: http://localhost:5173
           - name: API_HOST
             value: "0.0.0.0"
+          - name: GIN_MODE
+            value: debug
       traits:
         - type: expose
           properties:
@@ -67,7 +69,7 @@ spec:
       traits:
         - type: expose
           properties:
-            type: "ClusterIP"
+            type: "LoadBalancer"
             annotations:
               service: "backend"
             port:
