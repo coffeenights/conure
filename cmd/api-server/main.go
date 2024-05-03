@@ -39,8 +39,6 @@ func main() {
 		createsuperuserCmd = flag.NewFlagSet("createsuperuser", flag.ExitOnError)
 		subcommand         string
 	)
-	log.SetOutput(os.Stdout)
-	log.SetFlags(log.Ldate | log.Ltime)
 
 	addressServer := runserverCmd.String("address", "localhost", "The HTTP server bind address.")
 	portServer := runserverCmd.Int("port", 8080, "The HTTP server port")
