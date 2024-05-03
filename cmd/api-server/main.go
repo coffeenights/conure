@@ -39,6 +39,9 @@ func main() {
 		createsuperuserCmd = flag.NewFlagSet("createsuperuser", flag.ExitOnError)
 		subcommand         string
 	)
+	log.SetOutput(os.Stdout)
+	log.SetFlags(log.Ldate | log.Ltime)
+
 	addressServer := runserverCmd.String("address", "localhost", "The HTTP server bind address.")
 	portServer := runserverCmd.Int("port", 8080, "The HTTP server port")
 
@@ -68,7 +71,7 @@ func main() {
 			log.Fatal(err)
 		}
 		if *emailSuperuser == "" {
-			log.Printf("Error: -email is required for createsuperuser command")
+			fmt.Println("Error: Missing -email flag")
 			createsuperuserCmd.Usage()
 			os.Exit(1)
 		}
