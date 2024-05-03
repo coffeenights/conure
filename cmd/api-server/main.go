@@ -67,6 +67,11 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+		if *emailSuperuser == "" {
+			log.Printf("Error: -email is required for createsuperuser command")
+			createsuperuserCmd.Usage()
+			os.Exit(1)
+		}
 		createsuperuser(*emailSuperuser)
 	default:
 		flag.Usage()
