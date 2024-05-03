@@ -2,6 +2,8 @@ package applications
 
 import (
 	"errors"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"net/http"
 
@@ -69,7 +71,7 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 	component := &models.Component{}
 	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
-		if err.Error() == "mongo: no documents in result" {
+		if errors.Is(err, mongo.ErrNoDocuments) || errors.Is(err, primitive.ErrInvalidHex) {
 			conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 			return
 		}

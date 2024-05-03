@@ -1,6 +1,7 @@
 package conureerrors
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -45,16 +46,11 @@ var (
 )
 
 func AbortWithError(c *gin.Context, err error) {
-	if conureErr, ok := err.(*ConureError); ok {
+	var conureErr *ConureError
+	if errors.As(err, &conureErr) {
 		c.AbortWithStatusJSON(conureErr.StatusCode, gin.H{
 			"code":  conureErr.Code,
 			"error": conureErr.Message,
-		})
-	} else {
-		// If the error is not a ConureError, return a generic internal error
-		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-			"code":  ErrInternalError.Code,
-			"error": ErrInternalError.Message,
 		})
 	}
 }
