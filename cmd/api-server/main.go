@@ -15,6 +15,7 @@ import (
 
 func runserver(address string, port int) {
 	r := routes.GenerateRouter()
+	log.Println("Running the server...")
 	err := r.Run(fmt.Sprintf("%s:%d", address, port))
 	if err != nil {
 		log.Fatal(err)
@@ -62,10 +63,9 @@ func main() {
 		}
 		runserver(*addressServer, *portServer)
 	case "createsuperuser":
-		if *emailSuperuser == "" {
-			log.Printf("Error: email is required for createsuperuser command")
-			createsuperuserCmd.Usage()
-			os.Exit(1)
+		err := createsuperuserCmd.Parse(os.Args[2:])
+		if err != nil {
+			log.Fatal(err)
 		}
 		createsuperuser(*emailSuperuser)
 	default:
