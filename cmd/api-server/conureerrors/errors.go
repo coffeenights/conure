@@ -52,5 +52,11 @@ func AbortWithError(c *gin.Context, err error) {
 			"code":  conureErr.Code,
 			"error": conureErr.Message,
 		})
+	} else {
+		// If the error is not a ConureError, return a generic internal error
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
+			"code":  ErrInternalError.Code,
+			"error": ErrInternalError.Message,
+		})
 	}
 }
