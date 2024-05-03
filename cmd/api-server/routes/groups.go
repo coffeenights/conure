@@ -35,7 +35,7 @@ func GenerateRouter() *gin.Engine {
 	}
 
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery(), getCorsMiddleware(conf.CorsOrigins))
+	router.Use(gin.Logger(), gin.Recovery(), getCorsMiddleware())
 	appHandler := apps.NewApiHandler(conf, mongo)
 	authHandler := auth.NewAuthHandler(conf, mongo)
 	variablesHandler := variables.NewVariablesHandler(conf, mongo, keyStorage)
@@ -56,7 +56,7 @@ func allowOrigin(origin string) bool {
 	return true
 }
 
-func getCorsMiddleware(origins string) gin.HandlerFunc {
+func getCorsMiddleware() gin.HandlerFunc {
 	return cors.New(cors.Config{
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Content-Length", "Accept-Encoding", "X-CSRF-Token", "Authorization"},
