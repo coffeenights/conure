@@ -106,7 +106,8 @@ func (a *ApiHandler) CreateApplication(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 		return
 	}
-	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
+	uID := c.MustGet("currentUser").(models.User).ID
+	if org.AccountID != uID {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
@@ -116,7 +117,7 @@ func (a *ApiHandler) CreateApplication(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
-	application := models.NewApplication(c.Param("organizationID"), request.Name, primitive.NewObjectID().Hex())
+	application := models.NewApplication(c.Param("organizationID"), request.Name, uID.Hex())
 	application.Description = request.Description
 	_, err = application.Create(a.MongoDB)
 	if err != nil {
