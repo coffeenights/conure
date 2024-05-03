@@ -42,11 +42,6 @@ func main() {
 	portServer := runserverCmd.Int("port", 8080, "The HTTP server port")
 
 	emailSuperuser := createsuperuserCmd.String("email", "", "The email of the superuser")
-	if *emailSuperuser == "" {
-		log.Printf("Error: email is required for createsuperuser command")
-		createsuperuserCmd.Usage()
-		os.Exit(1)
-	}
 
 	flag.Usage = func() {
 		fmt.Printf("Usage: \n")
@@ -67,6 +62,11 @@ func main() {
 		}
 		runserver(*addressServer, *portServer)
 	case "createsuperuser":
+		if *emailSuperuser == "" {
+			log.Printf("Error: email is required for createsuperuser command")
+			createsuperuserCmd.Usage()
+			os.Exit(1)
+		}
 		createsuperuser(*emailSuperuser)
 	default:
 		flag.Usage()
