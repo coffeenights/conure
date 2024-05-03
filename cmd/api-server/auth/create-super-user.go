@@ -7,9 +7,8 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/database"
 )
 
-func CreateSuperuser(mongo *database.MongoDB) {
+func CreateSuperuser(mongo *database.MongoDB, email string) {
 	client := "conure"
-	email := "admin@conure.io"
 	password := GenerateRandomPassword(10)
 	hashedPassword, err := GenerateFromPassword(password)
 	if err != nil {
@@ -33,9 +32,8 @@ func CreateSuperuser(mongo *database.MongoDB) {
 	log.Println("x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x-x")
 }
 
-func ResetSuperuserPassword(mongo *database.MongoDB) {
+func ResetSuperuserPassword(mongo *database.MongoDB, email string) {
 	client := "conure"
-	email := "admin@conure.io"
 	password := GenerateRandomPassword(10)
 	hashedPassword, err := GenerateFromPassword(password)
 	if err != nil {
