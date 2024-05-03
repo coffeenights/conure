@@ -29,6 +29,7 @@ func (a *ApiHandler) CreateEnvironment(c *gin.Context) {
 		return
 	}
 	if appHandler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		log.Printf("AccountID: %v, currentUser: %v\n", appHandler.Model.AccountID, c.MustGet("currentUser").(models.User).ID)
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
