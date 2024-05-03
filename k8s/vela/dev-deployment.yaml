@@ -9,7 +9,7 @@ spec:
       type: webservice
       properties:
         image: "coffeenights/conure-api:latest"
-        cmd: ["./conure_api"]
+        cmd: ["./conure_api", "runserver", "--address", "0.0.0.0", "--port", "8080"]
         workdir: /app
         imagePullPolicy: "Always"
         cpu: "0.2"
@@ -45,8 +45,6 @@ spec:
             value: "false"
           - name: CORS_ORIGINS
             value: http://localhost:5173
-          - name: API_HOST
-            value: "0.0.0.0"
           - name: GIN_MODE
             value: debug
       traits:
