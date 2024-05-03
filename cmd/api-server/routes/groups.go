@@ -35,6 +35,7 @@ func GenerateRouter() *gin.Engine {
 	}
 
 	router := gin.New()
+	router.RedirectTrailingSlash = false
 	router.Use(gin.Logger(), gin.Recovery(), getCorsMiddleware())
 	appHandler := apps.NewApiHandler(conf, mongo)
 	authHandler := auth.NewAuthHandler(conf, mongo)
