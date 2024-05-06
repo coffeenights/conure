@@ -1,0 +1,46 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kaniko
+spec:
+  template:
+    spec:
+      initContainers:
+        - name: git-clone
+          image: alpine/git
+          args:
+            - clone
+            - --single-branch
+            - --branch
+            - feat/deployment
+            - https://github.com/coffeenights/conure.git
+            - /workspace
+          volumeMounts:
+            - name: dockerfile-storage
+              mountPath: /workspace
+      containers:
+        - name: kaniko
+          image: gcr.io/kaniko-project/executor:latest
+          args: ["--dockerfile=/workspace/cmd/api-server/Dockerfile",
+                 "--context=/workspace",
+                 "--destination=docker.io/coffeenights/conure-api:latest",
+                 "--cache=false"]
+          volumeMounts:
+            - name: dockerfile-storage
+              mountPath: /workspace
+            - name: kaniko-secret
+              mountPath: /kaniko/.docker
+      restartPolicy: Never
+      volumes:
+        - name: kaniko-secret
+          secret:
+            secretName: regcred
+            items:
+              - key: .dockerconfigjson
+                path: config.json
+        - name: dockerfile-storage
+          emptyDir:
+            sizeLimit: 10Gi
+      imagePullSecrets:
+        - name: regcred
+  backoffLimit: 0

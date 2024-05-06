@@ -13,5 +13,4 @@ type Config struct {
 	FrontendDomain     string `env:"FRONTEND_DOMAIN"`
 	CookieSecure       bool   `env:"COOKIE_SECURE"`
 	CorsOrigins        string `env:"CORS_ORIGINS"`
-	APIHost            string `env:"API_HOST"`
 }

@@ -38,7 +38,7 @@ func TestCreateSuperuser(t *testing.T) {
 					t.Errorf("SequenceInt() recover = %v, wantPanic = %v", r, tt.wantError)
 				}
 			}()
-			CreateSuperuser(mongo)
+			CreateSuperuser(mongo, "test@conure.io")
 		})
 	}
 }
@@ -76,12 +76,12 @@ func TestResetSuperuserPassword(t *testing.T) {
 			u := &models.User{}
 			u2 := &models.User{}
 			if !tt.wantError {
-				CreateSuperuser(mongo)
-				_ = u.GetByEmail(mongo, "admin@conure.io")
+				CreateSuperuser(mongo, "test@conure.io")
+				_ = u.GetByEmail(mongo, "test@conure.io")
 			}
-			ResetSuperuserPassword(mongo)
+			ResetSuperuserPassword(mongo, "test@conure.io")
 			if !tt.wantError {
-				_ = u2.GetByEmail(mongo, "admin@conure.io")
+				_ = u2.GetByEmail(mongo, "test@conure.io")
 				if u2.Password == u.Password {
 					t.Errorf("ResetSuperuserPassword() password = %v, want new password", u2.Password)
 				}
