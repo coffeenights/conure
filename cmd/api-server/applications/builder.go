@@ -34,7 +34,7 @@ func BuildApplicationManifest(application *models.Application, environment *mode
 	}
 	for _, component := range components {
 		componentManifest := map[string]interface{}{
-			"name":       component.ID,
+			"name":       component.Name,
 			"type":       component.Type,
 			"properties": component.Properties,
 			"traits":     component.Traits,
