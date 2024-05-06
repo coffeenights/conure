@@ -72,3 +72,23 @@ spec:
               service: "backend"
             port:
               - 27017
+    - name: frontend
+      type: webservice
+      properties:
+        image: "coffeenights/conure-frontend:latest"
+        imagePullPolicy: "Always"
+        cpu: "0.2"
+        memory: "256Mi"
+      traits:
+        - type: expose
+          properties:
+            type: "LoadBalancer"
+            annotations:
+              service: "frontend"
+            ports:
+              - name: http
+                port: 8081
+                protocol: TCP
+        - type: scaler
+          properties:
+            replicas: 1
