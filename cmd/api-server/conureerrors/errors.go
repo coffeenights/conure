@@ -23,7 +23,7 @@ var (
 	ErrInvalidToken              = &ConureError{Code: "1001", Message: "invalid_token", StatusCode: http.StatusUnauthorized}
 	ErrJWTKeyError               = &ConureError{Code: "1002", Message: "jwt_key_error", StatusCode: http.StatusInternalServerError}
 	ErrCryptoError               = &ConureError{Code: "1003", Message: "crypto_error", StatusCode: http.StatusInternalServerError}
-	ErrInvalidCredentials        = &ConureError{Code: "1004", Message: "invalid_credentials", StatusCode: http.StatusBadRequest}
+	ErrInvalidCredentials        = &ConureError{Code: "1004", Message: "invalid_credentials", StatusCode: http.StatusUnauthorized}
 	ErrOldPasswordInvalid        = &ConureError{Code: "1005", Message: "old_password_invalid", StatusCode: http.StatusBadRequest}
 	ErrWrongAuthenticationSystem = &ConureError{Code: "1006", Message: "wrong_authentication_system", StatusCode: http.StatusUnauthorized}
 	ErrNotAllowed                = &ConureError{Code: "1007", Message: "not_allowed", StatusCode: http.StatusForbidden}
