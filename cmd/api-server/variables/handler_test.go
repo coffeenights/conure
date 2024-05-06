@@ -5,12 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/coffeenights/conure/cmd/api-server/auth"
-	"github.com/coffeenights/conure/cmd/api-server/models"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/coffeenights/conure/cmd/api-server/auth"
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -886,5 +888,5 @@ func TestHandler_DeleteVariable(t *testing.T) {
 
 	var result models.Variable
 	err = result.GetByID(mongo, newVar.ID.Hex())
-	assert.ErrorIsf(t, err, models.ErrDocumentNotFound, "should return error as variable does not exist")
+	assert.ErrorIsf(t, err, conureerrors.ErrObjectNotFound, "should return error as variable does not exist")
 }
