@@ -39,6 +39,38 @@ type Organization struct {
 	DeletedAt time.Time          `bson:"deletedAt,omitempty" json:"-"`
 }
 
+func OrganizationList(db *database.MongoDB, accountID string) ([]*Organization, error) {
+	collection := db.Client.Database(db.DBName).Collection(OrganizationCollection)
+	aID, err := primitive.ObjectIDFromHex(accountID)
+	if err != nil {
+		return nil, err
+	}
+	filter := bson.M{"accountId": aID, "status": bson.M{"$ne": OrgDeleted}}
+	cursor, err := collection.Find(context.Background(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err = cursor.Close(ctx)
+		if err != nil {
+			log.Panicf("Error closing cursor: %v\n", err)
+		}
+	}(cursor, context.Background())
+	var organizations []*Organization
+	for cursor.Next(context.Background()) {
+		var org Organization
+		err = cursor.Decode(&org)
+		if err != nil {
+			return nil, err
+		}
+		organizations = append(organizations, &org)
+	}
+	if err = cursor.Err(); err != nil {
+		return nil, err
+	}
+	return organizations, nil
+}
+
 func (o *Organization) String() string {
 	return fmt.Sprintf("Organization: %s, %s", o.Status, o.AccountID)
 }

@@ -8,6 +8,7 @@ import (
 func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *ApiHandler) {
 	applications := r.Group(relativePath, middlewares.CheckAuthenticatedUser(appHandler.Config, appHandler.MongoDB))
 	{
+		applications.GET("/", appHandler.ListOrganization)
 		applications.POST("/", appHandler.CreateOrganization)
 		applications.GET("/:organizationID", appHandler.DetailOrganization)
 		applications.GET("/:organizationID/a", appHandler.ListApplications)

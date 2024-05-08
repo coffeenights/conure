@@ -46,3 +46,24 @@ func (a *ApiHandler) CreateOrganization(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, response)
 }
+
+func (a *ApiHandler) ListOrganization(c *gin.Context) {
+	uID := c.MustGet("currentUser").(models.User).ID
+	orgs, err := models.OrganizationList(a.MongoDB, uID.Hex())
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
+		return
+	}
+
+	orgResponses := make([]OrganizationResponse, len(orgs))
+	for i, org := range orgs {
+		r := OrganizationResponse{
+			Organization: org,
+		}
+		orgResponses[i] = r
+	}
+	response := OrganizationListResponse{
+		Organizations: orgResponses,
+	}
+	c.JSON(http.StatusOK, response)
+}

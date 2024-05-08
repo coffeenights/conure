@@ -65,3 +65,40 @@ func TestCreateOrganization(t *testing.T) {
 		log.Fatal(err)
 	}
 }
+
+func TestListOrganization(t *testing.T) {
+	// Create test organization
+	org := models.Organization{
+		Status:    models.OrgActive,
+		AccountID: testConf.authUser.ID,
+		Name:      "Test Organization",
+	}
+	_, err := org.Create(testConf.app.MongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "/organizations/"
+	req, _ := http.NewRequest("GET", url, nil)
+	req.AddCookie(testConf.generateCookie())
+	resp := httptest.NewRecorder()
+	testConf.router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusOK {
+		t.Errorf("Expected response code 200, got: %v", resp.Code)
+	}
+
+	orgs := OrganizationListResponse{}
+	err = json.Unmarshal(resp.Body.Bytes(), &orgs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(orgs.Organizations) == 0 {
+		t.Error("Expected at least one organization")
+	}
+	if orgs.Organizations[0].Name != "Test Organization" {
+		t.Errorf("Expected organization name to be 'Test Organization', got: %v", orgs.Organizations[0].Name)
+	}
+
+	_ = org.Delete(testConf.app.MongoDB)
+}
