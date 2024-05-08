@@ -33,10 +33,42 @@ const (
 type Organization struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	Status    OrganizationStatus `bson:"status" json:"status"`
-	AccountID primitive.ObjectID `bson:"accountId" json:"accountId"`
+	AccountID primitive.ObjectID `bson:"accountId" json:"account_id"`
 	Name      string             `bson:"name" json:"name"`
-	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
+	CreatedAt time.Time          `bson:"createdAt" json:"created_at"`
 	DeletedAt time.Time          `bson:"deletedAt,omitempty" json:"-"`
+}
+
+func OrganizationList(db *database.MongoDB, accountID string) ([]*Organization, error) {
+	collection := db.Client.Database(db.DBName).Collection(OrganizationCollection)
+	aID, err := primitive.ObjectIDFromHex(accountID)
+	if err != nil {
+		return nil, err
+	}
+	filter := bson.M{"accountId": aID, "status": bson.M{"$ne": OrgDeleted}}
+	cursor, err := collection.Find(context.Background(), filter)
+	if err != nil {
+		return nil, err
+	}
+	defer func(cursor *mongo.Cursor, ctx context.Context) {
+		err = cursor.Close(ctx)
+		if err != nil {
+			log.Panicf("Error closing cursor: %v\n", err)
+		}
+	}(cursor, context.Background())
+	var organizations []*Organization
+	for cursor.Next(context.Background()) {
+		var org Organization
+		err = cursor.Decode(&org)
+		if err != nil {
+			return nil, err
+		}
+		organizations = append(organizations, &org)
+	}
+	if err = cursor.Err(); err != nil {
+		return nil, err
+	}
+	return organizations, nil
 }
 
 func (o *Organization) String() string {
@@ -48,10 +80,10 @@ func (o *Organization) Create(mongo *database.MongoDB) (string, error) {
 	o.CreatedAt = time.Now()
 	o.Status = OrgActive
 	insertResult, err := collection.InsertOne(context.Background(), o)
-	o.ID = insertResult.InsertedID.(primitive.ObjectID)
 	if err != nil {
 		return "", err
 	}
+	o.ID = insertResult.InsertedID.(primitive.ObjectID)
 	log.Println("Inserted a single document: ", insertResult.InsertedID.(primitive.ObjectID).Hex())
 	return insertResult.InsertedID.(primitive.ObjectID).Hex(), nil
 }

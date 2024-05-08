@@ -89,6 +89,10 @@ type OrganizationResponse struct {
 	*models.Organization
 }
 
+type OrganizationListResponse struct {
+	Organizations []OrganizationResponse `json:"organizations"`
+}
+
 type CreateEnvironmentRequest struct {
 	Name string `json:"name" validate:"required,regexp=^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"`
 }
