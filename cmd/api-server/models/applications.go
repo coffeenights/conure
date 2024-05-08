@@ -33,9 +33,9 @@ const (
 type Organization struct {
 	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	Status    OrganizationStatus `bson:"status" json:"status"`
-	AccountID primitive.ObjectID `bson:"accountId" json:"accountId"`
+	AccountID primitive.ObjectID `bson:"accountId" json:"account_id"`
 	Name      string             `bson:"name" json:"name"`
-	CreatedAt time.Time          `bson:"createdAt" json:"createdAt"`
+	CreatedAt time.Time          `bson:"createdAt" json:"created_at"`
 	DeletedAt time.Time          `bson:"deletedAt,omitempty" json:"-"`
 }
 
@@ -80,10 +80,10 @@ func (o *Organization) Create(mongo *database.MongoDB) (string, error) {
 	o.CreatedAt = time.Now()
 	o.Status = OrgActive
 	insertResult, err := collection.InsertOne(context.Background(), o)
-	o.ID = insertResult.InsertedID.(primitive.ObjectID)
 	if err != nil {
 		return "", err
 	}
+	o.ID = insertResult.InsertedID.(primitive.ObjectID)
 	log.Println("Inserted a single document: ", insertResult.InsertedID.(primitive.ObjectID).Hex())
 	return insertResult.InsertedID.(primitive.ObjectID).Hex(), nil
 }
