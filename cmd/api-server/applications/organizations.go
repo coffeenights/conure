@@ -29,9 +29,9 @@ func (a *ApiHandler) DetailOrganization(c *gin.Context) {
 
 func (a *ApiHandler) CreateOrganization(c *gin.Context) {
 	request := CreateOrganizationRequest{}
-	err := c.BindJSON(&request)
+	err := c.ShouldBind(&request)
 	if err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		conureerrors.AbortWithError(c, err)
 		return
 	}
 	org := request.ParseRequestToModel()

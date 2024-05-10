@@ -3,7 +3,9 @@ package conureerrors
 import (
 	"errors"
 	"fmt"
+	"github.com/go-playground/validator/v10"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -35,6 +37,7 @@ var (
 	ErrInvalidEmail                 = &ConureError{Code: "2004", Message: "invalid_email", StatusCode: http.StatusBadRequest}
 	ErrInvalidPassword              = &ConureError{Code: "2005", Message: "invalid_password", StatusCode: http.StatusBadRequest}
 	ErrPasswordConfirmationMismatch = &ConureError{Code: "2006", Message: "password_confirmation_mismatch", StatusCode: http.StatusBadRequest}
+	ErrFieldValidation              = &ConureError{Code: "2007", Message: "invalid_field_value", StatusCode: http.StatusBadRequest}
 
 	ErrInternalError = &ConureError{Code: "3001", Message: "internal_error", StatusCode: http.StatusInternalServerError}
 	ErrDatabaseError = &ConureError{Code: "3002", Message: "database_error", StatusCode: http.StatusInternalServerError}
@@ -47,10 +50,23 @@ var (
 
 func AbortWithError(c *gin.Context, err error) {
 	var conureErr *ConureError
+	var validationErr validator.ValidationErrors
+
 	if errors.As(err, &conureErr) {
 		c.AbortWithStatusJSON(conureErr.StatusCode, gin.H{
 			"code":  conureErr.Code,
 			"error": conureErr.Message,
+		})
+	} else if errors.As(err, &validationErr) {
+		var fieldNames []string
+		for _, errorField := range validationErr {
+			fieldNames = append(fieldNames, errorField.Field())
+		}
+		concatenatedErrors := strings.Join(fieldNames, ", ")
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"code":    ErrFieldValidation.Code,
+			"message": ErrFieldValidation.Message,
+			"fields":  concatenatedErrors,
 		})
 	} else {
 		// If the error is not a ConureError, return a generic internal error

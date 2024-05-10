@@ -68,15 +68,15 @@ type ComponentStatusResponse struct {
 }
 
 type CreateComponentRequest struct {
-	Name        string                   `json:"name" validate:"required"`
-	Type        string                   `json:"type" validate:"required"`
-	Properties  map[string]interface{}   `json:"properties" validate:"required"`
+	Name        string                   `json:"name" binding:"required"`
+	Type        string                   `json:"type" binding:"required"`
+	Properties  map[string]interface{}   `json:"properties" binding:"required"`
 	Traits      []map[string]interface{} `json:"traits"`
 	Description string                   `json:"description"`
 }
 
 type CreateOrganizationRequest struct {
-	Name string `json:"name" validate:"required"`
+	Name string `json:"name" binding:"required"`
 }
 
 func (r *CreateOrganizationRequest) ParseRequestToModel() *models.Organization {
@@ -94,7 +94,7 @@ type OrganizationListResponse struct {
 }
 
 type CreateEnvironmentRequest struct {
-	Name string `json:"name" validate:"required,regexp=^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"`
+	Name string `json:"name" validate:"required,regexp=^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"` // TODO: Validate this field with a regex, current implementation doesn't work
 }
 
 type EnvironmentListResponse struct {

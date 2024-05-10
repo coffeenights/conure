@@ -12,7 +12,7 @@ spec:
             - clone
             - --single-branch
             - --branch
-            - feat/deployment
+            - main
             - https://github.com/coffeenights/conure-frontend.git
             - /workspace
           volumeMounts:
