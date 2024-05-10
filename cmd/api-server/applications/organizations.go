@@ -1,8 +1,6 @@
 package applications
 
 import (
-	"errors"
-	"github.com/go-playground/validator/v10"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -32,11 +30,7 @@ func (a *ApiHandler) DetailOrganization(c *gin.Context) {
 func (a *ApiHandler) CreateOrganization(c *gin.Context) {
 	request := CreateOrganizationRequest{}
 	err := c.ShouldBind(&request)
-	var validationErr validator.ValidationErrors
-	if errors.As(err, &validationErr) {
-		conureerrors.AbortWithValidationError(c, validationErr)
-		return
-	} else if err != nil {
+	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
 	}

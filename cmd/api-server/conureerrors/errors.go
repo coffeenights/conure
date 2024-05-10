@@ -50,10 +50,23 @@ var (
 
 func AbortWithError(c *gin.Context, err error) {
 	var conureErr *ConureError
+	var validationErr validator.ValidationErrors
+
 	if errors.As(err, &conureErr) {
 		c.AbortWithStatusJSON(conureErr.StatusCode, gin.H{
 			"code":  conureErr.Code,
 			"error": conureErr.Message,
+		})
+	} else if errors.As(err, &validationErr) {
+		var fieldNames []string
+		for _, errorField := range validationErr {
+			fieldNames = append(fieldNames, errorField.Field())
+		}
+		concatenatedErrors := strings.Join(fieldNames, ", ")
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+			"code":    ErrFieldValidation.Code,
+			"message": ErrFieldValidation.Message,
+			"fields":  concatenatedErrors,
 		})
 	} else {
 		// If the error is not a ConureError, return a generic internal error
