@@ -76,16 +76,3 @@ func AbortWithError(c *gin.Context, err error) {
 		})
 	}
 }
-
-func AbortWithValidationError(c *gin.Context, err validator.ValidationErrors) {
-	var validationErrs []string
-	for _, errorField := range err {
-		validationErrs = append(validationErrs, errorField.Field())
-	}
-	concatenatedErrors := strings.Join(validationErrs, ", ")
-	c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
-		"code":    ErrFieldValidation.Code,
-		"message": ErrFieldValidation.Message,
-		"fields":  concatenatedErrors,
-	})
-}
