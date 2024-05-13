@@ -11,26 +11,16 @@ import (
 type ApplicationStatus string
 
 const (
-	// ApplicationStarting means the app is preparing for reconcile
-	ApplicationStarting ApplicationStatus = "starting"
-	// ApplicationRendering means the app is rendering
-	ApplicationRendering ApplicationStatus = "rendering"
-	// ApplicationPolicyGenerating means the app is generating policies
-	ApplicationPolicyGenerating ApplicationStatus = "generatingPolicy"
-	// ApplicationRunningWorkflow means the app is running workflow
-	ApplicationRunningWorkflow ApplicationStatus = "runningWorkflow"
-	// ApplicationWorkflowSuspending means the app's workflow is suspending
+	ApplicationStarting           ApplicationStatus = "starting"
+	ApplicationRendering          ApplicationStatus = "rendering"
+	ApplicationPolicyGenerating   ApplicationStatus = "generatingPolicy"
+	ApplicationRunningWorkflow    ApplicationStatus = "runningWorkflow"
 	ApplicationWorkflowSuspending ApplicationStatus = "workflowSuspending"
-	// ApplicationWorkflowTerminated means the app's workflow is terminated
 	ApplicationWorkflowTerminated ApplicationStatus = "workflowTerminated"
-	// ApplicationWorkflowFailed means the app's workflow is failed
-	ApplicationWorkflowFailed ApplicationStatus = "workflowFailed"
-	// ApplicationRunning means the app finished rendering and applied result to the cluster
-	ApplicationRunning ApplicationStatus = "running"
-	// ApplicationUnhealthy means the app finished rendering and applied result to the cluster, but still unhealthy
-	ApplicationUnhealthy ApplicationStatus = "unhealthy"
-	// ApplicationDeleting means application is being deleted
-	ApplicationDeleting ApplicationStatus = "deleting"
+	ApplicationWorkflowFailed     ApplicationStatus = "workflowFailed"
+	ApplicationRunning            ApplicationStatus = "running"
+	ApplicationUnhealthy          ApplicationStatus = "unhealthy"
+	ApplicationDeleting           ApplicationStatus = "deleting"
 )
 
 type ApplicationResponse struct {
