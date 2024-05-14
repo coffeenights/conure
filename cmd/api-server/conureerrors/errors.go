@@ -3,11 +3,11 @@ package conureerrors
 import (
 	"errors"
 	"fmt"
-	"github.com/go-playground/validator/v10"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 )
 
 type ConureError struct {
@@ -33,11 +33,11 @@ var (
 	ErrInvalidRequest               = &ConureError{Code: "2001", Message: "invalid_request", StatusCode: http.StatusBadRequest}
 	ErrObjectNotFound               = &ConureError{Code: "2002", Message: "object_not_found", StatusCode: http.StatusNotFound}
 	ErrObjectAlreadyExists          = &ConureError{Code: "2003", Message: "object_already_exists", StatusCode: http.StatusBadRequest}
-	ErrEmailAlreadyExists           = &ConureError{Code: "2003", Message: "email_already_exists", StatusCode: http.StatusBadRequest}
 	ErrInvalidEmail                 = &ConureError{Code: "2004", Message: "invalid_email", StatusCode: http.StatusBadRequest}
 	ErrInvalidPassword              = &ConureError{Code: "2005", Message: "invalid_password", StatusCode: http.StatusBadRequest}
 	ErrPasswordConfirmationMismatch = &ConureError{Code: "2006", Message: "password_confirmation_mismatch", StatusCode: http.StatusBadRequest}
 	ErrFieldValidation              = &ConureError{Code: "2007", Message: "invalid_field_value", StatusCode: http.StatusBadRequest}
+	ErrEmailAlreadyExists           = &ConureError{Code: "2008", Message: "email_already_exists", StatusCode: http.StatusBadRequest}
 
 	ErrInternalError = &ConureError{Code: "3001", Message: "internal_error", StatusCode: http.StatusInternalServerError}
 	ErrDatabaseError = &ConureError{Code: "3002", Message: "database_error", StatusCode: http.StatusInternalServerError}
