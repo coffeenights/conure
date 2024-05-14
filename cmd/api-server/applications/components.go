@@ -109,7 +109,7 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 	component := &models.Component{}
 	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
 	if err != nil {
-		if err.Error() == "mongo: no documents in result" {
+		if errors.Is(err, mongo.ErrNoDocuments) || errors.Is(err, primitive.ErrInvalidHex) {
 			conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 			return
 		}
@@ -161,6 +161,13 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
+	response.Properties.Status, err = status.GetComponentStatus(component.Name)
+	if err != nil {
+		log.Printf("Error getting component status: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
 	response.Component.Component = component
 	c.JSON(http.StatusOK, response)
 
