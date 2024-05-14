@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-func GetDeploymentByLabels(clientset *kubernetes.Clientset, namespace string, labels map[string]string) ([]k8sV1.Deployment, error) {
+func GetDeploymentsByLabels(clientset *kubernetes.Clientset, namespace string, labels map[string]string) ([]k8sV1.Deployment, error) {
 	deploymentsClient := clientset.AppsV1().Deployments(namespace)
 	var labelSelector []string
 	for key, value := range labels {
