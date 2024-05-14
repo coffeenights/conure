@@ -340,6 +340,16 @@ func (a *Application) ListComponents(db *database.MongoDB) ([]Component, error) 
 	return components, nil
 }
 
+func (a *Application) CountComponents(db *database.MongoDB) (int64, error) {
+	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
+	filter := bson.M{"applicationID": a.ID, "deletedAt": bson.M{"$exists": false}}
+	count, err := collection.CountDocuments(context.Background(), filter)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (a *Application) CreateEnvironment(db *database.MongoDB, name string) (*Environment, error) {
 	env := NewEnvironment(name)
 	a.Environments = append(a.Environments, *env)

@@ -25,6 +25,7 @@ const (
 
 type ApplicationResponse struct {
 	*models.Application
+	TotalComponents int64 `json:"total_components"`
 }
 
 type ApplicationStatusResponse struct {

@@ -48,8 +48,15 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 	}
 	applicationResponses := make([]ApplicationResponse, len(handlers))
 	for i, handler := range handlers {
+		totalComponents, err := handler.Model.CountComponents(a.MongoDB)
+		if err != nil {
+			log.Printf("Error counting components: %v\n", err)
+			conureerrors.AbortWithError(c, err)
+			return
+		}
 		r := ApplicationResponse{
-			Application: handler.Model,
+			Application:     handler.Model,
+			TotalComponents: totalComponents,
 		}
 		applicationResponses[i] = r
 	}
