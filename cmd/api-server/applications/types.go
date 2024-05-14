@@ -81,6 +81,7 @@ type ComponentProperties struct {
 	ResourcesProperties *providers.ResourcesProperties `json:"resources"`
 	StorageProperties   *providers.StorageProperties   `json:"storage"`
 	SourceProperties    *providers.SourceProperties    `json:"source"`
+	Status              *providers.ComponentStatus     `json:"status"`
 }
 
 type ComponentStatusResponse struct {

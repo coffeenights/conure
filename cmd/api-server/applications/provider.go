@@ -20,6 +20,7 @@ type ProviderStatus interface {
 	GetResourcesProperties(componentName string) (*providers.ResourcesProperties, error)
 	GetStorageProperties(componentName string) (*providers.StorageProperties, error)
 	GetSourceProperties(componentName string) (*providers.SourceProperties, error)
+	GetComponentStatus(componentName string) (*providers.ComponentStatus, error)
 }
 
 func NewProviderStatus(application *models.Application, environment *models.Environment) (ProviderStatus, error) {

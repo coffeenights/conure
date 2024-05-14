@@ -76,6 +76,39 @@ func (p *ProviderStatusVela) GetApplicationStatus() (string, error) {
 	return string(p.VelaApplication.Status.Phase), nil
 }
 
+func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*ComponentStatus, error) {
+	comp, err := p.getVelaComponent(componentName)
+	if err != nil {
+		return nil, err
+	}
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		return nil, err
+	}
+	labels := map[string]string{
+		ApplicationIDLabel:  p.ApplicationID,
+		OrganizationIDLabel: p.OrganizationID,
+		NamespaceLabel:      p.Namespace,
+		ComponentNameLabel:  comp.ComponentSpec.Name,
+	}
+	deployments, err := k8sUtils.GetDeploymentsByLabels(clientset.K8s, p.Namespace, labels)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(deployments) == 0 {
+
+	}
+	deployment := deployments[0]
+
+	status := &ComponentStatus{
+		Healthy: comp.ComponentStatus.Healthy,
+		Message: comp.ComponentStatus.Message,
+		Updated: deployment.ObjectMeta.CreationTimestamp.UTC(),
+	}
+	return status, nil
+}
+
 func (p *ProviderStatusVela) getVelaComponent(componentName string) (*VelaComponent, error) {
 	velaComponent := &VelaComponent{}
 	for _, componentSpec := range p.VelaApplication.Spec.Components {
@@ -197,7 +230,7 @@ func (p *ProviderStatusVela) GetActivity(componentID string) error {
 		NamespaceLabel:      p.Namespace,
 		ComponentIDLabel:    componentID,
 	}
-	deployments, err := k8sUtils.GetDeploymentByLabels(clientset.K8s, p.Namespace, labels)
+	deployments, err := k8sUtils.GetDeploymentsByLabels(clientset.K8s, p.Namespace, labels)
 	if err != nil {
 		return err
 	}

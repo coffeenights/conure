@@ -1,5 +1,7 @@
 package providers
 
+import "time"
+
 type NetworkProperties struct {
 	IP         string  `json:"ip"`
 	ExternalIP string  `json:"external_ip"`
@@ -19,4 +21,10 @@ type StorageProperties struct {
 
 type SourceProperties struct {
 	ContainerImage string `json:"container_image"`
+}
+
+type ComponentStatus struct {
+	Healthy bool
+	Message string
+	Updated time.Time
 }
