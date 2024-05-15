@@ -114,7 +114,7 @@ func (a *ApiHandler) statusLoad(c *gin.Context, component *models.Component) (Pr
 
 	status, err := handler.Status(env)
 	if errors.Is(err, k8sUtils.ErrApplicationNotFound) {
-		return nil, conureerrors.ErrObjectNotFound
+		return nil, conureerrors.ErrApplicationNotDeployed
 	} else if err != nil {
 		log.Printf("Error getting status: %v\n", err)
 		return nil, err

@@ -190,8 +190,7 @@ func (a *ApiHandler) StatusApplication(c *gin.Context) {
 	}
 	status, err := handler.Status(env)
 	if errors.Is(err, k8sUtils.ErrApplicationNotFound) {
-		log.Printf("Error getting status: %v\n", err)
-		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
+		conureerrors.AbortWithError(c, conureerrors.ErrApplicationNotDeployed)
 		return
 	} else if err != nil {
 		log.Printf("Error getting status: %v\n", err)
