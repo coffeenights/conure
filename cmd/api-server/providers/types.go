@@ -23,8 +23,8 @@ type SourceProperties struct {
 	ContainerImage string `json:"container_image"`
 }
 
-type ComponentStatus struct {
-	Healthy bool
-	Message string
-	Updated time.Time
+type ComponentStatusHealth struct {
+	Healthy bool      `json:"healthy"`
+	Message string    `json:"message"`
+	Updated time.Time `json:"updated"`
 }

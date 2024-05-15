@@ -76,7 +76,7 @@ func (p *ProviderStatusVela) GetApplicationStatus() (string, error) {
 	return string(p.VelaApplication.Status.Phase), nil
 }
 
-func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*ComponentStatus, error) {
+func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*ComponentStatusHealth, error) {
 	comp, err := p.getVelaComponent(componentName)
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*Componen
 	}
 	deployment := deployments[0]
 
-	status := &ComponentStatus{
+	status := &ComponentStatusHealth{
 		Healthy: comp.ComponentStatus.Healthy,
 		Message: comp.ComponentStatus.Message,
 		Updated: deployment.ObjectMeta.CreationTimestamp.UTC(),

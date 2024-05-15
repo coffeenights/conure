@@ -172,7 +172,7 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 		results <- err
 	}()
 	go func() {
-		response.Properties.Status, err = status.GetComponentStatus(component.Name)
+		response.Properties.Health, err = status.GetComponentStatus(component.Name)
 		results <- err
 	}()
 

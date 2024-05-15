@@ -77,11 +77,11 @@ type ComponentListResponse struct {
 }
 
 type ComponentProperties struct {
-	NetworkProperties   *providers.NetworkProperties   `json:"network"`
-	ResourcesProperties *providers.ResourcesProperties `json:"resources"`
-	StorageProperties   *providers.StorageProperties   `json:"storage"`
-	SourceProperties    *providers.SourceProperties    `json:"source"`
-	Status              *providers.ComponentStatus     `json:"status"`
+	NetworkProperties   *providers.NetworkProperties     `json:"network"`
+	ResourcesProperties *providers.ResourcesProperties   `json:"resources"`
+	StorageProperties   *providers.StorageProperties     `json:"storage"`
+	SourceProperties    *providers.SourceProperties      `json:"source"`
+	Health              *providers.ComponentStatusHealth `json:"health"`
 }
 
 type ComponentStatusResponse struct {
