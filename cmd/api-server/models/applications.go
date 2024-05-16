@@ -445,6 +445,20 @@ func (c *Component) GetByID(db *database.MongoDB, ID string) (*Component, error)
 	return c, nil
 }
 
+func (c *Component) Update(db *database.MongoDB) error {
+	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
+	filter := bson.M{"_id": c.ID}
+	update := bson.D{
+		{"$set", c},
+	}
+	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return err
+	}
+	log.Printf("Matched %v documents and updated %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
+	return nil
+}
+
 type ApplicationRevision struct {
 	RevisionNumber int       `json:"revision_number" bson:"revisionNumber"`
 	CreatedAt      time.Time `json:"created_at" bson:"createdAt"`

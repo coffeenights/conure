@@ -237,3 +237,64 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 	}
 	c.JSON(http.StatusCreated, component)
 }
+
+func (a *ApiHandler) UpdateComponent(c *gin.Context) {
+	handler, err := NewApplicationHandler(a.MongoDB)
+	if err != nil {
+		log.Printf("Error creating application handler: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	if errors.Is(err, conureerrors.ErrObjectNotFound) {
+		conureerrors.AbortWithError(c, err)
+		return
+	} else if err != nil {
+		log.Printf("Error getting application: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
+		return
+	}
+
+	component := models.Component{}
+	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) || errors.Is(err, primitive.ErrInvalidHex) {
+			conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
+			return
+		}
+		log.Printf("Error getting components: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	var request CreateComponentRequest
+	err = c.BindJSON(&request)
+	if err != nil {
+		log.Printf("Error binding request: %v\n", err)
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+
+	component.Name = request.Name
+	component.Type = request.Type
+	component.Description = request.Description
+	component.ApplicationID = handler.Model.ID
+	component.Properties = request.Properties
+	component.Traits = request.Traits
+
+	err = component.Update(a.MongoDB)
+	if errors.Is(err, conureerrors.ErrObjectAlreadyExists) {
+		conureerrors.AbortWithError(c, err)
+		return
+	} else if err != nil {
+		log.Printf("Error updating component: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, component)
+
+}
