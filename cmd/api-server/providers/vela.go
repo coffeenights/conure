@@ -280,10 +280,11 @@ func getExposeTraitProperties(trait *common.ApplicationTrait, properties *Networ
 }
 
 type ProviderDispatcherVela struct {
-	OrganizationID string
-	ApplicationID  string
-	Namespace      string
-	Environment    string
+	OrganizationID  string
+	ApplicationID   string
+	ApplicationName string
+	Namespace       string
+	Environment     string
 }
 
 func (p *ProviderDispatcherVela) createNamespace(clientset *k8sUtils.GenericClientset) error {
@@ -330,5 +331,28 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 		return err
 	}
 	log.Printf("Created deployment %q.\n", result.GetName())
+	return nil
+}
+
+func (p *ProviderDispatcherVela) UpdateApplication(manifest map[string]interface{}) error {
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		log.Printf("Error getting clientset: %v\n", err)
+		return err
+	}
+	deploymentRes := schema.GroupVersionResource{Group: "core.oam.dev", Version: "v1beta1", Resource: "applications"}
+	resource, err := clientset.Dynamic.Resource(deploymentRes).Namespace(p.Namespace).Get(context.Background(), p.ApplicationName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	deployment := &unstructured.Unstructured{
+		Object: manifest,
+	}
+	deployment.SetResourceVersion(resource.GetResourceVersion())
+	result, err := clientset.Dynamic.Resource(deploymentRes).Namespace(p.Namespace).Update(context.Background(), deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	log.Printf("Updated deployment %q.\n", result.GetName())
 	return nil
 }
