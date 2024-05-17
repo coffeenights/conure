@@ -15,8 +15,15 @@ type ResourcesProperties struct {
 	Memory   string `json:"memory"`
 }
 
-type StorageProperties struct {
+type VolumeProperties struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
 	Size string `json:"size"`
+}
+
+type StorageProperties struct {
+	Volumes []VolumeProperties `json:"volumes"`
+	Healthy bool               `json:"health"`
 }
 
 type SourceProperties struct {

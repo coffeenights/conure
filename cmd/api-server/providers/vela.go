@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/mitchellh/mapstructure"
 	"log"
 
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
@@ -22,6 +23,18 @@ import (
 type VelaComponent struct {
 	ComponentSpec   *common.ApplicationComponent
 	ComponentStatus *common.ApplicationComponentStatus
+}
+
+type PVCStorageTrait struct {
+	PVC []struct {
+		Name      string
+		MountPath string
+		Resources struct {
+			Requests struct {
+				Storage string
+			}
+		}
+	}
 }
 
 type WorkloadName string
@@ -199,7 +212,46 @@ func (p *ProviderStatusVela) GetResourcesProperties(componentName string) (*Reso
 }
 
 func (p *ProviderStatusVela) GetStorageProperties(componentName string) (*StorageProperties, error) {
-	return nil, nil
+	var storages StorageProperties
+	velaComponent, err := p.getVelaComponent(componentName)
+	if err != nil {
+		return nil, err
+	}
+	for _, trait := range velaComponent.ComponentSpec.Traits {
+		if trait.Type == "storage" {
+			traitsData, err := k8sUtils.ExtractMapFromRawExtension(trait.Properties)
+			if err != nil {
+				return nil, err
+			}
+			var pvcTrait PVCStorageTrait
+			if _, ok := traitsData["pvc"].(interface{}); ok {
+				err := mapstructure.Decode(traitsData, &pvcTrait)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, fmt.Errorf("pvc not found in storage trait")
+			}
+			for _, pvc := range pvcTrait.PVC {
+				size := "8Gi" // Default value per kubevela
+				if pvc.Resources.Requests.Storage != "" {
+					size = pvc.Resources.Requests.Storage
+				}
+				volume := VolumeProperties{
+					Name: pvc.Name,
+					Path: pvc.MountPath,
+					Size: size,
+				}
+				storages.Volumes = append(storages.Volumes, volume)
+			}
+		}
+	}
+	for _, status := range velaComponent.ComponentStatus.Traits {
+		if status.Type == "storage" {
+			storages.Healthy = status.Healthy
+		}
+	}
+	return &storages, nil
 }
 
 func (p *ProviderStatusVela) GetSourceProperties(componentName string) (*SourceProperties, error) {
