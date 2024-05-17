@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/mitchellh/mapstructure"
-	"log"
-
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -15,9 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
-	k8sUtils "github.com/coffeenights/conure/internal/k8s"
+	"log"
 )
 
 type VelaComponent struct {
@@ -213,6 +211,7 @@ func (p *ProviderStatusVela) GetResourcesProperties(componentName string) (*Reso
 
 func (p *ProviderStatusVela) GetStorageProperties(componentName string) (*StorageProperties, error) {
 	var storages StorageProperties
+	storages.Volumes = []VolumeProperties{}
 	velaComponent, err := p.getVelaComponent(componentName)
 	if err != nil {
 		return nil, err
@@ -267,6 +266,17 @@ func (p *ProviderStatusVela) GetSourceProperties(componentName string) (*SourceP
 	source.ContainerImage = ""
 	if image, ok := propertiesData["image"].(string); ok {
 		source.ContainerImage = image
+	}
+	if cmd, ok := propertiesData["cmd"].([]interface{}); ok {
+		var cmdStr string
+		for i, c := range cmd {
+			if i == len(cmd)-1 {
+				cmdStr += c.(string)
+				break
+			}
+			cmdStr += c.(string) + " "
+		}
+		source.Command = cmdStr
 	}
 	return &source, nil
 }

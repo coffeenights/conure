@@ -28,6 +28,7 @@ type StorageProperties struct {
 
 type SourceProperties struct {
 	ContainerImage string `json:"container_image"`
+	Command        string `json:"command"`
 }
 
 type ComponentStatusHealth struct {
