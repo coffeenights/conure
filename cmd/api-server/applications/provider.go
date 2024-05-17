@@ -20,6 +20,7 @@ type ProviderStatus interface {
 	GetResourcesProperties(componentName string) (*providers.ResourcesProperties, error)
 	GetStorageProperties(componentName string) (*providers.StorageProperties, error)
 	GetSourceProperties(componentName string) (*providers.SourceProperties, error)
+	GetComponentStatus(componentName string) (*providers.ComponentStatusHealth, error)
 }
 
 func NewProviderStatus(application *models.Application, environment *models.Environment) (ProviderStatus, error) {
@@ -39,6 +40,7 @@ func NewProviderStatus(application *models.Application, environment *models.Envi
 
 type ProviderDispatcher interface {
 	DeployApplication(manifest map[string]interface{}) error
+	UpdateApplication(manifest map[string]interface{}) error
 }
 
 func NewProviderDispatcher(application *models.Application, environment *models.Environment) (ProviderDispatcher, error) {
@@ -48,10 +50,11 @@ func NewProviderDispatcher(application *models.Application, environment *models.
 	switch providerType {
 	case Vela:
 		return &providers.ProviderDispatcherVela{
-			OrganizationID: application.OrganizationID.Hex(),
-			ApplicationID:  application.ID.Hex(),
-			Namespace:      environment.GetNamespace(),
-			Environment:    environment.Name,
+			OrganizationID:  application.OrganizationID.Hex(),
+			ApplicationID:   application.ID.Hex(),
+			ApplicationName: application.Name,
+			Namespace:       environment.GetNamespace(),
+			Environment:     environment.Name,
 		}, nil
 	}
 	return nil, conureerrors.ErrProviderNotSupported

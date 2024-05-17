@@ -291,6 +291,43 @@ func TestApplication_ListNotDeleted(t *testing.T) {
 	}
 }
 
+func TestApplication_CountComponents(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestApplicationCountComponents", primitive.NewObjectID().Hex()).Create(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	comp := Component{
+		ApplicationID: app.ID,
+		Name:          "test-component",
+		Type:          "service",
+		Properties: map[string]interface{}{
+			"cpu":      "1",
+			"memory":   "1Gi",
+			"replicas": int32(1),
+		},
+	}
+	_, err = comp.Create(client)
+	if err != nil {
+		t.Errorf("Failed to create component: %v", err)
+	}
+	count, err := app.CountComponents(client)
+	if err != nil {
+		t.Errorf("Failed to count components: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("Got %d components, want 1", count)
+	}
+	err = app.Delete(client)
+	if err != nil {
+		t.Errorf("Failed to delete application: %v", err)
+	}
+	_ = comp.Delete(client)
+}
+
 func TestComponent_CreateList(t *testing.T) {
 	client, err := SetupDB()
 	if err != nil {

@@ -7,8 +7,29 @@ import (
 	"time"
 )
 
+// ApplicationStatus Indicate the current condition of the overall application
+type ApplicationStatus string
+
+const (
+	ApplicationStarting           ApplicationStatus = "starting"
+	ApplicationRendering          ApplicationStatus = "rendering"
+	ApplicationPolicyGenerating   ApplicationStatus = "generatingPolicy"
+	ApplicationRunningWorkflow    ApplicationStatus = "runningWorkflow"
+	ApplicationWorkflowSuspending ApplicationStatus = "workflowSuspending"
+	ApplicationWorkflowTerminated ApplicationStatus = "workflowTerminated"
+	ApplicationWorkflowFailed     ApplicationStatus = "workflowFailed"
+	ApplicationRunning            ApplicationStatus = "running"
+	ApplicationUnhealthy          ApplicationStatus = "unhealthy"
+	ApplicationDeleting           ApplicationStatus = "deleting"
+)
+
 type ApplicationResponse struct {
 	*models.Application
+	TotalComponents int64 `json:"total_components"`
+}
+
+type ApplicationStatusResponse struct {
+	Status ApplicationStatus `json:"status"`
 }
 
 type ApplicationListResponse struct {
@@ -56,10 +77,11 @@ type ComponentListResponse struct {
 }
 
 type ComponentProperties struct {
-	NetworkProperties   *providers.NetworkProperties   `json:"network"`
-	ResourcesProperties *providers.ResourcesProperties `json:"resources"`
-	StorageProperties   *providers.StorageProperties   `json:"storage"`
-	SourceProperties    *providers.SourceProperties    `json:"source"`
+	NetworkProperties   *providers.NetworkProperties     `json:"network"`
+	ResourcesProperties *providers.ResourcesProperties   `json:"resources"`
+	StorageProperties   *providers.StorageProperties     `json:"storage"`
+	SourceProperties    *providers.SourceProperties      `json:"source"`
+	Health              *providers.ComponentStatusHealth `json:"health"`
 }
 
 type ComponentStatusResponse struct {

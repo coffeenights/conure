@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
-
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
+	"github.com/mitchellh/mapstructure"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	corev1 "k8s.io/api/core/v1"
@@ -14,14 +15,24 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-
-	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
-	k8sUtils "github.com/coffeenights/conure/internal/k8s"
+	"log"
 )
 
 type VelaComponent struct {
 	ComponentSpec   *common.ApplicationComponent
 	ComponentStatus *common.ApplicationComponentStatus
+}
+
+type PVCStorageTrait struct {
+	PVC []struct {
+		Name      string
+		MountPath string
+		Resources struct {
+			Requests struct {
+				Storage string
+			}
+		}
+	}
 }
 
 type WorkloadName string
@@ -74,6 +85,39 @@ func NewProviderStatusVela(organizationID string, applicationID string, namespac
 
 func (p *ProviderStatusVela) GetApplicationStatus() (string, error) {
 	return string(p.VelaApplication.Status.Phase), nil
+}
+
+func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*ComponentStatusHealth, error) {
+	comp, err := p.getVelaComponent(componentName)
+	if err != nil {
+		return nil, err
+	}
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		return nil, err
+	}
+	labels := map[string]string{
+		ApplicationIDLabel:  p.ApplicationID,
+		OrganizationIDLabel: p.OrganizationID,
+		NamespaceLabel:      p.Namespace,
+		ComponentNameLabel:  comp.ComponentSpec.Name,
+	}
+	deployments, err := k8sUtils.GetDeploymentsByLabels(clientset.K8s, p.Namespace, labels)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(deployments) == 0 {
+
+	}
+	deployment := deployments[0]
+
+	status := &ComponentStatusHealth{
+		Healthy: comp.ComponentStatus.Healthy,
+		Message: comp.ComponentStatus.Message,
+		Updated: deployment.ObjectMeta.CreationTimestamp.UTC(),
+	}
+	return status, nil
 }
 
 func (p *ProviderStatusVela) getVelaComponent(componentName string) (*VelaComponent, error) {
@@ -166,7 +210,47 @@ func (p *ProviderStatusVela) GetResourcesProperties(componentName string) (*Reso
 }
 
 func (p *ProviderStatusVela) GetStorageProperties(componentName string) (*StorageProperties, error) {
-	return nil, nil
+	var storages StorageProperties
+	storages.Volumes = []VolumeProperties{}
+	velaComponent, err := p.getVelaComponent(componentName)
+	if err != nil {
+		return nil, err
+	}
+	for _, trait := range velaComponent.ComponentSpec.Traits {
+		if trait.Type == "storage" {
+			traitsData, err := k8sUtils.ExtractMapFromRawExtension(trait.Properties)
+			if err != nil {
+				return nil, err
+			}
+			var pvcTrait PVCStorageTrait
+			if _, ok := traitsData["pvc"].(interface{}); ok {
+				err := mapstructure.Decode(traitsData, &pvcTrait)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, fmt.Errorf("pvc not found in storage trait")
+			}
+			for _, pvc := range pvcTrait.PVC {
+				size := "8Gi" // Default value per kubevela
+				if pvc.Resources.Requests.Storage != "" {
+					size = pvc.Resources.Requests.Storage
+				}
+				volume := VolumeProperties{
+					Name: pvc.Name,
+					Path: pvc.MountPath,
+					Size: size,
+				}
+				storages.Volumes = append(storages.Volumes, volume)
+			}
+		}
+	}
+	for _, status := range velaComponent.ComponentStatus.Traits {
+		if status.Type == "storage" {
+			storages.Healthy = status.Healthy
+		}
+	}
+	return &storages, nil
 }
 
 func (p *ProviderStatusVela) GetSourceProperties(componentName string) (*SourceProperties, error) {
@@ -183,6 +267,17 @@ func (p *ProviderStatusVela) GetSourceProperties(componentName string) (*SourceP
 	if image, ok := propertiesData["image"].(string); ok {
 		source.ContainerImage = image
 	}
+	if cmd, ok := propertiesData["cmd"].([]interface{}); ok {
+		var cmdStr string
+		for i, c := range cmd {
+			if i == len(cmd)-1 {
+				cmdStr += c.(string)
+				break
+			}
+			cmdStr += c.(string) + " "
+		}
+		source.Command = cmdStr
+	}
 	return &source, nil
 }
 
@@ -197,7 +292,7 @@ func (p *ProviderStatusVela) GetActivity(componentID string) error {
 		NamespaceLabel:      p.Namespace,
 		ComponentIDLabel:    componentID,
 	}
-	deployments, err := k8sUtils.GetDeploymentByLabels(clientset.K8s, p.Namespace, labels)
+	deployments, err := k8sUtils.GetDeploymentsByLabels(clientset.K8s, p.Namespace, labels)
 	if err != nil {
 		return err
 	}
@@ -247,10 +342,11 @@ func getExposeTraitProperties(trait *common.ApplicationTrait, properties *Networ
 }
 
 type ProviderDispatcherVela struct {
-	OrganizationID string
-	ApplicationID  string
-	Namespace      string
-	Environment    string
+	OrganizationID  string
+	ApplicationID   string
+	ApplicationName string
+	Namespace       string
+	Environment     string
 }
 
 func (p *ProviderDispatcherVela) createNamespace(clientset *k8sUtils.GenericClientset) error {
@@ -297,5 +393,28 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 		return err
 	}
 	log.Printf("Created deployment %q.\n", result.GetName())
+	return nil
+}
+
+func (p *ProviderDispatcherVela) UpdateApplication(manifest map[string]interface{}) error {
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		log.Printf("Error getting clientset: %v\n", err)
+		return err
+	}
+	deploymentRes := schema.GroupVersionResource{Group: "core.oam.dev", Version: "v1beta1", Resource: "applications"}
+	resource, err := clientset.Dynamic.Resource(deploymentRes).Namespace(p.Namespace).Get(context.Background(), p.ApplicationName, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	deployment := &unstructured.Unstructured{
+		Object: manifest,
+	}
+	deployment.SetResourceVersion(resource.GetResourceVersion())
+	result, err := clientset.Dynamic.Resource(deploymentRes).Namespace(p.Namespace).Update(context.Background(), deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	log.Printf("Updated deployment %q.\n", result.GetName())
 	return nil
 }

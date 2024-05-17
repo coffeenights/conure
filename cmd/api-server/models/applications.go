@@ -340,6 +340,16 @@ func (a *Application) ListComponents(db *database.MongoDB) ([]Component, error) 
 	return components, nil
 }
 
+func (a *Application) CountComponents(db *database.MongoDB) (int64, error) {
+	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
+	filter := bson.M{"applicationID": a.ID, "deletedAt": bson.M{"$exists": false}}
+	count, err := collection.CountDocuments(context.Background(), filter)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 func (a *Application) CreateEnvironment(db *database.MongoDB, name string) (*Environment, error) {
 	env := NewEnvironment(name)
 	a.Environments = append(a.Environments, *env)
@@ -433,6 +443,20 @@ func (c *Component) GetByID(db *database.MongoDB, ID string) (*Component, error)
 	}
 	log.Println("Found a single document: ", c)
 	return c, nil
+}
+
+func (c *Component) Update(db *database.MongoDB) error {
+	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
+	filter := bson.M{"_id": c.ID}
+	update := bson.D{
+		{"$set", c},
+	}
+	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
+	if err != nil {
+		return err
+	}
+	log.Printf("Matched %v documents and updated %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
+	return nil
 }
 
 type ApplicationRevision struct {

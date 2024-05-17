@@ -1,5 +1,7 @@
 package providers
 
+import "time"
+
 type NetworkProperties struct {
 	IP         string  `json:"ip"`
 	ExternalIP string  `json:"external_ip"`
@@ -13,10 +15,24 @@ type ResourcesProperties struct {
 	Memory   string `json:"memory"`
 }
 
-type StorageProperties struct {
+type VolumeProperties struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
 	Size string `json:"size"`
+}
+
+type StorageProperties struct {
+	Volumes []VolumeProperties `json:"volumes"`
+	Healthy bool               `json:"health"`
 }
 
 type SourceProperties struct {
 	ContainerImage string `json:"container_image"`
+	Command        string `json:"command"`
+}
+
+type ComponentStatusHealth struct {
+	Healthy bool      `json:"healthy"`
+	Message string    `json:"message"`
+	Updated time.Time `json:"updated"`
 }
