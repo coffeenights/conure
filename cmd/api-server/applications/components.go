@@ -2,10 +2,14 @@ package applications
 
 import (
 	"errors"
+	"fmt"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"io"
+	corev1 "k8s.io/api/core/v1"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -297,4 +301,46 @@ func (a *ApiHandler) UpdateComponent(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, component)
 
+}
+
+func (a *ApiHandler) StreamLogs(c *gin.Context) {
+	// Set necessary headers for SSE
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+
+	podLogOpts := corev1.PodLogOptions{}
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		log.Printf("Error getting clientset: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+	req := clientset.K8s.CoreV1().Pods("namespace-test").GetLogs("backend-server-5588c58f47-cx7bd", &podLogOpts)
+	podLogs, err := req.Stream(c.Request.Context())
+	if err != nil {
+		log.Printf("Error in opening stream: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+	defer podLogs.Close()
+	for {
+		byteStream, err := io.ReadAll(podLogs)
+		log.Printf("Stream: %s\n", string(byteStream))
+		if err != nil {
+			log.Printf("Error in reading stream: %v\n", err)
+			conureerrors.AbortWithError(c, err)
+			return
+		}
+		// Write "data: <counter>\n\n" to the client
+		_, err = c.Writer.Write([]byte(fmt.Sprintf("%s\n", string(byteStream))))
+		if err != nil {
+			log.Printf("Error in writing stream: %v\n", err)
+			conureerrors.AbortWithError(c, err)
+			return
+		}
+		c.Writer.Flush() // Flush the data immediately instead of buffering it for later.
+		time.Sleep(time.Second)
+	}
 }
