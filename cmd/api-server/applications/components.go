@@ -3,6 +3,10 @@ package applications
 import (
 	"errors"
 	"fmt"
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/models"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
+	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"io"
@@ -10,12 +14,6 @@ import (
 	"log"
 	"net/http"
 	"time"
-
-	"github.com/gin-gonic/gin"
-
-	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
-	"github.com/coffeenights/conure/cmd/api-server/models"
-	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 )
 
 func (a *ApiHandler) ListComponents(c *gin.Context) {
@@ -157,7 +155,7 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 
 	// Create a channel to collect the results
 	results := make(chan error)
-
+	defer close(results)
 	// Create a goroutine for each property
 	go func() {
 		response.Properties.ResourcesProperties, err = status.GetResourcesProperties(component.Name)
@@ -179,7 +177,6 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 		response.Properties.Health, err = status.GetComponentStatus(component.Name)
 		results <- err
 	}()
-
 	// Collect the results
 	for i := 0; i < 5; i++ {
 		err := <-results
@@ -192,7 +189,6 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 
 	response.Component.Component = &component
 	c.JSON(http.StatusOK, response)
-
 }
 
 func (a *ApiHandler) CreateComponent(c *gin.Context) {
@@ -303,6 +299,21 @@ func (a *ApiHandler) UpdateComponent(c *gin.Context) {
 
 }
 
+type Event struct {
+	// Events are pushed to this channel by the main events-gathering routine
+	Message chan string
+
+	// New client connections
+	NewClients chan chan string
+
+	// Closed client connections
+	ClosedClients chan chan string
+
+	// Total client connections
+	TotalClients map[chan string]bool
+}
+type ClientChan chan string
+
 func (a *ApiHandler) StreamLogs(c *gin.Context) {
 	// Set necessary headers for SSE
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
@@ -310,37 +321,51 @@ func (a *ApiHandler) StreamLogs(c *gin.Context) {
 	c.Writer.Header().Set("Connection", "keep-alive")
 	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 
-	podLogOpts := corev1.PodLogOptions{}
+	//lines := int64(100)
+	podLogOpts := corev1.PodLogOptions{
+		//TailLines: &lines,
+	}
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	req := clientset.K8s.CoreV1().Pods("namespace-test").GetLogs("backend-server-5588c58f47-cx7bd", &podLogOpts)
-	podLogs, err := req.Stream(c.Request.Context())
-	if err != nil {
-		log.Printf("Error in opening stream: %v\n", err)
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-	defer podLogs.Close()
-	for {
-		byteStream, err := io.ReadAll(podLogs)
-		log.Printf("Stream: %s\n", string(byteStream))
-		if err != nil {
-			log.Printf("Error in reading stream: %v\n", err)
-			conureerrors.AbortWithError(c, err)
-			return
+	stream := make(chan string)
+	//defer func() {
+	//	close(stream)
+	//	log.Println("Closing stream")
+	//}()
+	go func() {
+		req := clientset.K8s.CoreV1().Pods("namespace-test").GetLogs("backend-server-5588c58f47-cx7bd", &podLogOpts)
+
+		for {
+			podLogs, err := req.Stream(c.Request.Context())
+			if err != nil {
+				log.Printf("Error in opening stream: %v\n", err)
+				conureerrors.AbortWithError(c, err)
+				return
+			}
+			byteStream, err := io.ReadAll(podLogs)
+			if err != nil {
+				log.Printf("Error in reading stream: %v\n", err)
+				conureerrors.AbortWithError(c, err)
+				return
+			}
+			if len(byteStream) != 0 {
+				stream <- string(byteStream)
+			}
+			time.Sleep(1 * time.Second)
 		}
-		// Write "data: <counter>\n\n" to the client
-		_, err = c.Writer.Write([]byte(fmt.Sprintf("%s\n", string(byteStream))))
-		if err != nil {
-			log.Printf("Error in writing stream: %v\n", err)
-			conureerrors.AbortWithError(c, err)
-			return
+	}()
+
+	c.Stream(func(w io.Writer) bool {
+		// Stream message to client from message channel
+		if msg, ok := <-stream; ok {
+			c.SSEvent("message", fmt.Sprintf("data: %s\n\n", msg))
+			return true
 		}
-		c.Writer.Flush() // Flush the data immediately instead of buffering it for later.
-		time.Sleep(time.Second)
-	}
+		return false
+	})
+
 }
