@@ -13,6 +13,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -299,19 +300,6 @@ func (a *ApiHandler) UpdateComponent(c *gin.Context) {
 
 }
 
-type Event struct {
-	// Events are pushed to this channel by the main events-gathering routine
-	Message chan string
-
-	// New client connections
-	NewClients chan chan string
-
-	// Closed client connections
-	ClosedClients chan chan string
-
-	// Total client connections
-	TotalClients map[chan string]bool
-}
 type ClientChan chan string
 
 func (a *ApiHandler) StreamLogs(c *gin.Context) {
@@ -323,7 +311,7 @@ func (a *ApiHandler) StreamLogs(c *gin.Context) {
 
 	//lines := int64(100)
 	podLogOpts := corev1.PodLogOptions{
-		//TailLines: &lines,
+		Follow: true,
 	}
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
@@ -331,29 +319,41 @@ func (a *ApiHandler) StreamLogs(c *gin.Context) {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	stream := make(chan string)
-	//defer func() {
-	//	close(stream)
-	//	log.Println("Closing stream")
-	//}()
-	go func() {
-		req := clientset.K8s.CoreV1().Pods("namespace-test").GetLogs("backend-server-5588c58f47-cx7bd", &podLogOpts)
 
+	stream := make(chan string)
+	done := make(chan bool)
+	defer func() {
+		done <- true
+		log.Println("Closing stream")
+	}()
+	go func() {
+		req := clientset.K8s.CoreV1().Pods("fbc70d63-development").GetLogs("backend-service-d7c588db7-hkjj2", &podLogOpts)
+		podLogs, err := req.Stream(c.Request.Context())
+		if err != nil {
+			log.Printf("Error in opening stream: %v\n", err)
+			conureerrors.AbortWithError(c, err)
+			return
+		}
 		for {
-			podLogs, err := req.Stream(c.Request.Context())
-			if err != nil {
-				log.Printf("Error in opening stream: %v\n", err)
-				conureerrors.AbortWithError(c, err)
-				return
+			buf := make([]byte, 2000)
+			numBytes, err := podLogs.Read(buf)
+			if numBytes == 0 {
+				continue
 			}
-			byteStream, err := io.ReadAll(podLogs)
+			if err == io.EOF {
+				break
+			}
 			if err != nil {
 				log.Printf("Error in reading stream: %v\n", err)
 				conureerrors.AbortWithError(c, err)
 				return
 			}
-			if len(byteStream) != 0 {
-				stream <- string(byteStream)
+			select {
+			case stream <- string(buf[:numBytes]):
+			case <-done:
+				close(stream)
+				close(done)
+				return
 			}
 			time.Sleep(1 * time.Second)
 		}
@@ -362,7 +362,11 @@ func (a *ApiHandler) StreamLogs(c *gin.Context) {
 	c.Stream(func(w io.Writer) bool {
 		// Stream message to client from message channel
 		if msg, ok := <-stream; ok {
-			c.SSEvent("message", fmt.Sprintf("data: %s\n\n", msg))
+			splitMsg := strings.Split(msg, "\n")
+			for _, line := range splitMsg {
+				c.SSEvent("message", fmt.Sprintf("%s", line))
+
+			}
 			return true
 		}
 		return false
