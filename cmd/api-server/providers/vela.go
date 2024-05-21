@@ -43,13 +43,14 @@ const (
 )
 
 const (
-	ApplicationIDLabel  = "conure.io/application-id"
-	OrganizationIDLabel = "conure.io/organization-id"
-	EnvironmentLabel    = "conure.io/environment"
-	CreatedByLabel      = "conure.io/created-by"
-	NamespaceLabel      = "conure.io/namespace"
-	ComponentNameLabel  = "app.oam.dev/component"
-	ComponentIDLabel    = "conure.io/component-id"
+	ApplicationIDLabel   = "conure.io/application-id"
+	OrganizationIDLabel  = "conure.io/organization-id"
+	EnvironmentLabel     = "conure.io/environment"
+	CreatedByLabel       = "conure.io/created-by"
+	NamespaceLabel       = "conure.io/namespace"
+	ComponentNameLabel   = "app.oam.dev/component"
+	ApplicationNameLabel = "app.oam.dev/name"
+	ComponentIDLabel     = "conure.io/component-id"
 )
 
 type ProviderStatusVela struct {
@@ -307,6 +308,31 @@ func (p *ProviderStatusVela) GetActivity(componentID string) error {
 	events, err := clientset.K8s.CoreV1().Events(p.Namespace).List(context.Background(), listOptions)
 	_ = events
 	return nil
+}
+
+func (p *ProviderStatusVela) GetPodList(componentName string) ([]string, error) {
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		return nil, err
+	}
+
+	podSelector := fields.SelectorFromSet(fields.Set{
+		ApplicationNameLabel: p.VelaApplication.Name,
+		ComponentNameLabel:   componentName,
+	})
+
+	listOptions := metav1.ListOptions{
+		LabelSelector: podSelector.String(),
+	}
+	pods, err := clientset.K8s.CoreV1().Pods(p.Namespace).List(context.Background(), listOptions)
+	if err != nil {
+		return nil, err
+	}
+	podNames := []string{}
+	for _, pod := range pods.Items {
+		podNames = append(podNames, pod.Name)
+	}
+	return podNames, nil
 }
 
 func getNetworkPropertiesFromService(clientset *k8sUtils.GenericClientset, namespace string, labels map[string]string, properties *NetworkProperties) error {

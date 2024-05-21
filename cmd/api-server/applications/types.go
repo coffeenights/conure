@@ -97,6 +97,10 @@ type CreateComponentRequest struct {
 	Description string                   `json:"description"`
 }
 
+type ComponentPodsResponse struct {
+	Pods []string `json:"pods"`
+}
+
 type CreateOrganizationRequest struct {
 	Name string `json:"name" binding:"required"`
 }

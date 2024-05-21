@@ -21,6 +21,7 @@ type ProviderStatus interface {
 	GetStorageProperties(componentName string) (*providers.StorageProperties, error)
 	GetSourceProperties(componentName string) (*providers.SourceProperties, error)
 	GetComponentStatus(componentName string) (*providers.ComponentStatusHealth, error)
+	GetPodList(componentName string) ([]string, error)
 }
 
 func NewProviderStatus(application *models.Application, environment *models.Environment) (ProviderStatus, error) {

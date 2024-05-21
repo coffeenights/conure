@@ -300,7 +300,25 @@ func (a *ApiHandler) UpdateComponent(c *gin.Context) {
 
 }
 
-type ClientChan chan string
+func (a *ApiHandler) ComponentPods(c *gin.Context) {
+	var response ComponentPodsResponse
+	var component models.Component
+	status, err := a.statusLoad(c, &component)
+	if err != nil {
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	pods, err := status.GetPodList(component.Name)
+	if err != nil {
+		log.Printf("Error getting pods: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	response.Pods = pods
+	c.JSON(http.StatusOK, response)
+}
 
 func (a *ApiHandler) StreamLogs(c *gin.Context) {
 	// Set necessary headers for SSE
