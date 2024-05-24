@@ -1,6 +1,7 @@
 package applications
 
 import (
+	"context"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/models"
@@ -22,6 +23,7 @@ type ProviderStatus interface {
 	GetSourceProperties(componentName string) (*providers.SourceProperties, error)
 	GetComponentStatus(componentName string) (*providers.ComponentStatusHealth, error)
 	GetPodList(componentName string) ([]string, error)
+	StreamLogs(c context.Context, podName string, logStream *providers.LogStream, linesBuffer int)
 }
 
 func NewProviderStatus(application *models.Application, environment *models.Environment) (ProviderStatus, error) {

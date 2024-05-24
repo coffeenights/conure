@@ -2,19 +2,17 @@ package applications
 
 import (
 	"errors"
-	"fmt"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/cmd/api-server/providers"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"io"
-	corev1 "k8s.io/api/core/v1"
 	"log"
 	"net/http"
 	"strings"
-	"time"
 )
 
 func (a *ApiHandler) ListComponents(c *gin.Context) {
@@ -321,73 +319,41 @@ func (a *ApiHandler) ComponentPods(c *gin.Context) {
 }
 
 func (a *ApiHandler) StreamLogs(c *gin.Context) {
+	var component models.Component
+	status, err := a.statusLoad(c, &component)
+	if err != nil {
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	podQuery, ok := c.GetQuery("pods")
+	if !ok {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+
+	pods := strings.Split(podQuery, ",")
+
+	logStream := providers.NewLogStream()
+	for _, podName := range pods {
+		go status.StreamLogs(c.Request.Context(), podName, logStream, 20)
+	}
+
 	// Set necessary headers for SSE
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
 	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-
-	//lines := int64(100)
-	podLogOpts := corev1.PodLogOptions{
-		Follow: true,
-	}
-	clientset, err := k8sUtils.GetClientset()
-	if err != nil {
-		log.Printf("Error getting clientset: %v\n", err)
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-
-	stream := make(chan string)
-	done := make(chan bool)
-	defer func() {
-		done <- true
-		log.Println("Closing stream")
-	}()
-	go func() {
-		req := clientset.K8s.CoreV1().Pods("fbc70d63-development").GetLogs("backend-service-d7c588db7-hkjj2", &podLogOpts)
-		podLogs, err := req.Stream(c.Request.Context())
-		if err != nil {
-			log.Printf("Error in opening stream: %v\n", err)
-			conureerrors.AbortWithError(c, err)
-			return
-		}
-		for {
-			buf := make([]byte, 2000)
-			numBytes, err := podLogs.Read(buf)
-			if numBytes == 0 {
-				continue
-			}
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Printf("Error in reading stream: %v\n", err)
-				conureerrors.AbortWithError(c, err)
-				return
-			}
-			select {
-			case stream <- string(buf[:numBytes]):
-			case <-done:
-				close(stream)
-				close(done)
-				return
-			}
-			time.Sleep(1 * time.Second)
-		}
-	}()
-
 	c.Stream(func(w io.Writer) bool {
 		// Stream message to client from message channel
-		if msg, ok := <-stream; ok {
-			splitMsg := strings.Split(msg, "\n")
-			for _, line := range splitMsg {
-				c.SSEvent("message", fmt.Sprintf("%s", line))
-
-			}
+		select {
+		case msg := <-logStream.Stream:
+			c.SSEvent("message", msg)
 			return true
+		case err := <-logStream.Error:
+			conureerrors.AbortWithError(c, err)
+			c.SSEvent("error", err.Error())
+			return false
 		}
-		return false
 	})
-
 }
