@@ -36,3 +36,21 @@ type ComponentStatusHealth struct {
 	Message string    `json:"message"`
 	Updated time.Time `json:"updated"`
 }
+
+type LogStream struct {
+	Stream chan string
+	Done   chan bool
+	Error  chan error
+}
+
+func NewLogStream() *LogStream {
+	return &LogStream{
+		Stream: make(chan string),
+		Error:  make(chan error),
+	}
+}
+
+func (l *LogStream) Close() {
+	close(l.Stream)
+	close(l.Error)
+}

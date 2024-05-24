@@ -1,6 +1,7 @@
 package providers
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
+	"io"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -109,7 +111,7 @@ func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*Componen
 	}
 
 	if len(deployments) == 0 {
-
+		return nil, conureerrors.ErrComponentNotFound
 	}
 	deployment := deployments[0]
 
@@ -193,9 +195,7 @@ func (p *ProviderStatusVela) GetResourcesProperties(componentName string) (*Reso
 			if err != nil {
 				return nil, err
 			}
-			if replicas, ok := traitsData["replicas"].(interface{}); ok {
-				resources.Replicas = int32(replicas.(float64))
-			}
+			resources.Replicas = int32(traitsData["replicas"].(float64))
 		}
 	}
 	propertiesData, err := k8sUtils.ExtractMapFromRawExtension(velaComponent.ComponentSpec.Properties)
@@ -224,13 +224,9 @@ func (p *ProviderStatusVela) GetStorageProperties(componentName string) (*Storag
 				return nil, err
 			}
 			var pvcTrait PVCStorageTrait
-			if _, ok := traitsData["pvc"].(interface{}); ok {
-				err := mapstructure.Decode(traitsData, &pvcTrait)
-				if err != nil {
-					return nil, err
-				}
-			} else {
-				return nil, fmt.Errorf("pvc not found in storage trait")
+			err = mapstructure.Decode(traitsData, &pvcTrait)
+			if err != nil {
+				return nil, err
 			}
 			for _, pvc := range pvcTrait.PVC {
 				size := "8Gi" // Default value per kubevela
@@ -306,6 +302,9 @@ func (p *ProviderStatusVela) GetActivity(componentID string) error {
 		FieldSelector: deploymentSelector.String(),
 	}
 	events, err := clientset.K8s.CoreV1().Events(p.Namespace).List(context.Background(), listOptions)
+	if err != nil {
+		return err
+	}
 	_ = events
 	return nil
 }
@@ -328,11 +327,54 @@ func (p *ProviderStatusVela) GetPodList(componentName string) ([]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	podNames := []string{}
+	var podNames []string
 	for _, pod := range pods.Items {
 		podNames = append(podNames, pod.Name)
 	}
 	return podNames, nil
+}
+
+func (p *ProviderStatusVela) StreamLogs(c context.Context, podName string, logStream *LogStream, linesBuffer int) {
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		logStream.Error <- err
+		return
+	}
+	podLogOpts := corev1.PodLogOptions{
+		Follow: true,
+	}
+
+	req := clientset.K8s.CoreV1().Pods(p.Namespace).GetLogs(podName, &podLogOpts)
+	podLogs, err := req.Stream(c)
+	var statusError *k8sErrors.StatusError
+	if err != nil {
+		if errors.As(err, &statusError) {
+			if statusError.ErrStatus.Code == 404 {
+				logStream.Error <- conureerrors.ErrPodNotFound
+			}
+		} else {
+			logStream.Error <- err
+		}
+		return
+	}
+
+	reader := bufio.NewReader(podLogs)
+	lines := make([]string, linesBuffer)
+	for {
+		var str string
+		for i := 0; i < len(lines); i++ {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				if err == io.EOF {
+					return
+				}
+				logStream.Error <- err
+				return
+			}
+			str = fmt.Sprintf("%s: %s", podName, line)
+			logStream.Stream <- str
+		}
+	}
 }
 
 func getNetworkPropertiesFromService(clientset *k8sUtils.GenericClientset, namespace string, labels map[string]string, properties *NetworkProperties) error {
@@ -402,6 +444,9 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 	}
 	// Create namespace if necessary
 	err = p.createNamespace(clientset)
+	if err != nil {
+		return err
+	}
 
 	deploymentRes := schema.GroupVersionResource{Group: "core.oam.dev", Version: "v1beta1", Resource: "applications"}
 	deployment := &unstructured.Unstructured{
