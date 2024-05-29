@@ -437,6 +437,8 @@ func (p *ProviderDispatcherVela) createNamespace(clientset *k8sUtils.GenericClie
 }
 
 func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface{}) error {
+	var statusError *k8sErrors.StatusError
+
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
@@ -444,7 +446,13 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 	}
 	// Create namespace if necessary
 	err = p.createNamespace(clientset)
-	if err != nil {
+	if errors.As(err, &statusError) {
+		if statusError.ErrStatus.Code == 409 {
+			log.Printf("Application already exists\n")
+			return conureerrors.ErrApplicationExists
+		}
+		return err
+	} else if err != nil {
 		return err
 	}
 
@@ -453,7 +461,6 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 		Object: manifest,
 	}
 	result, err := clientset.Dynamic.Resource(deploymentRes).Namespace(p.Namespace).Create(context.Background(), deployment, metav1.CreateOptions{})
-	var statusError *k8sErrors.StatusError
 	if err != nil {
 		if errors.As(err, &statusError) {
 			if statusError.ErrStatus.Code == 409 {
