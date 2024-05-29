@@ -38,9 +38,9 @@ func (a *ApiHandler) ListComponents(c *gin.Context) {
 	}
 	var response ComponentListResponse
 	response.Components = make([]ComponentResponse, len(components))
-	for i, component := range components {
+	for i, _ := range components {
 		response.Components[i] = ComponentResponse{
-			Component: &component,
+			Component: &components[i],
 		}
 	}
 	c.JSON(http.StatusOK, response)
