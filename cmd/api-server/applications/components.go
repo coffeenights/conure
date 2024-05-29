@@ -154,7 +154,6 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 
 	// Create a channel to collect the results
 	results := make(chan error)
-	defer close(results)
 	// Create a goroutine for each property
 	go func() {
 		response.Properties.ResourcesProperties, err = status.GetResourcesProperties(component.Name)
@@ -185,7 +184,7 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 			return
 		}
 	}
-
+	close(results)
 	response.Component.Component = &component
 	c.JSON(http.StatusOK, response)
 }
@@ -327,7 +326,7 @@ func (a *ApiHandler) StreamLogs(c *gin.Context) {
 	}
 
 	podQuery, ok := c.GetQuery("pods")
-	if !ok {
+	if !ok || podQuery == "" {
 		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
@@ -343,7 +342,6 @@ func (a *ApiHandler) StreamLogs(c *gin.Context) {
 	c.Writer.Header().Set("Content-Type", "text/event-stream")
 	c.Writer.Header().Set("Cache-Control", "no-cache")
 	c.Writer.Header().Set("Connection", "keep-alive")
-	c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 	c.Stream(func(w io.Writer) bool {
 		// Stream message to client from message channel
 		select {
