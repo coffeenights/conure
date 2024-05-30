@@ -48,6 +48,17 @@ func TestListComponents(t *testing.T) {
 	}
 	defer comp.Delete(testConf.app.MongoDB)
 
+	comp = models.Component{
+		ApplicationID: application.ID,
+		Name:          "test-component2",
+		Type:          "service",
+	}
+	_, err = comp.Create(testConf.app.MongoDB)
+	if err != nil {
+		t.Errorf("Failed to create component: %v", err)
+	}
+	defer comp.Delete(testConf.app.MongoDB)
+
 	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c"
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
@@ -63,10 +74,15 @@ func TestListComponents(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to unmarshal response: %v", err)
 	}
-	if len(response.Components) != 1 {
-		t.Errorf("Expected 1 component, got: %v", len(response.Components))
+	if len(response.Components) != 2 {
+		t.Errorf("Expected 2 component, got: %v", len(response.Components))
 	}
-
+	if response.Components[0].Name != "test-component" {
+		t.Errorf("Expected component name to be test-component, got: %v", response.Components[0].Name)
+	}
+	if response.Components[1].Name != "test-component2" {
+		t.Errorf("Expected component name to be test-component2, got: %v", response.Components[1].Name)
+	}
 }
 
 func TestListComponents_NotExist(t *testing.T) {

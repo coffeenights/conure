@@ -47,6 +47,7 @@ var (
 	ErrComponentNotFound      = &ConureError{Code: "4002", Message: "component_not_found", StatusCode: http.StatusNotFound}
 	ErrApplicationExists      = &ConureError{Code: "4003", Message: "application_already_exists", StatusCode: http.StatusConflict}
 	ErrApplicationNotDeployed = &ConureError{Code: "4004", Message: "application_not_deployed", StatusCode: http.StatusNotFound}
+	ErrPodNotFound            = &ConureError{Code: "4005", Message: "pod_not_found", StatusCode: http.StatusNotFound}
 )
 
 func AbortWithError(c *gin.Context, err error) {

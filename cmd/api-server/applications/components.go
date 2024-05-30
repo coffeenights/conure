@@ -2,16 +2,17 @@ package applications
 
 import (
 	"errors"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"log"
-	"net/http"
-
-	"github.com/gin-gonic/gin"
-
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/cmd/api-server/providers"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
+	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"io"
+	"log"
+	"net/http"
+	"strings"
 )
 
 func (a *ApiHandler) ListComponents(c *gin.Context) {
@@ -37,9 +38,9 @@ func (a *ApiHandler) ListComponents(c *gin.Context) {
 	}
 	var response ComponentListResponse
 	response.Components = make([]ComponentResponse, len(components))
-	for i, component := range components {
+	for i, _ := range components {
 		response.Components[i] = ComponentResponse{
-			Component: &component,
+			Component: &components[i],
 		}
 	}
 	c.JSON(http.StatusOK, response)
@@ -153,7 +154,6 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 
 	// Create a channel to collect the results
 	results := make(chan error)
-
 	// Create a goroutine for each property
 	go func() {
 		response.Properties.ResourcesProperties, err = status.GetResourcesProperties(component.Name)
@@ -175,7 +175,6 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 		response.Properties.Health, err = status.GetComponentStatus(component.Name)
 		results <- err
 	}()
-
 	// Collect the results
 	for i := 0; i < 5; i++ {
 		err := <-results
@@ -185,10 +184,9 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 			return
 		}
 	}
-
+	close(results)
 	response.Component.Component = &component
 	c.JSON(http.StatusOK, response)
-
 }
 
 func (a *ApiHandler) CreateComponent(c *gin.Context) {
@@ -297,4 +295,63 @@ func (a *ApiHandler) UpdateComponent(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, component)
 
+}
+
+func (a *ApiHandler) ComponentPods(c *gin.Context) {
+	var response ComponentPodsResponse
+	var component models.Component
+	status, err := a.statusLoad(c, &component)
+	if err != nil {
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	pods, err := status.GetPodList(component.Name)
+	if err != nil {
+		log.Printf("Error getting pods: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	response.Pods = pods
+	c.JSON(http.StatusOK, response)
+}
+
+func (a *ApiHandler) StreamLogs(c *gin.Context) {
+	var component models.Component
+	status, err := a.statusLoad(c, &component)
+	if err != nil {
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	podQuery, ok := c.GetQuery("pods")
+	if !ok || podQuery == "" {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+
+	pods := strings.Split(podQuery, ",")
+
+	logStream := providers.NewLogStream()
+	for _, podName := range pods {
+		go status.StreamLogs(c.Request.Context(), podName, logStream, 20)
+	}
+
+	// Set necessary headers for SSE
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Stream(func(w io.Writer) bool {
+		// Stream message to client from message channel
+		select {
+		case msg := <-logStream.Stream:
+			c.SSEvent("message", msg)
+			return true
+		case err := <-logStream.Error:
+			conureerrors.AbortWithError(c, err)
+			c.SSEvent("error", err.Error())
+			return false
+		}
+	})
 }
