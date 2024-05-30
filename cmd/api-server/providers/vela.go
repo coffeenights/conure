@@ -309,7 +309,7 @@ func (p *ProviderStatusVela) GetActivity(componentID string) error {
 	return nil
 }
 
-func (p *ProviderStatusVela) GetPodList(componentName string) ([]string, error) {
+func (p *ProviderStatusVela) GetPodList(componentName string) ([]Pod, error) {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		return nil, err
@@ -327,11 +327,24 @@ func (p *ProviderStatusVela) GetPodList(componentName string) ([]string, error) 
 	if err != nil {
 		return nil, err
 	}
-	var podNames []string
-	for _, pod := range pods.Items {
-		podNames = append(podNames, pod.Name)
+	var podList []Pod
+	for _, k8sPod := range pods.Items {
+		pod := Pod{
+			Name:  k8sPod.Name,
+			Phase: string(k8sPod.Status.Phase),
+		}
+		for _, k8sCondition := range k8sPod.Status.Conditions {
+			cond := PodCondition{
+				Type:    string(k8sCondition.Type),
+				Status:  string(k8sCondition.Status),
+				Reason:  k8sCondition.Reason,
+				Message: k8sCondition.Message,
+			}
+			pod.Conditions = append(pod.Conditions, cond)
+		}
+		podList = append(podList, pod)
 	}
-	return podNames, nil
+	return podList, nil
 }
 
 func (p *ProviderStatusVela) StreamLogs(c context.Context, podName string, logStream *LogStream, linesBuffer int) {
