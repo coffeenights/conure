@@ -22,7 +22,7 @@ type ProviderStatus interface {
 	GetStorageProperties(componentName string) (*providers.StorageProperties, error)
 	GetSourceProperties(componentName string) (*providers.SourceProperties, error)
 	GetComponentStatus(componentName string) (*providers.ComponentStatusHealth, error)
-	GetPodList(componentName string) ([]string, error)
+	GetPodList(componentName string) ([]providers.Pod, error)
 	StreamLogs(c context.Context, podName string, logStream *providers.LogStream, linesBuffer int)
 }
 

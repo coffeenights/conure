@@ -98,7 +98,7 @@ type CreateComponentRequest struct {
 }
 
 type ComponentPodsResponse struct {
-	Pods []string `json:"pods"`
+	Pods []providers.Pod `json:"pods"`
 }
 
 type CreateOrganizationRequest struct {

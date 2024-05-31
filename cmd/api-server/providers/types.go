@@ -54,3 +54,15 @@ func (l *LogStream) Close() {
 	close(l.Stream)
 	close(l.Error)
 }
+
+type PodCondition struct {
+	Type    string `json:"type"`
+	Status  string `json:"status"`
+	Reason  string `json:"reason"`
+	Message string `json:"message"`
+}
+type Pod struct {
+	Name       string         `json:"name"`
+	Phase      string         `json:"phase"`
+	Conditions []PodCondition `json:"conditions"`
+}
