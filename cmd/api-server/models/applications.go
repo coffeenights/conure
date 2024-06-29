@@ -23,6 +23,7 @@ type OrganizationStatus string
 const OrganizationCollection string = "organizations"
 const ApplicationCollection string = "applications"
 const ComponentCollection string = "components"
+const ComponentSettingsCollection string = "components_settings"
 
 const (
 	OrgActive   OrganizationStatus = "active"
@@ -492,4 +493,41 @@ func generate8DigitHash() string {
 	hash := sha256.Sum256(seed)
 	// Return the first 8 characters of the hexadecimal representation of the hash
 	return fmt.Sprintf("%x", hash)[:8]
+}
+
+type ComponentSettings struct {
+	Model
+	ComponentID     primitive.ObjectID     `json:"component_id" bson:"componentID"`
+	SourceSettings  map[string]interface{} `json:"source_settings" bson:"sourceSettings"`
+	NetworkSettings map[string]interface{} `json:"network_settings" bson:"networkSettings"`
+	StorageSettings map[string]interface{} `json:"storage_settings" bson:"storageSettings"`
+}
+
+func (c *ComponentSettings) GetCollectionName() string {
+	return ComponentSettingsCollection
+}
+
+func (c *ComponentSettings) Create(db *database.MongoDB) error {
+	err := Create(context.Background(), db, c)
+	return err
+}
+
+func (c *ComponentSettings) GetByID(db *database.MongoDB, ID string) error {
+	err := GetByID(context.Background(), db, ID, c)
+	return err
+}
+
+func (c *ComponentSettings) Update(db *database.MongoDB) error {
+	err := Update(context.Background(), db, c)
+	return err
+}
+
+func (c *ComponentSettings) Delete(db *database.MongoDB) error {
+	err := Delete(context.Background(), db, c)
+	return err
+}
+
+func (c *ComponentSettings) SoftDelete(db *database.MongoDB) error {
+	err := SoftDelete(context.Background(), db, c)
+	return err
 }

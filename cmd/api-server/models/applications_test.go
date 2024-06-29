@@ -599,3 +599,22 @@ func TestComponent_Create_Duplicate(t *testing.T) {
 	}
 	_ = comp.Delete(client)
 }
+
+func TestComponentSettings_Create(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	comp := ComponentSettings{
+		SourceSettings: map[string]interface{}{
+			"cpu":      "1",
+			"memory":   "1Gi",
+			"replicas": int32(1),
+		},
+	}
+	err = comp.Create(client)
+	if err != nil {
+		t.Errorf("Failed to create component: %v", err)
+	}
+}
