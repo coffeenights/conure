@@ -64,6 +64,13 @@ func Create(ctx context.Context, db *database.MongoDB, model ModelInterface) err
 	model.SetCreatedAt(time.Now())
 	insertResult, err := collection.InsertOne(ctx, model)
 	if err != nil {
+		var writeException mongo.WriteException
+		switch {
+		case errors.As(err, &writeException):
+			if err.(mongo.WriteException).WriteErrors[0].Code == 11000 {
+				return conureerrors.ErrObjectAlreadyExists
+			}
+		}
 		return err
 	}
 	model.SetID(insertResult.InsertedID.(primitive.ObjectID))
