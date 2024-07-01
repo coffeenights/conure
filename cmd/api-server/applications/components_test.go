@@ -37,27 +37,27 @@ func TestListComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	comp := models.Component{
+	comp1 := models.Component{
 		ApplicationID: application.ID,
-		Name:          "test-component",
+		Name:          "test-component-list",
 		Type:          "service",
 	}
-	_, err = comp.Create(testConf.app.MongoDB)
+	err = comp1.Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
-	defer comp.Delete(testConf.app.MongoDB)
+	defer comp1.Delete(testConf.app.MongoDB)
 
-	comp = models.Component{
+	comp2 := models.Component{
 		ApplicationID: application.ID,
-		Name:          "test-component2",
+		Name:          "test-component2-list",
 		Type:          "service",
 	}
-	_, err = comp.Create(testConf.app.MongoDB)
+	err = comp2.Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
-	defer comp.Delete(testConf.app.MongoDB)
+	defer comp2.Delete(testConf.app.MongoDB)
 
 	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c"
 	req, _ := http.NewRequest("GET", url, nil)
@@ -77,11 +77,11 @@ func TestListComponents(t *testing.T) {
 	if len(response.Components) != 2 {
 		t.Errorf("Expected 2 component, got: %v", len(response.Components))
 	}
-	if response.Components[0].Name != "test-component" {
-		t.Errorf("Expected component name to be test-component, got: %v", response.Components[0].Name)
+	if response.Components[0].Name != "test-component-list" {
+		t.Errorf("Expected component name to be test-component-list, got: %v", response.Components[0].Name)
 	}
-	if response.Components[1].Name != "test-component2" {
-		t.Errorf("Expected component name to be test-component2, got: %v", response.Components[1].Name)
+	if response.Components[1].Name != "test-component2-list" {
+		t.Errorf("Expected component name to be test-component2-list, got: %v", response.Components[1].Name)
 	}
 }
 
@@ -203,6 +203,7 @@ func TestCreateComponent(t *testing.T) {
 	// Assert
 	if resp.Code != http.StatusCreated {
 		t.Errorf("Expected response code 201, got: %v", resp.Code)
+		t.FailNow()
 	}
 	var response ComponentResponse
 	err = json.Unmarshal(resp.Body.Bytes(), &response)
@@ -214,7 +215,9 @@ func TestCreateComponent(t *testing.T) {
 	}
 	// Clean up Component
 	comp := models.Component{
-		ID: response.ID,
+		Model: models.Model{
+			ID: response.ID,
+		},
 	}
 	_ = comp.Delete(testConf.app.MongoDB)
 }
@@ -249,7 +252,7 @@ func TestDetailComponent(t *testing.T) {
 		Name:          "test-detail-component",
 		Type:          "service",
 	}
-	_, err = comp.Create(testConf.app.MongoDB)
+	err = comp.Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}

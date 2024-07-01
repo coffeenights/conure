@@ -390,74 +390,37 @@ func (a *Application) DeleteEnvironmentByName(db *database.MongoDB, envName stri
 }
 
 type Component struct {
-	ID            primitive.ObjectID       `json:"id,omitempty" bson:"_id,omitempty"`
+	Model
 	Name          string                   `json:"name" bson:"name"`
 	Type          string                   `json:"type" bson:"type"`
 	Description   string                   `json:"description" bson:"description"`
 	ApplicationID primitive.ObjectID       `json:"application_id" bson:"applicationID"`
 	Properties    map[string]interface{}   `json:"properties,omitempty" bson:"properties,omitempty"`
 	Traits        []map[string]interface{} `json:"traits,omitempty" bson:"traits,omitempty"`
-	CreatedAt     time.Time                `json:"created_at" bson:"createdAt"`
-	DeletedAt     time.Time                `json:"-" bson:"deletedAt,omitempty"`
 }
 
-func (c *Component) Create(db *database.MongoDB) (*Component, error) {
-	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
-	c.CreatedAt = time.Now()
+func (c *Component) GetCollectionName() string {
+	return ComponentCollection
+}
 
-	r, err := collection.InsertOne(context.Background(), c)
-	if err != nil {
-		var writeException mongo.WriteException
-		switch {
-		case errors.As(err, &writeException):
-			if err.(mongo.WriteException).WriteErrors[0].Code == 11000 {
-				return nil, conureerrors.ErrObjectAlreadyExists
-			}
-		}
-		return nil, err
-	}
-	c.ID = r.InsertedID.(primitive.ObjectID)
-	return c, nil
+func (c *Component) Create(db *database.MongoDB) error {
+	err := Create(context.Background(), db, c)
+	return err
 }
 
 func (c *Component) Delete(db *database.MongoDB) error {
-	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
-	filter := bson.D{{"_id", c.ID}}
-	deleteResult, err := collection.DeleteOne(context.Background(), filter)
-	if err != nil {
-		return err
-	}
-	log.Printf("Deleted %v documents in the components collection\n", deleteResult.DeletedCount)
-	return nil
+	err := Delete(context.Background(), db, c)
+	return err
 }
 
-func (c *Component) GetByID(db *database.MongoDB, ID string) (*Component, error) {
-	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
-	oID, err := primitive.ObjectIDFromHex(ID)
-	if err != nil {
-		return nil, err
-	}
-	filter := bson.M{"_id": oID, "deletedAt": bson.M{"$exists": false}}
-	err = collection.FindOne(context.Background(), filter).Decode(c)
-	if err != nil {
-		return nil, err
-	}
-	log.Println("Found a single document: ", c)
-	return c, nil
+func (c *Component) GetByID(db *database.MongoDB, ID string) error {
+	err := GetByID(context.Background(), db, ID, c)
+	return err
 }
 
 func (c *Component) Update(db *database.MongoDB) error {
-	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
-	filter := bson.M{"_id": c.ID}
-	update := bson.D{
-		{"$set", c},
-	}
-	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
-	if err != nil {
-		return err
-	}
-	log.Printf("Matched %v documents and updated %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
-	return nil
+	err := Update(context.Background(), db, c)
+	return err
 }
 
 type ApplicationRevision struct {
@@ -495,12 +458,56 @@ func generate8DigitHash() string {
 	return fmt.Sprintf("%x", hash)[:8]
 }
 
+type ResourcesSettings struct {
+	Replicas int     `json:"replicas" bson:"replicas"`
+	CPU      float32 `json:"cpu" bson:"cpu"`
+	Memory   int     `json:"memory" bson:"memory"`
+}
+
+type AccessType string
+
+const (
+	Public  AccessType = "public"
+	Private AccessType = "private"
+)
+
+type Protocol string
+
+const (
+	TCP Protocol = "tcp"
+	UDP Protocol = "udp"
+)
+
+type PortSettings struct {
+	HostPort   int      `json:"host_port" bson:"hostPort"`
+	TargetPort int      `json:"container_port" bson:"containerPort"`
+	Protocol   Protocol `json:"protocol" bson:"protocol"`
+}
+
+type NetworkSettings struct {
+	Exposed bool           `json:"exposed" bson:"exposed"`
+	Type    AccessType     `json:"type" bson:"type"`
+	Ports   []PortSettings `json:"ports" bson:"ports"`
+}
+
+type SourceSettings struct {
+	Repository string `json:"repository" bson:"repository"`
+	Command    string `json:"command" bson:"command"`
+}
+
+type StorageSettings struct {
+	Size      float32 `json:"size" bson:"size"`
+	Name      string  `json:"name" bson:"name"`
+	MountPath string  `json:"mount_path" bson:"mountPath"`
+}
+
 type ComponentSettings struct {
 	Model
-	ComponentID     primitive.ObjectID     `json:"component_id" bson:"componentID"`
-	SourceSettings  map[string]interface{} `json:"source_settings" bson:"sourceSettings"`
-	NetworkSettings map[string]interface{} `json:"network_settings" bson:"networkSettings"`
-	StorageSettings map[string]interface{} `json:"storage_settings" bson:"storageSettings"`
+	ComponentID       primitive.ObjectID `json:"component_id" bson:"componentID"`
+	ResourcesSettings ResourcesSettings  `json:"resources_settings" bson:"resourcesSettings"`
+	SourceSettings    SourceSettings     `json:"source_settings" bson:"sourceSettings"`
+	NetworkSettings   NetworkSettings    `json:"network_settings" bson:"networkSettings"`
+	StorageSettings   []StorageSettings  `json:"storage_settings" bson:"storageSettings"`
 }
 
 func (c *ComponentSettings) GetCollectionName() string {

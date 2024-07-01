@@ -3,6 +3,7 @@ package applications
 import (
 	"errors"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/cmd/api-server/providers"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
@@ -14,6 +15,19 @@ import (
 	"net/http"
 	"strings"
 )
+
+func getComponentFromRoute(c *gin.Context, db *database.MongoDB) (*models.Component, error) {
+	component := &models.Component{}
+	err := component.GetByID(db, c.Param("componentID"))
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) || errors.Is(err, primitive.ErrInvalidHex) {
+			return nil, conureerrors.ErrObjectNotFound
+		}
+		log.Printf("Error getting components: %v\n", err)
+		return nil, err
+	}
+	return component, nil
+}
 
 func (a *ApiHandler) ListComponents(c *gin.Context) {
 	application := &models.Application{}
@@ -47,36 +61,13 @@ func (a *ApiHandler) ListComponents(c *gin.Context) {
 }
 
 func (a *ApiHandler) DetailComponent(c *gin.Context) {
-	handler, err := NewApplicationHandler(a.MongoDB)
+	_, err := getHandlerFromRoute(c, a.MongoDB)
 	if err != nil {
-		log.Printf("Error creating application handler: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if errors.Is(err, conureerrors.ErrObjectNotFound) {
-		conureerrors.AbortWithError(c, err)
-		return
-	} else if err != nil {
-		log.Printf("Error getting application: %v\n", err)
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-
-	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
-		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
-
-		return
-	}
-
-	component := &models.Component{}
-	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
+	component, err := getComponentFromRoute(c, a.MongoDB)
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) || errors.Is(err, primitive.ErrInvalidHex) {
-			conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
-			return
-		}
-		log.Printf("Error getting components: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
 	}
@@ -86,23 +77,13 @@ func (a *ApiHandler) DetailComponent(c *gin.Context) {
 }
 
 func (a *ApiHandler) statusLoad(c *gin.Context, component *models.Component) (ProviderStatus, error) {
-	handler, err := NewApplicationHandler(a.MongoDB)
+	handler, err := getHandlerFromRoute(c, a.MongoDB)
 	if err != nil {
-		log.Printf("Error creating application handler: %v\n", err)
+		conureerrors.AbortWithError(c, err)
 		return nil, err
 	}
-	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
+	component, err = getComponentFromRoute(c, a.MongoDB)
 	if err != nil {
-		return nil, err
-	}
-	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
-		return nil, conureerrors.ErrNotAllowed
-	}
-	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
-	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) || errors.Is(err, primitive.ErrInvalidHex) {
-			return nil, conureerrors.ErrObjectNotFound
-		}
 		log.Printf("Error getting components: %v\n", err)
 		return nil, err
 	}
@@ -190,23 +171,9 @@ func (a *ApiHandler) StatusComponent(c *gin.Context) {
 }
 
 func (a *ApiHandler) CreateComponent(c *gin.Context) {
-	handler, err := NewApplicationHandler(a.MongoDB)
+	handler, err := getHandlerFromRoute(c, a.MongoDB)
 	if err != nil {
-		log.Printf("Error creating application handler: %v\n", err)
 		conureerrors.AbortWithError(c, err)
-		return
-	}
-	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if errors.Is(err, conureerrors.ErrObjectNotFound) {
-		conureerrors.AbortWithError(c, err)
-		return
-	} else if err != nil {
-		log.Printf("Error getting application: %v\n", err)
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
-		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
 	var request CreateComponentRequest
@@ -224,7 +191,7 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		Properties:    request.Properties,
 		Traits:        request.Traits,
 	}
-	_, err = component.Create(a.MongoDB)
+	err = component.Create(a.MongoDB)
 	if errors.Is(err, conureerrors.ErrObjectAlreadyExists) {
 		conureerrors.AbortWithError(c, err)
 		return
@@ -237,34 +204,14 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 }
 
 func (a *ApiHandler) UpdateComponent(c *gin.Context) {
-	handler, err := NewApplicationHandler(a.MongoDB)
+	handler, err := getHandlerFromRoute(c, a.MongoDB)
 	if err != nil {
-		log.Printf("Error creating application handler: %v\n", err)
 		conureerrors.AbortWithError(c, err)
-		return
-	}
-	err = handler.Model.GetByID(a.MongoDB, c.Param("applicationID"))
-	if errors.Is(err, conureerrors.ErrObjectNotFound) {
-		conureerrors.AbortWithError(c, err)
-		return
-	} else if err != nil {
-		log.Printf("Error getting application: %v\n", err)
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
-		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
 
-	component := models.Component{}
-	_, err = component.GetByID(a.MongoDB, c.Param("componentID"))
+	component, err := getComponentFromRoute(c, a.MongoDB)
 	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) || errors.Is(err, primitive.ErrInvalidHex) {
-			conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
-			return
-		}
-		log.Printf("Error getting components: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
 	}
@@ -354,4 +301,8 @@ func (a *ApiHandler) StreamLogs(c *gin.Context) {
 			return false
 		}
 	})
+}
+
+func (a *ApiHandler) CreateComponentSettings(c *gin.Context) {
+
 }
