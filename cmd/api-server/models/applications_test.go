@@ -304,11 +304,6 @@ func TestApplication_CountComponents(t *testing.T) {
 		ApplicationID: app.ID,
 		Name:          "test-component",
 		Type:          "service",
-		Properties: map[string]interface{}{
-			"cpu":      "1",
-			"memory":   "1Gi",
-			"replicas": int32(1),
-		},
 	}
 	err = comp.Create(client)
 	if err != nil {
@@ -340,12 +335,7 @@ func TestComponent_CreateList(t *testing.T) {
 	comp := Component{
 		ApplicationID: app.ID,
 		Name:          "test-component",
-		Type:          "service",
-		Properties: map[string]interface{}{
-			"cpu":      "1",
-			"memory":   "1Gi",
-			"replicas": int32(1),
-		},
+		Type:          "webservice",
 	}
 	err = comp.Create(client)
 	if err != nil {
@@ -513,25 +503,22 @@ func TestComponent_GetByID(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	comp := Component{
-		ApplicationID: app.ID,
-		Name:          "test-component",
-		Type:          "service",
-		Properties: map[string]interface{}{
-			"cpu":      "1",
-			"memory":   "1Gi",
-			"replicas": int32(1),
-		},
-	}
+	comp := ComponentTemplate(app.ID, "test-component-get-by-id")
 
 	err = comp.Create(client)
 	defer comp.Delete(client)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
-	err = comp.GetByID(client, comp.ID.Hex())
+
+	findComp := Component{}
+	err = findComp.GetByID(client, comp.ID.Hex())
 	if err != nil {
 		t.Errorf("Failed to get component: %v", err)
+	}
+
+	if findComp.ID != comp.ID {
+		t.Errorf("Got %v, want %v", findComp.ID, comp.ID)
 	}
 }
 
@@ -546,16 +533,7 @@ func TestComponent_Create(t *testing.T) {
 	}
 	defer app.Delete(client)
 
-	comp := Component{
-		ApplicationID: app.ID,
-		Name:          "test-component",
-		Type:          "service",
-		Properties: map[string]interface{}{
-			"cpu":      "1",
-			"memory":   "1Gi",
-			"replicas": int32(1),
-		},
-	}
+	comp := ComponentTemplate(app.ID, "test-component")
 	err = comp.Create(client)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
@@ -574,19 +552,11 @@ func TestComponent_Create_Duplicate(t *testing.T) {
 	}
 	defer app.Delete(client)
 
-	comp := Component{
-		ApplicationID: app.ID,
-		Name:          "test-component",
-		Type:          "service",
-		Properties: map[string]interface{}{
-			"cpu":      "1",
-			"memory":   "1Gi",
-			"replicas": int32(1),
-		},
-	}
+	comp := ComponentTemplate(app.ID, "test-component")
 	err = comp.Create(client)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
+		t.FailNow()
 	}
 	err = comp.Create(client)
 	if err == nil {
@@ -596,22 +566,3 @@ func TestComponent_Create_Duplicate(t *testing.T) {
 	}
 	_ = comp.Delete(client)
 }
-
-//func TestComponentSettings_Create(t *testing.T) {
-//	client, err := SetupDB()
-//	if err != nil {
-//		t.Fatal(err)
-//	}
-//
-//	comp := ComponentSettings{
-//		SourceSettings: map[string]interface{}{
-//			"cpu":      "1",
-//			"memory":   "1Gi",
-//			"replicas": int32(1),
-//		},
-//	}
-//	err = comp.Create(client)
-//	if err != nil {
-//		t.Errorf("Failed to create component: %v", err)
-//	}
-//}
