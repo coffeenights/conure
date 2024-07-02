@@ -82,11 +82,12 @@ func (a *ApiHandler) statusLoad(c *gin.Context, component *models.Component) (Pr
 		conureerrors.AbortWithError(c, err)
 		return nil, err
 	}
-	component, err = getComponentFromRoute(c, a.MongoDB)
+	componentFound, err := getComponentFromRoute(c, a.MongoDB)
 	if err != nil {
 		log.Printf("Error getting components: %v\n", err)
 		return nil, err
 	}
+	*component = *componentFound
 
 	// Get environment
 	env, err := handler.Model.GetEnvironmentByName(a.MongoDB, c.Param("environment"))
