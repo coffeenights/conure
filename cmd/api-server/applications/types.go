@@ -92,9 +92,8 @@ type ComponentStatusResponse struct {
 type CreateComponentRequest struct {
 	Name        string                   `json:"name" binding:"required"`
 	Type        string                   `json:"type" binding:"required"`
-	Properties  map[string]interface{}   `json:"properties" binding:"required"`
-	Traits      []map[string]interface{} `json:"traits"`
 	Description string                   `json:"description"`
+	Settings    models.ComponentSettings `json:"settings"`
 }
 
 type ComponentPodsResponse struct {
