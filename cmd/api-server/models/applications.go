@@ -23,7 +23,6 @@ type OrganizationStatus string
 const OrganizationCollection string = "organizations"
 const ApplicationCollection string = "applications"
 const ComponentCollection string = "components"
-const ComponentSettingsCollection string = "components_settings"
 
 const (
 	OrgActive   OrganizationStatus = "active"
@@ -391,12 +390,11 @@ func (a *Application) DeleteEnvironmentByName(db *database.MongoDB, envName stri
 
 type Component struct {
 	Model
-	Name          string                   `json:"name" bson:"name"`
-	Type          string                   `json:"type" bson:"type"`
-	Description   string                   `json:"description" bson:"description"`
-	ApplicationID primitive.ObjectID       `json:"application_id" bson:"applicationID"`
-	Properties    map[string]interface{}   `json:"properties,omitempty" bson:"properties,omitempty"`
-	Traits        []map[string]interface{} `json:"traits,omitempty" bson:"traits,omitempty"`
+	Name          string             `json:"name" bson:"name"`
+	Type          string             `json:"type" bson:"type"`
+	Description   string             `json:"description" bson:"description"`
+	ApplicationID primitive.ObjectID `json:"application_id" bson:"applicationID"`
+	Settings      ComponentSettings  `json:"settings" bson:"settings"`
 }
 
 func (c *Component) GetCollectionName() string {
@@ -502,39 +500,8 @@ type StorageSettings struct {
 }
 
 type ComponentSettings struct {
-	Model
-	ComponentID       primitive.ObjectID `json:"component_id" bson:"componentID"`
-	ResourcesSettings ResourcesSettings  `json:"resources_settings" bson:"resourcesSettings"`
-	SourceSettings    SourceSettings     `json:"source_settings" bson:"sourceSettings"`
-	NetworkSettings   NetworkSettings    `json:"network_settings" bson:"networkSettings"`
-	StorageSettings   []StorageSettings  `json:"storage_settings" bson:"storageSettings"`
-}
-
-func (c *ComponentSettings) GetCollectionName() string {
-	return ComponentSettingsCollection
-}
-
-func (c *ComponentSettings) Create(db *database.MongoDB) error {
-	err := Create(context.Background(), db, c)
-	return err
-}
-
-func (c *ComponentSettings) GetByID(db *database.MongoDB, ID string) error {
-	err := GetByID(context.Background(), db, ID, c)
-	return err
-}
-
-func (c *ComponentSettings) Update(db *database.MongoDB) error {
-	err := Update(context.Background(), db, c)
-	return err
-}
-
-func (c *ComponentSettings) Delete(db *database.MongoDB) error {
-	err := Delete(context.Background(), db, c)
-	return err
-}
-
-func (c *ComponentSettings) SoftDelete(db *database.MongoDB) error {
-	err := SoftDelete(context.Background(), db, c)
-	return err
+	ResourcesSettings ResourcesSettings `json:"resources_settings" bson:"resourcesSettings"`
+	SourceSettings    SourceSettings    `json:"source_settings" bson:"sourceSettings"`
+	NetworkSettings   NetworkSettings   `json:"network_settings" bson:"networkSettings"`
+	StorageSettings   []StorageSettings `json:"storage_settings" bson:"storageSettings"`
 }
