@@ -1,10 +1,76 @@
 package applications
 
 import (
+	"fmt"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/cmd/api-server/providers"
+	"strings"
 )
+
+/*
+  - properties:
+    pvc:
+  - mountPath: /mnt/storage
+    name: backend-service-pvc
+    resources:
+    requests:
+    storage: 2Gi
+  - mountPath: /mnt/storage2
+    name: backend-service-2-pvc
+    type: storage
+*/
+var serviceType = map[string]string{
+	"public":  "LoadBalancer",
+	"private": "ClusterIP",
+}
+
+func buildExposeTrait(component *models.Component) map[string]interface{} {
+	if component.Settings.NetworkSettings.Exposed == false {
+		return map[string]interface{}{}
+	}
+	trait := map[string]interface{}{
+		"type":       "expose",
+		"properties": map[string]interface{}{},
+	}
+	// Set the service type
+	exposeType := string(component.Settings.NetworkSettings.Type)
+	trait["properties"].(map[string]interface{})["type"] = serviceType[exposeType]
+
+	type Port map[string]interface{}
+	var ports []Port
+	// Set the ports
+	for _, settingsPort := range component.Settings.NetworkSettings.Ports {
+		traitPort := Port{
+			"port":     settingsPort.HostPort,
+			"protocol": strings.ToUpper(string(settingsPort.Protocol)),
+		}
+		ports = append(ports, traitPort)
+	}
+	trait["properties"].(map[string]interface{})["ports"] = ports
+	return trait
+}
+
+func buildScalerTrait(component *models.Component) map[string]interface{} {
+	trait := map[string]interface{}{
+		"type":       "scaler",
+		"properties": map[string]interface{}{},
+	}
+	trait["properties"].(map[string]interface{})["replicas"] = component.Settings.ResourcesSettings.Replicas
+	return trait
+}
+
+func buildComponentProperties(component *models.Component) map[string]interface{} {
+	properties := map[string]interface{}{
+		"image":           component.Settings.SourceSettings.Repository,
+		"workdir":         "/app",
+		"imagePullPolicy": "Always",
+		"cpu":             fmt.Sprint(component.Settings.ResourcesSettings.CPU),
+		"memory":          fmt.Sprintf("%dMi", component.Settings.ResourcesSettings.Memory),
+		"cmd":             strings.Fields(component.Settings.SourceSettings.Command),
+	}
+	return properties
+}
 
 func BuildApplicationManifest(application *models.Application, environment *models.Environment, db *database.MongoDB) (map[string]interface{}, error) {
 	object := map[string]interface{}{
@@ -27,7 +93,7 @@ func BuildApplicationManifest(application *models.Application, environment *mode
 		"spec": map[string]interface{}{},
 	}
 	// Add components
-	componentsManifest := []map[string]interface{}{}
+	var componentsManifest []map[string]interface{}
 	components, err := application.ListComponents(db)
 	if err != nil {
 		return nil, err
@@ -36,11 +102,18 @@ func BuildApplicationManifest(application *models.Application, environment *mode
 		componentManifest := map[string]interface{}{
 			"name": component.Name,
 			"type": component.Type,
-			"labels": map[string]string{
-				providers.ComponentNameLabel: component.Name,
-				providers.ComponentIDLabel:   component.ID.Hex(),
-			},
 		}
+		// Add traits
+		var traits []map[string]interface{}
+		exposeTrait := buildExposeTrait(&component)
+		if len(exposeTrait) > 0 {
+			traits = append(traits, exposeTrait)
+		}
+		scalerTrait := buildScalerTrait(&component)
+		traits = append(traits, scalerTrait)
+		componentManifest["traits"] = traits
+		componentManifest["properties"] = buildComponentProperties(&component)
+
 		componentsManifest = append(componentsManifest, componentManifest)
 	}
 	object["spec"].(map[string]interface{})["components"] = componentsManifest
