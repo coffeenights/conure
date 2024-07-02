@@ -13,18 +13,18 @@ import (
 )
 
 type Model struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty"`
-	CreatedAt time.Time          `bson:"createdAt,omitempty"`
-	UpdatedAt time.Time          `bson:"updatedAt,omitempty"`
-	DeleteAt  time.Time          `bson:"deletedAt,omitempty"`
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	CreatedAt time.Time          `bson:"createdAt,omitempty" json:"created_at"`
+	UpdatedAt time.Time          `bson:"updatedAt,omitempty" json:"updated_at"`
+	DeleteAt  time.Time          `bson:"deletedAt,omitempty" json:"-"`
 }
 
 func (c *Model) SetCreatedAt(t time.Time) {
 	c.CreatedAt = t
 }
 
-func (c *Model) SetDeletedAt() {
-	c.DeleteAt = time.Now()
+func (c *Model) SetUpdatedAt(t time.Time) {
+	c.UpdatedAt = t
 }
 
 func (c *Model) SetID(id primitive.ObjectID) {
@@ -38,6 +38,7 @@ func (c *Model) GetID() primitive.ObjectID {
 type ModelInterface interface {
 	GetCollectionName() string
 	SetCreatedAt(time.Time)
+	SetUpdatedAt(time.Time)
 	SetID(primitive.ObjectID)
 	GetID() primitive.ObjectID
 }
@@ -55,6 +56,7 @@ func GetByID(ctx context.Context, db *database.MongoDB, ID string, model ModelIn
 	} else if err != nil {
 		return err
 	}
+	model.SetID(oID)
 	log.Println("Found a single document: ", model)
 	return nil
 }
@@ -84,6 +86,7 @@ func Update(ctx context.Context, db *database.MongoDB, model ModelInterface) err
 	update := bson.D{
 		{"$set", model},
 	}
+	model.SetUpdatedAt(time.Now())
 	updateResult, err := collection.UpdateOne(ctx, filter, update)
 	if err != nil {
 		return err
