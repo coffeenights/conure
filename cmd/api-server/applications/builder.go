@@ -5,6 +5,7 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/cmd/api-server/providers"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"strings"
 )
 
@@ -72,6 +73,33 @@ func buildComponentProperties(component *models.Component) map[string]interface{
 	return properties
 }
 
+func buildStorageTrait(component *models.Component) map[string]interface{} {
+	trait := map[string]interface{}{
+		"type": "storage",
+		"properties": map[string]interface{}{
+			"pvc": []map[string]interface{}{},
+		},
+	}
+	type MountPath map[string]interface{}
+	var paths []MountPath
+
+	for _, storage := range component.Settings.StorageSettings {
+		diskSize := resource.NewQuantity(int64(storage.Size*1000*1000*1000), resource.DecimalSI)
+		path := MountPath{
+			"mountPath": storage.MountPath,
+			"name":      storage.Name,
+			"resources": map[string]interface{}{
+				"requests": map[string]interface{}{
+					"storage": fmt.Sprintf("%s", diskSize),
+				},
+			},
+		}
+		paths = append(paths, path)
+	}
+	trait["properties"].(map[string]interface{})["pvc"] = paths
+	return trait
+}
+
 func BuildApplicationManifest(application *models.Application, environment *models.Environment, db *database.MongoDB) (map[string]interface{}, error) {
 	object := map[string]interface{}{
 		"apiVersion": "core.oam.dev/v1beta1",
@@ -111,7 +139,13 @@ func BuildApplicationManifest(application *models.Application, environment *mode
 		}
 		scalerTrait := buildScalerTrait(&component)
 		traits = append(traits, scalerTrait)
+
+		storageTrait := buildStorageTrait(&component)
+		traits = append(traits, storageTrait)
+
 		componentManifest["traits"] = traits
+
+		// Add properties
 		componentManifest["properties"] = buildComponentProperties(&component)
 
 		componentsManifest = append(componentsManifest, componentManifest)
