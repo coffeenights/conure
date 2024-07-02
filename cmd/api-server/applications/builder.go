@@ -9,18 +9,6 @@ import (
 	"strings"
 )
 
-/*
-  - properties:
-    pvc:
-  - mountPath: /mnt/storage
-    name: backend-service-pvc
-    resources:
-    requests:
-    storage: 2Gi
-  - mountPath: /mnt/storage2
-    name: backend-service-2-pvc
-    type: storage
-*/
 var serviceType = map[string]string{
 	"public":  "LoadBalancer",
 	"private": "ClusterIP",
