@@ -13,7 +13,7 @@ import (
 )
 
 type Model struct {
-	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	ID        primitive.ObjectID `bson:"_id" json:"id"`
 	CreatedAt time.Time          `bson:"createdAt,omitempty" json:"created_at"`
 	UpdatedAt time.Time          `bson:"updatedAt,omitempty" json:"updated_at"`
 	DeleteAt  time.Time          `bson:"deletedAt,omitempty" json:"-"`
@@ -64,6 +64,7 @@ func GetByID(ctx context.Context, db *database.MongoDB, ID string, model ModelIn
 func Create(ctx context.Context, db *database.MongoDB, model ModelInterface) error {
 	collection := db.Client.Database(db.DBName).Collection(model.GetCollectionName())
 	model.SetCreatedAt(time.Now())
+	model.SetID(primitive.NewObjectID())
 	insertResult, err := collection.InsertOne(ctx, model)
 	if err != nil {
 		var writeException mongo.WriteException

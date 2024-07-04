@@ -389,7 +389,7 @@ func (a *Application) DeleteEnvironmentByName(db *database.MongoDB, envName stri
 }
 
 type Component struct {
-	Model
+	Model         `bson:",inline"`
 	Name          string             `json:"name" bson:"name"`
 	Type          string             `json:"type" bson:"type"`
 	Description   string             `json:"description" bson:"description"`
@@ -478,7 +478,7 @@ const (
 
 type PortSettings struct {
 	HostPort   int      `json:"host_port" bson:"hostPort"`
-	TargetPort int      `json:"container_port" bson:"containerPort"`
+	TargetPort int      `json:"target_port" bson:"targetPort"`
 	Protocol   Protocol `json:"protocol" bson:"protocol"`
 }
 

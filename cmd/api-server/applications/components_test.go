@@ -37,22 +37,14 @@ func TestListComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	comp1 := models.Component{
-		ApplicationID: application.ID,
-		Name:          "test-component-list",
-		Type:          "service",
-	}
+	comp1 := models.ComponentTemplate(application.ID, "test-component-list")
 	err = comp1.Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
 	defer comp1.Delete(testConf.app.MongoDB)
 
-	comp2 := models.Component{
-		ApplicationID: application.ID,
-		Name:          "test-component2-list",
-		Type:          "service",
-	}
+	comp2 := models.ComponentTemplate(application.ID, "test-component2-list")
 	err = comp2.Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
@@ -82,6 +74,9 @@ func TestListComponents(t *testing.T) {
 	}
 	if response.Components[1].Name != "test-component2-list" {
 		t.Errorf("Expected component name to be test-component2-list, got: %v", response.Components[1].Name)
+	}
+	if response.Components[0].ID.Hex() != comp1.ID.Hex() {
+		t.Errorf("Expected component ID to be %v, got: %v", comp1.ID.Hex(), response.Components[0].ID.Hex())
 	}
 }
 
