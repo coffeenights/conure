@@ -136,7 +136,7 @@ func (a *ApiHandler) CreateApplication(c *gin.Context) {
 }
 
 func (a *ApiHandler) DeployApplication(c *gin.Context) {
-	handler, err := a.getHandlerFromRoute(c)
+	handler, err := getHandlerFromRoute(c, a.MongoDB)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
@@ -180,7 +180,7 @@ func (a *ApiHandler) DeployApplication(c *gin.Context) {
 }
 
 func (a *ApiHandler) StatusApplication(c *gin.Context) {
-	handler, err := a.getHandlerFromRoute(c)
+	handler, err := getHandlerFromRoute(c, a.MongoDB)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
@@ -211,34 +211,4 @@ func (a *ApiHandler) StatusApplication(c *gin.Context) {
 	response.Status = ApplicationStatus(appStatus)
 	c.JSON(http.StatusOK, gin.H{"status": appStatus})
 
-}
-
-func (a *ApiHandler) getHandlerFromRoute(c *gin.Context) (*ApplicationHandler, error) {
-	// Escape the organizationID
-	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
-		log.Printf("Error parsing organizationID: %v\n", err)
-		return nil, err
-
-	}
-	// Escape the applicationID
-	if _, err := primitive.ObjectIDFromHex(c.Param("applicationID")); err != nil {
-		log.Printf("Error parsing applicationID: %v\n", err)
-		return nil, err
-	}
-
-	handler, err := NewApplicationHandler(a.MongoDB)
-	if err != nil {
-		log.Printf("Error creating application handler: %v\n", err)
-		return nil, err
-	}
-	err = handler.GetApplicationByID(c.Param("applicationID"))
-	if err != nil {
-		log.Printf("Error getting application: %v\n", err)
-		return nil, conureerrors.ErrObjectNotFound
-	}
-	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
-		return nil, conureerrors.ErrNotAllowed
-	}
-
-	return handler, nil
 }

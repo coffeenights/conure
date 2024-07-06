@@ -53,6 +53,7 @@ func TestCreateOrganization(t *testing.T) {
 	// Assert
 	if resp.Code != http.StatusCreated {
 		t.Errorf("Expected response code 201, got: %v", resp.Code)
+		t.FailNow()
 	}
 	org := models.Organization{}
 	response := OrganizationResponse{}

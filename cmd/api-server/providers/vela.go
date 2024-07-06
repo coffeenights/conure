@@ -396,7 +396,7 @@ func getNetworkPropertiesFromService(clientset *k8sUtils.GenericClientset, names
 		return fmt.Errorf("error getting services: %v", err)
 	}
 	if len(services) == 0 {
-		return fmt.Errorf("no services found with labels: %v", labels)
+		return k8sUtils.ErrServiceNotFound
 	}
 	service := services[0]
 	properties.IP = service.Spec.ClusterIP
@@ -461,10 +461,10 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 	err = p.createNamespace(clientset)
 	if errors.As(err, &statusError) {
 		if statusError.ErrStatus.Code == 409 {
-			log.Printf("Application already exists\n")
-			return conureerrors.ErrApplicationExists
+			log.Printf("Namespace already exists, reusing it\n")
+		} else {
+			return err
 		}
-		return err
 	} else if err != nil {
 		return err
 	}
