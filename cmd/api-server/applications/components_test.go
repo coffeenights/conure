@@ -357,3 +357,47 @@ func TestUpdateComponent(t *testing.T) {
 	}
 
 }
+
+func TestDeleteComponent(t *testing.T) {
+	// Create test organization
+	org := models.Organization{
+		Status:    models.OrgActive,
+		AccountID: testConf.authUser.ID,
+		Name:      "Test Organization for ListApplications",
+	}
+	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer org.Delete(testConf.app.MongoDB)
+
+	// Create test application
+	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer application.Delete(testConf.app.MongoDB)
+
+	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	comp := models.ComponentTemplate(application.ID, "test-delete-component")
+	err = comp.Create(testConf.app.MongoDB)
+	if err != nil {
+		t.Errorf("Failed to create component: %v", err)
+		t.FailNow()
+	}
+
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID.Hex()
+	req, _ := http.NewRequest("DELETE", url, nil)
+	req.AddCookie(testConf.generateCookie())
+	resp := httptest.NewRecorder()
+	testConf.router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusNoContent {
+		t.Errorf("Expected response code 204, got: %v", resp.Code)
+	}
+}

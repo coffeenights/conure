@@ -243,6 +243,28 @@ func (a *ApiHandler) UpdateComponent(c *gin.Context) {
 
 }
 
+func (a *ApiHandler) DeleteComponent(c *gin.Context) {
+	_, err := getHandlerFromRoute(c, a.MongoDB)
+	if err != nil {
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	component, err := getComponentFromRoute(c, a.MongoDB)
+	if err != nil {
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	err = component.Delete(a.MongoDB)
+	if err != nil {
+		log.Printf("Error deleting component: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 func (a *ApiHandler) ComponentPods(c *gin.Context) {
 	var response ComponentPodsResponse
 	var component models.Component
@@ -300,8 +322,4 @@ func (a *ApiHandler) StreamLogs(c *gin.Context) {
 			return false
 		}
 	})
-}
-
-func (a *ApiHandler) CreateComponentSettings(c *gin.Context) {
-
 }
