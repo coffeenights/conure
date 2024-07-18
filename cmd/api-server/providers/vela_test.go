@@ -9,3 +9,14 @@ func TestProviderStatusVela_GetActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestProviderStatusVela_WatchApplicationStatus(t *testing.T) {
+	providerStatusVela, err := NewProviderStatusVela("65d6db08a7d5cf185f75e6d2", "65f91a8bfff40488c9329dcc", "9f14717c-development")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = providerStatusVela.WatchApplicationStatus()
+	if err != nil {
+		t.Fatal(err)
+	}
+}

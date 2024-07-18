@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	"log"
 )
 
@@ -88,6 +89,31 @@ func NewProviderStatusVela(organizationID string, applicationID string, namespac
 
 func (p *ProviderStatusVela) GetApplicationStatus() (string, error) {
 	return string(p.VelaApplication.Status.Phase), nil
+}
+
+func (p *ProviderStatusVela) WatchApplicationStatus() error {
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		return err
+	}
+	watchInterface, err := clientset.Vela.CoreV1beta1().Applications(p.Namespace).Watch(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		log.Fatalf("Error opening watch: %v", err)
+	}
+	defer watchInterface.Stop()
+	for event := range watchInterface.ResultChan() {
+		switch event.Type {
+		case watch.Added:
+			fmt.Println("Application added:", event.Object)
+		case watch.Modified:
+			fmt.Println("Application modified:", event.Object)
+		case watch.Deleted:
+			fmt.Println("Application deleted:", event.Object)
+		case watch.Error:
+			fmt.Println("Error:", event.Object)
+		}
+	}
+	return nil
 }
 
 func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*ComponentStatusHealth, error) {
