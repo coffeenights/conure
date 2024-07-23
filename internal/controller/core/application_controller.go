@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	oamconureiov1alpha1 "github.com/coffeenights/conure/api/oam/v1alpha1"
+	coreconureiov1alpha1 "github.com/coffeenights/conure/api/core/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 )
 
@@ -18,13 +18,13 @@ type ApplicationReconciler struct {
 	Scheme *runtime.Scheme
 }
 
-//+kubebuilder:rbac:groups=oam.conure.io,resources=applications,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=oam.conure.io,resources=applications/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=oam.conure.io,resources=applications/finalizers,verbs=update
+//+kubebuilder:rbac:groups=core.conure.io,resources=applications,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core.conure.io,resources=applications/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=core.conure.io,resources=applications/finalizers,verbs=update
 
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	var application oamconureiov1alpha1.Application
+	var application coreconureiov1alpha1.Application
 	if err := r.Get(ctx, req.NamespacedName, &application); err != nil {
 		logger.Info("Application resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -51,7 +51,7 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		if owner == nil {
 			return nil
 		}
-		apiGVStr := oamconureiov1alpha1.GroupVersion.String()
+		apiGVStr := coreconureiov1alpha1.GroupVersion.String()
 		if owner.APIVersion != apiGVStr || owner.Kind != "Application" {
 			return nil
 		}
@@ -64,7 +64,7 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&oamconureiov1alpha1.Application{}).
+		For(&coreconureiov1alpha1.Application{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&appsv1.StatefulSet{}).
 		Complete(r)

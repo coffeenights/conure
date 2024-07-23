@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-	oamconureiov1alpha1 "github.com/coffeenights/conure/api/oam/v1alpha1"
+	coreconureiov1alpha1 "github.com/coffeenights/conure/api/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/workload"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -16,13 +16,13 @@ type Workload interface {
 }
 
 type ApplicationHandler struct {
-	Application *oamconureiov1alpha1.Application
+	Application *coreconureiov1alpha1.Application
 	Reconciler  *ApplicationReconciler
 	Ctx         context.Context
 	Workloads   []Workload
 }
 
-func NewApplicationHandler(ctx context.Context, application *oamconureiov1alpha1.Application, reconciler *ApplicationReconciler) (*ApplicationHandler, error) {
+func NewApplicationHandler(ctx context.Context, application *coreconureiov1alpha1.Application, reconciler *ApplicationReconciler) (*ApplicationHandler, error) {
 	logger := log.FromContext(ctx)
 	var handler ApplicationHandler
 	handler.Application = application
@@ -30,8 +30,8 @@ func NewApplicationHandler(ctx context.Context, application *oamconureiov1alpha1
 	handler.Reconciler = reconciler
 	for _, component := range application.Spec.Components {
 		switch component.Type {
-		case oamconureiov1alpha1.Service:
-			componentProperties := oamconureiov1alpha1.ServiceComponentProperties{}
+		case coreconureiov1alpha1.Service:
+			componentProperties := coreconureiov1alpha1.ServiceComponentProperties{}
 			err := componentProperties.Parse(component.Properties.Raw)
 			if err != nil {
 				return &handler, err
@@ -52,9 +52,9 @@ func NewApplicationHandler(ctx context.Context, application *oamconureiov1alpha1
 				return &handler, err
 			}
 			handler.Workloads = append(handler.Workloads, &wld)
-		case oamconureiov1alpha1.StatefulService:
-		case oamconureiov1alpha1.CronTask:
-		case oamconureiov1alpha1.Worker:
+		case coreconureiov1alpha1.StatefulService:
+		case coreconureiov1alpha1.CronTask:
+		case coreconureiov1alpha1.Worker:
 		}
 	}
 	return &handler, nil

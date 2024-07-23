@@ -7,7 +7,7 @@ import (
 	"hash"
 )
 
-const HashLabelName = "oam.conure.io/hash"
+const HashLabelName = "core.conure.io/hash"
 
 func GetHashForSpec(specStruct interface{}) string {
 	byteArray, _ := json.Marshal(specStruct)

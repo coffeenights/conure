@@ -1,6 +1,6 @@
 // Package v1alpha1 contains API Schema definitions for the  v1alpha1 API group
 // +kubebuilder:object:generate=true
-// +groupName=oam.conure.io
+// +groupName=core.conure.io
 package v1alpha1
 
 import (
@@ -10,7 +10,7 @@ import (
 
 var (
 	// GroupVersion is group version used to register these objects
-	GroupVersion       = schema.GroupVersion{Group: "oam.conure.io", Version: "v1alpha1"}
+	GroupVersion       = schema.GroupVersion{Group: "core.conure.io", Version: "v1alpha1"}
 	SchemeGroupVersion = GroupVersion // For compatibility with client-gen code
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme

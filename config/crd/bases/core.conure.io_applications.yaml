@@ -5,9 +5,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: applications.oam.conure.io
+  name: applications.core.conure.io
 spec:
-  group: oam.conure.io
+  group: core.conure.io
   names:
     kind: Application
     listKind: ApplicationList

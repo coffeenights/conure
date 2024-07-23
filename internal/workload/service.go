@@ -3,7 +3,7 @@ package workload
 import (
 	"context"
 	"fmt"
-	oamconureiov1alpha1 "github.com/coffeenights/conure/api/oam/v1alpha1"
+	coreconureiov1alpha1 "github.com/coffeenights/conure/api/core/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -18,9 +18,9 @@ import (
 type ServiceWorkload struct {
 	Deployment  *appsv1.Deployment
 	Service     *corev1.Service
-	Application *oamconureiov1alpha1.Application
-	Component   *oamconureiov1alpha1.Component
-	Properties  *oamconureiov1alpha1.ServiceComponentProperties
+	Application *coreconureiov1alpha1.Application
+	Component   *coreconureiov1alpha1.Component
+	Properties  *coreconureiov1alpha1.ServiceComponentProperties
 }
 
 func (s *ServiceWorkload) Build() error {
@@ -49,11 +49,11 @@ func (s *ServiceWorkload) buildDeployment() *appsv1.Deployment {
 			Name:      fmt.Sprintf("%s-%s", s.Application.Name, s.Component.Name),
 			Namespace: s.Application.Namespace,
 			Annotations: map[string]string{
-				"oam.conure.io/application.component": fmt.Sprintf("%s.%s", s.Application.Name, s.Component.Name),
+				"core.conure.io/application.component": fmt.Sprintf("%s.%s", s.Application.Name, s.Component.Name),
 			},
 			Labels: map[string]string{
-				"oam.conure.io/application":    s.Application.Name,
-				"oam.conure.io/component":      s.Component.Name,
+				"core.conure.io/application":   s.Application.Name,
+				"core.conure.io/component":     s.Component.Name,
 				"app.kubernetes.io/name":       s.Component.Name,
 				"app.kubernetes.io/part-of":    s.Application.Name,
 				"app.kubernetes.io/managed-by": "Conure",
@@ -63,14 +63,14 @@ func (s *ServiceWorkload) buildDeployment() *appsv1.Deployment {
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
-					"oam.conure.io/application": s.Application.Name,
+					"core.conure.io/application": s.Application.Name,
 				},
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"oam.conure.io/application":    s.Application.Name,
-						"oam.conure.io/component":      s.Component.Name,
+						"core.conure.io/application":   s.Application.Name,
+						"core.conure.io/component":     s.Component.Name,
 						"app.kubernetes.io/name":       s.Component.Name,
 						"app.kubernetes.io/part-of":    s.Application.Name,
 						"app.kubernetes.io/managed-by": "Conure",
@@ -102,11 +102,11 @@ func (s *ServiceWorkload) buildService() *corev1.Service {
 			Name:      fmt.Sprintf("%s-%s", s.Application.Name, s.Component.Name),
 			Namespace: s.Application.Namespace,
 			Annotations: map[string]string{
-				"oam.conure.io/application.component": fmt.Sprintf("%s.%s", s.Application.Name, s.Component.Name),
+				"core.conure.io/application.component": fmt.Sprintf("%s.%s", s.Application.Name, s.Component.Name),
 			},
 			Labels: map[string]string{
-				"oam.conure.io/application":    s.Application.Name,
-				"oam.conure.io/component":      s.Component.Name,
+				"core.conure.io/application":   s.Application.Name,
+				"core.conure.io/component":     s.Component.Name,
 				"app.kubernetes.io/name":       s.Component.Name,
 				"app.kubernetes.io/part-of":    s.Application.Name,
 				"app.kubernetes.io/managed-by": "Conure",
@@ -122,8 +122,8 @@ func (s *ServiceWorkload) buildService() *corev1.Service {
 			}},
 			Type: "LoadBalancer",
 			Selector: map[string]string{
-				"oam.conure.io/application": s.Application.Name,
-				"oam.conure.io/component":   s.Component.Name,
+				"core.conure.io/application": s.Application.Name,
+				"core.conure.io/component":   s.Component.Name,
 			},
 		},
 		Status: corev1.ServiceStatus{},

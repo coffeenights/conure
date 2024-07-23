@@ -6,12 +6,12 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-type MissingField struct {
-	Field string
-	Err   error
-}
-
-func (e *MissingField) Error() string { return "Missing field " + e.Field + e.Err.Error() }
+//type MissingField struct {
+//	Field string
+//	Err   error
+//}
+//
+//func (e *MissingField) Error() string { return "Missing field " + e.Field + e.Err.Error() }
 
 // Component describe functional units that may be instantiated as part of a larger distributed application
 // ref: https://github.com/oam-dev/spec/blob/master/3.component_model.md
