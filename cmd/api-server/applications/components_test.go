@@ -37,27 +37,19 @@ func TestListComponents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	comp := models.Component{
-		ApplicationID: application.ID,
-		Name:          "test-component",
-		Type:          "service",
-	}
-	_, err = comp.Create(testConf.app.MongoDB)
+	comp1 := models.ComponentTemplate(application.ID, "test-component-list")
+	err = comp1.Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
-	defer comp.Delete(testConf.app.MongoDB)
+	defer comp1.Delete(testConf.app.MongoDB)
 
-	comp = models.Component{
-		ApplicationID: application.ID,
-		Name:          "test-component2",
-		Type:          "service",
-	}
-	_, err = comp.Create(testConf.app.MongoDB)
+	comp2 := models.ComponentTemplate(application.ID, "test-component2-list")
+	err = comp2.Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
-	defer comp.Delete(testConf.app.MongoDB)
+	defer comp2.Delete(testConf.app.MongoDB)
 
 	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c"
 	req, _ := http.NewRequest("GET", url, nil)
@@ -77,11 +69,14 @@ func TestListComponents(t *testing.T) {
 	if len(response.Components) != 2 {
 		t.Errorf("Expected 2 component, got: %v", len(response.Components))
 	}
-	if response.Components[0].Name != "test-component" {
-		t.Errorf("Expected component name to be test-component, got: %v", response.Components[0].Name)
+	if response.Components[0].Name != "test-component-list" {
+		t.Errorf("Expected component name to be test-component-list, got: %v", response.Components[0].Name)
 	}
-	if response.Components[1].Name != "test-component2" {
-		t.Errorf("Expected component name to be test-component2, got: %v", response.Components[1].Name)
+	if response.Components[1].Name != "test-component2-list" {
+		t.Errorf("Expected component name to be test-component2-list, got: %v", response.Components[1].Name)
+	}
+	if response.Components[0].ID.Hex() != comp1.ID.Hex() {
+		t.Errorf("Expected component ID to be %v, got: %v", comp1.ID.Hex(), response.Components[0].ID.Hex())
 	}
 }
 
@@ -187,11 +182,6 @@ func TestCreateComponent(t *testing.T) {
 		"type":        "service",
 		"name":        "test-component",
 		"description": "Test component description",
-		"properties": map[string]interface{}{
-			"image": "nginx:latest",
-			"port":  "80",
-			"cpu":   "100m",
-		},
 	}
 	payload, err := json.Marshal(body)
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(payload))
@@ -203,6 +193,7 @@ func TestCreateComponent(t *testing.T) {
 	// Assert
 	if resp.Code != http.StatusCreated {
 		t.Errorf("Expected response code 201, got: %v", resp.Code)
+		t.FailNow()
 	}
 	var response ComponentResponse
 	err = json.Unmarshal(resp.Body.Bytes(), &response)
@@ -214,7 +205,9 @@ func TestCreateComponent(t *testing.T) {
 	}
 	// Clean up Component
 	comp := models.Component{
-		ID: response.ID,
+		Model: models.Model{
+			ID: response.ID,
+		},
 	}
 	_ = comp.Delete(testConf.app.MongoDB)
 }
@@ -249,7 +242,7 @@ func TestDetailComponent(t *testing.T) {
 		Name:          "test-detail-component",
 		Type:          "service",
 	}
-	_, err = comp.Create(testConf.app.MongoDB)
+	err = comp.Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Errorf("Failed to create component: %v", err)
 	}
@@ -309,5 +302,102 @@ func TestDetailComponent_NotFound(t *testing.T) {
 	// Assert
 	if resp.Code != http.StatusNotFound {
 		t.Errorf("Expected response code 404, got: %v", resp.Code)
+	}
+}
+
+func TestUpdateComponent(t *testing.T) {
+	// Create test organization
+	org := models.Organization{
+		Status:    models.OrgActive,
+		AccountID: testConf.authUser.ID,
+		Name:      "Test Organization for ListApplications",
+	}
+	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer org.Delete(testConf.app.MongoDB)
+
+	// Create test application
+	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer application.Delete(testConf.app.MongoDB)
+
+	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	comp := models.ComponentTemplate(application.ID, "test-update-component")
+	err = comp.Create(testConf.app.MongoDB)
+	if err != nil {
+		t.Errorf("Failed to create component: %v", err)
+	}
+	defer comp.Delete(testConf.app.MongoDB)
+
+	// Modify a  property
+	comp.Settings.ResourcesSettings.CPU = 1.0
+	payload, err := json.Marshal(comp)
+
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID.Hex()
+	req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(payload))
+	req.AddCookie(testConf.generateCookie())
+	resp := httptest.NewRecorder()
+	testConf.router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusOK {
+		t.Errorf("Expected response code 200, got: %v", resp.Code)
+	}
+
+	if comp.Settings.ResourcesSettings.CPU != 1.0 {
+		t.Errorf("Expected CPU to be 1.0, got: %v", comp.Settings.ResourcesSettings.CPU)
+	}
+
+}
+
+func TestDeleteComponent(t *testing.T) {
+	// Create test organization
+	org := models.Organization{
+		Status:    models.OrgActive,
+		AccountID: testConf.authUser.ID,
+		Name:      "Test Organization for ListApplications",
+	}
+	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer org.Delete(testConf.app.MongoDB)
+
+	// Create test application
+	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer application.Delete(testConf.app.MongoDB)
+
+	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	comp := models.ComponentTemplate(application.ID, "test-delete-component")
+	err = comp.Create(testConf.app.MongoDB)
+	if err != nil {
+		t.Errorf("Failed to create component: %v", err)
+		t.FailNow()
+	}
+
+	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID.Hex()
+	req, _ := http.NewRequest("DELETE", url, nil)
+	req.AddCookie(testConf.generateCookie())
+	resp := httptest.NewRecorder()
+	testConf.router.ServeHTTP(resp, req)
+
+	// Assert
+	if resp.Code != http.StatusNoContent {
+		t.Errorf("Expected response code 204, got: %v", resp.Code)
 	}
 }

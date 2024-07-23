@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/watch"
 	"log"
 )
 
@@ -88,6 +89,31 @@ func NewProviderStatusVela(organizationID string, applicationID string, namespac
 
 func (p *ProviderStatusVela) GetApplicationStatus() (string, error) {
 	return string(p.VelaApplication.Status.Phase), nil
+}
+
+func (p *ProviderStatusVela) WatchApplicationStatus() error {
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		return err
+	}
+	watchInterface, err := clientset.Vela.CoreV1beta1().Applications(p.Namespace).Watch(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		log.Fatalf("Error opening watch: %v", err)
+	}
+	defer watchInterface.Stop()
+	for event := range watchInterface.ResultChan() {
+		switch event.Type {
+		case watch.Added:
+			fmt.Println("Application added:", event.Object)
+		case watch.Modified:
+			fmt.Println("Application modified:", event.Object)
+		case watch.Deleted:
+			fmt.Println("Application deleted:", event.Object)
+		case watch.Error:
+			fmt.Println("Error:", event.Object)
+		}
+	}
+	return nil
 }
 
 func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*ComponentStatusHealth, error) {
@@ -396,7 +422,7 @@ func getNetworkPropertiesFromService(clientset *k8sUtils.GenericClientset, names
 		return fmt.Errorf("error getting services: %v", err)
 	}
 	if len(services) == 0 {
-		return fmt.Errorf("no services found with labels: %v", labels)
+		return k8sUtils.ErrServiceNotFound
 	}
 	service := services[0]
 	properties.IP = service.Spec.ClusterIP
@@ -461,10 +487,10 @@ func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface
 	err = p.createNamespace(clientset)
 	if errors.As(err, &statusError) {
 		if statusError.ErrStatus.Code == 409 {
-			log.Printf("Application already exists\n")
-			return conureerrors.ErrApplicationExists
+			log.Printf("Namespace already exists, reusing it\n")
+		} else {
+			return err
 		}
-		return err
 	} else if err != nil {
 		return err
 	}
