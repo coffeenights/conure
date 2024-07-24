@@ -65,7 +65,5 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&coreconureiov1alpha1.Application{}).
-		Owns(&appsv1.Deployment{}).
-		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
 }
