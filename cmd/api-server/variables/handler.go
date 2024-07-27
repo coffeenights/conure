@@ -45,7 +45,7 @@ func (h *Handler) ListOrganizationVariables(c *gin.Context) {
 	// Decrypt the values of the variables
 	for i, v := range variables {
 		if v.IsEncrypted {
-			variables[i].Value = decryptValue(h.KeyStorage, v.Value)
+			variables[i].Value = DecryptValue(h.KeyStorage, v.Value)
 		}
 	}
 
@@ -76,7 +76,7 @@ func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 	// Decrypt the values of the variables
 	for i, v := range variables {
 		if v.IsEncrypted {
-			variables[i].Value = decryptValue(h.KeyStorage, v.Value)
+			variables[i].Value = DecryptValue(h.KeyStorage, v.Value)
 		}
 	}
 
@@ -111,7 +111,7 @@ func (h *Handler) ListComponentVariables(c *gin.Context) {
 	// Decrypt the values of the variables
 	for i, v := range variables {
 		if v.IsEncrypted {
-			variables[i].Value = decryptValue(h.KeyStorage, v.Value)
+			variables[i].Value = DecryptValue(h.KeyStorage, v.Value)
 		}
 	}
 
@@ -178,7 +178,7 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	}
 
 	if variable.IsEncrypted {
-		variable.Value = encryptValue(h.KeyStorage, variable.Value)
+		variable.Value = EncryptValue(h.KeyStorage, variable.Value)
 	}
 
 	// save the variable to the database
@@ -267,7 +267,7 @@ func checkVariable(h *Handler, variable models.Variable) error {
 	return nil
 }
 
-func encryptValue(storage SecretKeyStorage, value string) string {
+func EncryptValue(storage SecretKeyStorage, value string) string {
 	key, err := storage.Load()
 	if err != nil {
 		log.Panic(err)
@@ -277,7 +277,7 @@ func encryptValue(storage SecretKeyStorage, value string) string {
 	return encryptedValue
 }
 
-func decryptValue(storage SecretKeyStorage, value string) string {
+func DecryptValue(storage SecretKeyStorage, value string) string {
 	key, err := storage.Load()
 	if err != nil {
 		log.Panic(err)
