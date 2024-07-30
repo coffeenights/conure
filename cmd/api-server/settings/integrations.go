@@ -39,6 +39,9 @@ func (a *ApiHandler) CreateIntegration(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
+	if validateIntegrationType(c, request) {
+		return
+	}
 
 	stringValue, err := convertToString(request.IntegrationValue)
 	if err != nil {
@@ -59,6 +62,37 @@ func (a *ApiHandler) CreateIntegration(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, integration)
+}
+
+func validateIntegrationType(c *gin.Context, request CreateIntegrationRequest) bool {
+
+	switch request.IntegrationType {
+	case DOCKER_REGISTRY:
+		// if the integration type is DOCKER_REGISTRY, the value should be a JSON object with the following keys:
+		// - registryUrl
+		// - username
+		// - password
+		dockerRegistry := DockerRegistry{}
+		jsonValue, err := json.Marshal(request.IntegrationValue)
+		if err != nil {
+			conureerrors.AbortWithError(c, err)
+			return true
+		}
+
+		err = json.Unmarshal(jsonValue, &dockerRegistry)
+		if err != nil {
+			conureerrors.AbortWithError(c, err)
+			return true
+		}
+		if dockerRegistry.RegistryUrl == "" || dockerRegistry.Username == "" || dockerRegistry.Password == "" {
+			conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+			return true
+		}
+	default:
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return true
+	}
+	return false
 }
 
 func (a *ApiHandler) ListIntegrations(c *gin.Context) {
