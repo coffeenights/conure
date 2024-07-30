@@ -6,7 +6,7 @@ import "k8s.io/apimachinery/pkg/runtime"
 type Component struct {
 	Name          string                `json:"name"`
 	ComponentType string                `json:"type"`
-	OCRRepository string                `json:"ocrRepository"`
-	OCRTag        string                `json:"ocrTag"`
+	OCIRepository string                `json:"ociRepository"`
+	OCITag        string                `json:"ociTag"`
 	Values        *runtime.RawExtension `json:"values"`
 }

@@ -4,30 +4,42 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ActionDefinitionSpec defines the desired state of Workflow
+// ActionDefinitionSpec defines the desired state of ActionDefinition
 type ActionDefinitionSpec struct {
-	Actions []Component `json:"components"`
+	OCIRepository string `json:"ociRepository"`
+	OCITag        string `json:"ociTag"`
+	ConfigDocs    string `json:"configDocs"`
 }
 
-// WorkflowStatus defines the observed state of Workflow
-type WorkflowStatus struct {
+// ActionDefinitionStatus defines the observed state of ActionDefinition
+type ActionDefinitionStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 }
 
 //+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+genclient
 
-// Workflow is the Schema for the workflows API
-type Workflow struct {
+// ActionDefinition is the Schema for the actionDefinition API
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Namespaced
+// +genclient
+type ActionDefinition struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   WorkflowSpec   `json:"spec,omitempty"`
-	Status WorkflowStatus `json:"status,omitempty"`
+	Spec   ActionDefinitionSpec   `json:"spec,omitempty"`
+	Status ActionDefinitionStatus `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// ActionDefinitionList contains a list of ActionDefinitions
+type ActionDefinitionList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ActionDefinition `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Workflow{})
+	SchemeBuilder.Register(&ActionDefinition{}, &ActionDefinitionList{})
 }

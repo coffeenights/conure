@@ -5,20 +5,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.3
   creationTimestamp: null
-  name: applications.core.conure.io
+  name: workflows.core.conure.io
 spec:
   group: core.conure.io
   names:
-    kind: Application
-    listKind: ApplicationList
-    plural: applications
-    singular: application
+    kind: Workflow
+    listKind: WorkflowList
+    plural: workflows
+    singular: workflow
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Application is the Schema for the applications API
+        description: Workflow is the Schema for the workflows API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -33,37 +33,17 @@ spec:
           metadata:
             type: object
           spec:
-            description: ApplicationSpec defines the desired state of Application
+            description: WorkflowSpec defines the desired state of Workflow
             properties:
-              components:
+              actions:
                 items:
-                  description: Component A component is a part of an application and
-                    represents a single unit of deployment.
-                  properties:
-                    name:
-                      type: string
-                    ociRepository:
-                      type: string
-                    ociTag:
-                      type: string
-                    type:
-                      type: string
-                    values:
-                      type: object
-                      x-kubernetes-preserve-unknown-fields: true
-                  required:
-                  - name
-                  - ociRepository
-                  - ociTag
-                  - type
-                  - values
-                  type: object
+                  type: string
                 type: array
             required:
-            - components
+            - actions
             type: object
           status:
-            description: ApplicationStatus defines the observed state of Application
+            description: WorkflowStatus defines the observed state of Workflow
             type: object
         type: object
     served: true

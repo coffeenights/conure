@@ -2,11 +2,17 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
+
+type Action struct {
+	Name   string                `json:"name"`
+	Values *runtime.RawExtension `json:"values"`
+}
 
 // WorkflowSpec defines the desired state of Workflow
 type WorkflowSpec struct {
-	Actions []Component `json:"components"`
+	Actions []string `json:"actions"`
 }
 
 // WorkflowStatus defines the observed state of Workflow
@@ -26,6 +32,15 @@ type Workflow struct {
 
 	Spec   WorkflowSpec   `json:"spec,omitempty"`
 	Status WorkflowStatus `json:"status,omitempty"`
+}
+
+//+kubebuilder:object:root=true
+
+// WorkflowList contains a list of Workflow
+type WorkflowList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Workflow `json:"items"`
 }
 
 func init() {

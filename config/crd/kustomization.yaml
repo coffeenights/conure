@@ -3,6 +3,8 @@
 # It should be run by config/default
 resources:
 - bases/core.conure.io_applications.yaml
+- bases/core.conure.io_actiondefinitions.yaml
+- bases/core.conure.io_workflows.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:

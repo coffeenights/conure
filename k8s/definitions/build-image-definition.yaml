@@ -1,0 +1,9 @@
+apiVersion: core.conure.io/v1alpha1
+kind: ActionDefinition
+metadata:
+  name: build-image
+  namespace: conure-system
+spec:
+  ociRepository: "oci://conure/conure"
+  ociTag: "latest"
+  configDocs: "https://docs.com"
