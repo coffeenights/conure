@@ -74,7 +74,7 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 	orgVar2 := &models.Variable{
 		OrganizationID: orgID,
 		Name:           "var2",
-		Value:          encryptValue(keyStorage, "value2"),
+		Value:          EncryptValue(keyStorage, "value2"),
 		IsEncrypted:    true,
 		Type:           models.OrganizationType,
 	}
@@ -175,7 +175,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
 		Name:           "var2",
-		Value:          encryptValue(keyStorage, "value2"),
+		Value:          EncryptValue(keyStorage, "value2"),
 		IsEncrypted:    true,
 		Type:           models.EnvironmentType,
 	}
@@ -306,7 +306,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 		ApplicationID:  &app1,
 		ComponentID:    &comp1,
 		Name:           "var2",
-		Value:          encryptValue(keyStorage, "value2"),
+		Value:          EncryptValue(keyStorage, "value2"),
 		IsEncrypted:    true,
 		Type:           models.ComponentType,
 	}

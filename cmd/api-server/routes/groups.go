@@ -1,15 +1,17 @@
 package routes
 
 import (
-	"github.com/gin-contrib/cors"
-	"github.com/gin-gonic/gin"
 	"log"
 	"strings"
+
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
 
 	apps "github.com/coffeenights/conure/cmd/api-server/applications"
 	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/settings"
 	"github.com/coffeenights/conure/cmd/api-server/variables"
 	"github.com/coffeenights/conure/internal/config"
 )
@@ -37,10 +39,12 @@ func GenerateRouter() *gin.Engine {
 	router := gin.New()
 	router.Use(gin.Logger(), gin.Recovery(), getCorsMiddleware())
 	appHandler := apps.NewApiHandler(conf, mongo)
+	settingsHandler := settings.NewApiHandler(conf, mongo, keyStorage)
 	authHandler := auth.NewAuthHandler(conf, mongo)
 	variablesHandler := variables.NewVariablesHandler(conf, mongo, keyStorage)
-	apps.GenerateRoutes("/organizations", router, appHandler)
 	auth.GenerateRoutes("/auth", router, authHandler)
+	apps.GenerateRoutes("/organizations", router, appHandler)
+	settings.GenerateRoutes("/settings", router, settingsHandler)
 	variables.GenerateRoutes("/variables", router, variablesHandler)
 	return router
 }
