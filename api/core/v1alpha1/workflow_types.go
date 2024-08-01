@@ -44,5 +44,5 @@ type WorkflowList struct {
 }
 
 func init() {
-	SchemeBuilder.Register(&Workflow{})
+	SchemeBuilder.Register(&Workflow{}, &WorkflowList{})
 }
