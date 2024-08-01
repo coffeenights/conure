@@ -17,4 +17,8 @@ limitations under the License.
 
 package v1alpha1
 
+type ActionDefinitionExpansion interface{}
+
 type ApplicationExpansion interface{}
+
+type WorkflowExpansion interface{}

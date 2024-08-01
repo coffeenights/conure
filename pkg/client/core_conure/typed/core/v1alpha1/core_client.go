@@ -27,7 +27,9 @@ import (
 
 type CoreV1alpha1Interface interface {
 	RESTClient() rest.Interface
+	ActionDefinitionsGetter
 	ApplicationsGetter
+	WorkflowsGetter
 }
 
 // CoreV1alpha1Client is used to interact with features provided by the  group.
@@ -35,8 +37,16 @@ type CoreV1alpha1Client struct {
 	restClient rest.Interface
 }
 
+func (c *CoreV1alpha1Client) ActionDefinitions(namespace string) ActionDefinitionInterface {
+	return newActionDefinitions(c, namespace)
+}
+
 func (c *CoreV1alpha1Client) Applications(namespace string) ApplicationInterface {
 	return newApplications(c, namespace)
+}
+
+func (c *CoreV1alpha1Client) Workflows(namespace string) WorkflowInterface {
+	return newWorkflows(c, namespace)
 }
 
 // NewForConfig creates a new CoreV1alpha1Client for the given config.

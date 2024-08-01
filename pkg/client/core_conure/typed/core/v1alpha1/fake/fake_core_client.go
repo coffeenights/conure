@@ -27,8 +27,16 @@ type FakeCoreV1alpha1 struct {
 	*testing.Fake
 }
 
+func (c *FakeCoreV1alpha1) ActionDefinitions(namespace string) v1alpha1.ActionDefinitionInterface {
+	return &FakeActionDefinitions{c, namespace}
+}
+
 func (c *FakeCoreV1alpha1) Applications(namespace string) v1alpha1.ApplicationInterface {
 	return &FakeApplications{c, namespace}
+}
+
+func (c *FakeCoreV1alpha1) Workflows(namespace string) v1alpha1.WorkflowInterface {
+	return &FakeWorkflows{c, namespace}
 }
 
 // RESTClient returns a RESTClient that is used to communicate
