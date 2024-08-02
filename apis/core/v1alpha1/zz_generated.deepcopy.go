@@ -314,8 +314,10 @@ func (in *WorkflowSpec) DeepCopyInto(out *WorkflowSpec) {
 	*out = *in
 	if in.Actions != nil {
 		in, out := &in.Actions, &out.Actions
-		*out = make([]string, len(*in))
-		copy(*out, *in)
+		*out = make([]Action, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 }
 

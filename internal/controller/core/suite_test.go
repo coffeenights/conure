@@ -14,7 +14,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	coreconureiov1alpha1 "github.com/coffeenights/conure/api/core/v1alpha1"
+	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	//+kubebuilder:scaffold:imports
 )
 

@@ -12,7 +12,7 @@ type Action struct {
 
 // WorkflowSpec defines the desired state of Workflow
 type WorkflowSpec struct {
-	Actions []string `json:"actions"`
+	Actions []Action `json:"actions"`
 }
 
 // WorkflowStatus defines the observed state of Workflow

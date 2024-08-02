@@ -20,7 +20,7 @@ package v1alpha1
 import (
 	"net/http"
 
-	v1alpha1 "github.com/coffeenights/conure/api/core/v1alpha1"
+	v1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/pkg/client/core_conure/scheme"
 	rest "k8s.io/client-go/rest"
 )
@@ -96,7 +96,7 @@ func New(c rest.Interface) *CoreV1alpha1Client {
 func setConfigDefaults(config *rest.Config) error {
 	gv := v1alpha1.SchemeGroupVersion
 	config.GroupVersion = &gv
-	config.APIPath = "/api"
+	config.APIPath = "/apis"
 	config.NegotiatedSerializer = scheme.Codecs.WithoutConversion()
 
 	if config.UserAgent == "" {

@@ -37,7 +37,16 @@ spec:
             properties:
               actions:
                 items:
-                  type: string
+                  properties:
+                    name:
+                      type: string
+                    values:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                  required:
+                  - name
+                  - values
+                  type: object
                 type: array
             required:
             - actions

@@ -2,7 +2,7 @@ package controller
 
 import (
 	"context"
-	coreconureiov1alpha1 "github.com/coffeenights/conure/api/core/v1alpha1"
+	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/workload"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"

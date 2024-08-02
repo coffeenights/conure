@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	coreconureiov1alpha1 "github.com/coffeenights/conure/api/core/v1alpha1"
+	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	appsv1 "k8s.io/api/apps/v1"
 )
 

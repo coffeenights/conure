@@ -18,7 +18,7 @@ limitations under the License.
 package fake
 
 import (
-	corev1alpha1 "github.com/coffeenights/conure/api/core/v1alpha1"
+	corev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	schema "k8s.io/apimachinery/pkg/runtime/schema"

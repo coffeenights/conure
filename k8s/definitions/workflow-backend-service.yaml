@@ -1,0 +1,13 @@
+apiVersion: core.conure.io/v1alpha1
+kind: Workflow
+metadata:
+  name: backend-service
+  namespace: conure-system
+spec:
+  actions:
+    - name: build-image
+      values:
+        gitRepository: "https://github.com/coffeenights/conure.git"
+        branch: "main"
+        imagePullSecretsName: "regcred"
+        message: "Building Conure!"
