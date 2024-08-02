@@ -61,6 +61,7 @@ type PodCondition struct {
 	Reason  string `json:"reason"`
 	Message string `json:"message"`
 }
+
 type Pod struct {
 	Name       string         `json:"name"`
 	Phase      string         `json:"phase"`

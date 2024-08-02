@@ -9,4 +9,5 @@ type Component struct {
 	OCIRepository string                `json:"ociRepository"`
 	OCITag        string                `json:"ociTag"`
 	Values        *runtime.RawExtension `json:"values"`
+	Workflow      *Workflow             `json:"workflow"`
 }

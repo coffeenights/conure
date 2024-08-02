@@ -1,7 +1,7 @@
 apiVersion: core.conure.io/v1alpha1
 kind: Workflow
 metadata:
-  name: backend-service
+  name: webservice
   namespace: conure-system
 spec:
   actions:

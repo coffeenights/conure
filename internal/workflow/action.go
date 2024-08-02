@@ -11,6 +11,21 @@ const (
 	ConureSystemNamespace = "conure-system"
 )
 
+func GetActions(serviceType string) error {
+	clientset, err := k8sUtils.GetClientset()
+	if err != nil {
+		return err
+	}
+	workflow, err := clientset.Conure.CoreV1alpha1().Workflows(ConureSystemNamespace).Get(context.Background(), serviceType, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+	for _, action := range workflow.Spec.Actions {
+		fmt.Println(action)
+	}
+	return nil
+}
+
 func RunAction() error {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
