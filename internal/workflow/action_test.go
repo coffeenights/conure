@@ -1,8 +1,21 @@
 package workflow
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestRunAction(t *testing.T) {
-	//RunAction()
-	GetActions("webservice")
+	handler, err := NewActionsHandler(context.Background())
+	if err != nil {
+		t.Errorf("NewActionsHandler() failed: %v", err)
+	}
+	err = handler.GetActions("webservice")
+	if err != nil {
+		t.Errorf("GetActions() failed: %v", err)
+	}
+	err = handler.RunActions()
+	if err != nil {
+		t.Errorf("GetActions() failed: %v", err)
+	}
 }
