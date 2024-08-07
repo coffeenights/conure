@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
+	"github.com/coffeenights/conure/internal/k8s"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
+	"github.com/stefanprodan/timoni/pkg/module"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -13,19 +15,23 @@ const (
 )
 
 type ActionsHandler struct {
-	Ctx       context.Context
-	Clientset *k8sUtils.GenericClientset
-	Actions   []coreconureiov1alpha1.Action
+	Ctx                context.Context
+	Clientset          *k8sUtils.GenericClientset
+	Actions            []coreconureiov1alpha1.Action
+	OCIRepoCredentials string
+	Namespace          string
 }
 
-func NewActionsHandler(ctx context.Context) (*ActionsHandler, error) {
+func NewActionsHandler(ctx context.Context, Namespace string) (*ActionsHandler, error) {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		return nil, err
 	}
 	return &ActionsHandler{
-		Ctx:       ctx,
-		Clientset: clientset,
+		Ctx:                ctx,
+		Clientset:          clientset,
+		OCIRepoCredentials: "", // TODO: Take it from integrations
+		Namespace:          Namespace,
 	}, nil
 }
 
@@ -55,5 +61,20 @@ func (a *ActionsHandler) RunAction(action *coreconureiov1alpha1.Action) error {
 		return err
 	}
 	fmt.Println(actionDefinition)
+	rawValues, err := k8s.ExtractMapFromRawExtension(action.Values)
+	if err != nil {
+		return err
+	}
+	values := map[string]interface{}{
+		"values": rawValues,
+	}
+	modManager, err := module.NewManager(a.Ctx, actionDefinition.Name, actionDefinition.Spec.OCIRepository, actionDefinition.Spec.OCITag, a.Namespace, a.OCIRepoCredentials, values)
+	if err != nil {
+		return err
+	}
+	err = modManager.Apply()
+	if err != nil {
+		return err
+	}
 	return nil
 }
