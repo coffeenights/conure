@@ -43,11 +43,23 @@ import (
 	// Name of the git repository to pull the code from.
 	gitRepository: string
 
+	// Name of the oci repository to push the image to.
+	ociRepository: string
+	ociTag: string
+
+	// Location of the docker file to build the image from.
+	dockerFile: string
+
+	// Size of the storage to be used for the build.
+	storageSize: string
+
 	// Name of the git branch in which to pull the code from.
 	branch: string
 
 	// App settings.
 	message!: string
+
+
 
 	// Pod optional settings.
 	podAnnotations?: {[string]: string}

@@ -3,6 +3,7 @@ package templates
 import (
 	corev1 "k8s.io/api/core/v1"
 	timoniv1 "timoni.sh/core/v1alpha1"
+	conurev1 "conure.io/apis/core/v1alpha1"
 )
 
 // Config defines the schema and defaults for the Instance values.
@@ -44,6 +45,8 @@ import (
 		digest:     *"" | string
 	}
 
+	component?: conurev1.#Component
+
 	// The pod allows setting the Kubernetes Pod annotations, image pull secrets,
 	// affinity and anti-affinity rules. By default, pods are scheduled on Linux nodes.
 	pod: {
@@ -74,6 +77,8 @@ import (
 	// The number of pods replicas.
 	// By default, the number of replicas is 1.
 	replicas: *1 | int & >0
+
+
 
 	// The securityContext allows setting the container security context.
 	// By default, the container is denined privilege escalation.

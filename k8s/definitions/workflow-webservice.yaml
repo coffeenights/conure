@@ -11,3 +11,7 @@ spec:
         branch: "main"
         imagePullSecretsName: "regcred"
         message: "Building Conure!"
+        ociRepository: "registry-service.conure-system.svc.cluster.local:5000/conure/backend"
+        ociTag: "latest"
+        dockerFile: "cmd/api-server/Dockerfile"
+        # storageSize: string

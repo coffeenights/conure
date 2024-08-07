@@ -15,7 +15,7 @@ import (
 	kind:       "Job"
 	metadata: timoniv1.#MetaComponent & {
 		#Meta:      #config.metadata
-		#Component: "docker-build-image"
+		#Component: "build-image"
 	}
 	metadata: annotations: timoniv1.Action.Force
 	spec: batchv1.#JobSpec & {
@@ -41,9 +41,11 @@ import (
 					image:           "gcr.io/kaniko-project/executor:latest"
 					imagePullPolicy: "IfNotPresent"
 					args: [
-						"--dockerfile=/workspace/cmd/api-server/Dockerfile",
+						"--insecure",
+            "--skip-tls-verify",
+						"--dockerfile=/workspace/\(#config.dockerFile)",
 						"--context=/workspace",
-						"--destination=docker.io/coffeenights/conure-api:latest",
+						"--destination=\(#config.ociRepository):\(#config.ociTag)",
 						"--cache=false"
 					]
 					volumeMounts: [
@@ -61,7 +63,7 @@ import (
 					{
 						name: "dockerfile-storage"
 						emptyDir: {
-							sizeLimit: "10Gi"
+							sizeLimit: #config.storageSize
 						}
 					},
 					{
