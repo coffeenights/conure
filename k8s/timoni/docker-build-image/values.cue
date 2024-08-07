@@ -7,8 +7,10 @@ package main
 
 // Defaults
 values: {
-	gitRepository: "https://github.com/coffeenights/conure.git"
-	branch: "main"
-	imagePullSecretsName: "regcred"
-	message: "Building Conure!"
+//	gitRepository: "https://github.com/coffeenights/conure.git"
+//	branch: "main"
+//	imagePullSecretsName: "regcred"
+//	message: "Building Conure!"
+	storageSize: "10Gi"
+//	namespace: "conure-system"
 }

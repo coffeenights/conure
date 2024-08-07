@@ -125,6 +125,7 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	// Groups is the groups you're testing for.
 	// +optional
+	// +listType=atomic
 	groups?: [...string] @go(Groups,[]string) @protobuf(4,bytes,rep)
 
 	// Extra corresponds to the user.Info.GetExtra() method from the authenticator.  Since that is input to the authorizer
@@ -212,10 +213,12 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 #SubjectRulesReviewStatus: {
 	// ResourceRules is the list of actions the subject is allowed to perform on resources.
 	// The list ordering isn't significant, may contain duplicates, and possibly be incomplete.
+	// +listType=atomic
 	resourceRules: [...#ResourceRule] @go(ResourceRules,[]ResourceRule) @protobuf(1,bytes,rep)
 
 	// NonResourceRules is the list of actions the subject is allowed to perform on non-resources.
 	// The list ordering isn't significant, may contain duplicates, and possibly be incomplete.
+	// +listType=atomic
 	nonResourceRules: [...#NonResourceRule] @go(NonResourceRules,[]NonResourceRule) @protobuf(2,bytes,rep)
 
 	// Incomplete is true when the rules returned by this call are incomplete. This is most commonly
@@ -233,30 +236,36 @@ import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 // may contain duplicates, and possibly be incomplete.
 #ResourceRule: {
 	// Verb is a list of kubernetes resource API verbs, like: get, list, watch, create, update, delete, proxy.  "*" means all.
+	// +listType=atomic
 	verbs: [...string] @go(Verbs,[]string) @protobuf(1,bytes,rep)
 
 	// APIGroups is the name of the APIGroup that contains the resources.  If multiple API groups are specified, any action requested against one of
 	// the enumerated resources in any API group will be allowed.  "*" means all.
 	// +optional
+	// +listType=atomic
 	apiGroups?: [...string] @go(APIGroups,[]string) @protobuf(2,bytes,rep)
 
 	// Resources is a list of resources this rule applies to.  "*" means all in the specified apiGroups.
 	//  "*/foo" represents the subresource 'foo' for all resources in the specified apiGroups.
 	// +optional
+	// +listType=atomic
 	resources?: [...string] @go(Resources,[]string) @protobuf(3,bytes,rep)
 
 	// ResourceNames is an optional white list of names that the rule applies to.  An empty set means that everything is allowed.  "*" means all.
 	// +optional
+	// +listType=atomic
 	resourceNames?: [...string] @go(ResourceNames,[]string) @protobuf(4,bytes,rep)
 }
 
 // NonResourceRule holds information that describes a rule for the non-resource
 #NonResourceRule: {
 	// Verb is a list of kubernetes non-resource API verbs, like: get, post, put, delete, patch, head, options.  "*" means all.
+	// +listType=atomic
 	verbs: [...string] @go(Verbs,[]string) @protobuf(1,bytes,rep)
 
 	// NonResourceURLs is a set of partial urls that a user should have access to.  *s are allowed, but only as the full,
 	// final step in the path.  "*" means all.
 	// +optional
+	// +listType=atomic
 	nonResourceURLs?: [...string] @go(NonResourceURLs,[]string) @protobuf(2,bytes,rep)
 }
