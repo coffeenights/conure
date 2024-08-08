@@ -42,10 +42,6 @@ spec:
                   properties:
                     name:
                       type: string
-                    ociRepository:
-                      type: string
-                    ociTag:
-                      type: string
                     type:
                       type: string
                     values:
@@ -53,8 +49,6 @@ spec:
                       x-kubernetes-preserve-unknown-fields: true
                   required:
                   - name
-                  - ociRepository
-                  - ociTag
                   - type
                   - values
                   type: object
