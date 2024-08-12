@@ -41,11 +41,11 @@ func (l *K8sSecretKeyStorage) Save(key []byte) error {
 	// Save the key using the k8s secret as the storage
 	encodedKey := hex.EncodeToString(key)
 	data := map[string]string{
-		"SECRET_KEY": encodedKey,
+		secretKey: encodedKey,
 	}
 	secret := corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "secret-key",
+			Name: secretName,
 		},
 		Immutable:  nil,
 		StringData: data,
