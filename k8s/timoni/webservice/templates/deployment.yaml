@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-service
+  labels:
+    conure.io/application-id: "65c084eaff5e41522cc80f99"
+    conure.io/organization-id: "65d6db08a7d5cf185f75e6d2"
+    conure.io/namespace: "65d6db08a7d5cf185f75e6d2-65c084eaff5e41522cc80f99-development"
+    conure.io/environment: "development"
+    conure.io/created-by: "6599082303bedbfeb7243ada"
+    conure.io/account-id: "6599082303bedbfeb7243ada"
+    conure.io/component-type: "webservice"
+    conure.io/component-name: "backend-service"
+    conure.io/component-id: "65c084eaff5e41522cc80f99"
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 2
+  selector:
+    matchLabels:
+      conure.io/component-name: "backend-service"
+      conure.io/component-id: "65c084eaff5e41522cc80f99"
+  template:
+    metadata:
+      labels:
+        conure.io/component-name: "backend-service"
+        conure.io/component-id: "65c084eaff5e41522cc80f99"
+    spec:
+      containers:
+        - name: backend-service
+          image: "coffeenights/django:latest"
+          ports:
+            - containerPort: 9091
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: backend-service-pvc
+              mountPath: "/mnt/storage"
+            - name: backend-service-2-pvc
+              mountPath: "/mnt/storage2"
+      volumes:
+        - name: backend-service-pvc
+          persistentVolumeClaim:
+            claimName: backend-service-pvc
+        - name: backend-service-2-pvc
+          persistentVolumeClaim:
+            claimName: backend-service-2-pvc

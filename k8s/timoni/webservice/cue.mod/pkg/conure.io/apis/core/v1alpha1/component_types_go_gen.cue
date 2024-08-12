@@ -13,5 +13,4 @@ import "k8s.io/apimachinery/pkg/runtime"
 	ociRepository: string                       @go(OCIRepository)
 	ociTag:        string                       @go(OCITag)
 	values?:       null | runtime.#RawExtension @go(Values,*runtime.RawExtension)
-	workflow?:     null | #Workflow             @go(Workflow,*Workflow)
 }

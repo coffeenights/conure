@@ -13,15 +13,19 @@ import (
 		metadata: annotations: #config.service.annotations
 	}
 	spec: corev1.#ServiceSpec & {
-		type:     corev1.#ServiceTypeClusterIP
+	  if #config.service.type == "Public" {
+		  type: corev1.#ServiceTypeLoadBalancer
+		}
+		if #config.service.type == "Private" {
+		  type: corev1.#ServiceTypeClusterIP
+		}
+
 		selector: #config.selector.labels
-		ports: [
-			{
-				port:       #config.service.port
-				protocol:   "TCP"
-				name:       "http"
-				targetPort: name
-			},
-		]
+		ports: [ for item in #config.network.ports {
+      port:       item.hostPort
+      protocol:   item.protocol
+      name:       "http"
+      targetPort: item.containerPort
+    }]
 	}
 }

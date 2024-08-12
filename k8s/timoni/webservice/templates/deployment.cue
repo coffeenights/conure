@@ -11,7 +11,7 @@ import (
 	kind:       "Deployment"
 	metadata:   #config.metadata
 	spec: appsv1.#DeploymentSpec & {
-		replicas: #config.replicas
+		replicas: #config.resources.replicas
 		selector: matchLabels: #config.selector.labels
 		template: {
 			metadata: {
@@ -23,42 +23,33 @@ import (
 			spec: corev1.#PodSpec & {
 				containers: [
 					{
-						name:            #config.metadata.name
-						image:           #config.image.reference
-						imagePullPolicy: #config.image.pullPolicy
-						ports: [
-							{
-								name:          "http"
-								containerPort: 80
-								protocol:      "TCP"
+						name: #config.metadata.name
+						image: #config.source.image
+						if #config.source.command != _|_ {
+							command: #config.source.command
+						}
+						workingDir: #config.source.workingDir
+						imagePullPolicy: "IfNotPresent"
+						resources: {
+							requests: {
+								cpu: #config.resources.cpu
+								memory: #config.resources.memory
 							},
-						]
-						readinessProbe: {
-							httpGet: {
-								path: "/"
-								port: "http"
+							limits: {
+								cpu: #config.resources.cpu
+								memory: #config.resources.memory
 							}
-							initialDelaySeconds: 5
-							periodSeconds:       10
 						}
-						livenessProbe: {
-							tcpSocket: {
-								port: "http"
-							}
-							initialDelaySeconds: 5
-							periodSeconds:       5
+						if #config.storage != _|_ {
+              volumes: [for item in #config.storage {
+                name: item.name
+                persistentVolumeClaim: {
+                  claimName: item.claimName
+                }
+              }]
 						}
-						if #config.resources != _|_ {
-							resources: #config.resources
-						}
-						if #config.securityContext != _|_ {
-							securityContext: #config.securityContext
-						}
-					},
+					}
 				]
-				if #config.pod.affinity != _|_ {
-					affinity: #config.pod.affinity
-				}
 				if #config.pod.imagePullSecrets != _|_ {
 					imagePullSecrets: #config.pod.imagePullSecrets
 				}
