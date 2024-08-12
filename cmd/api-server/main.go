@@ -3,17 +3,23 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
+	"os"
+
 	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/routes"
+	"github.com/coffeenights/conure/cmd/api-server/variables"
 	"github.com/coffeenights/conure/internal/config"
 	_ "github.com/joho/godotenv/autoload"
-	"log"
-	"os"
 )
 
-func runserver(address string, port int) {
+const (
+	SystemNamespace = "conure-system"
+)
+
+func runServer(address string, port int) {
 	r := routes.GenerateRouter()
 	log.Println("Running the server...")
 	err := r.Run(fmt.Sprintf("%s:%d", address, port))
@@ -22,7 +28,7 @@ func runserver(address string, port int) {
 	}
 }
 
-func createsuperuser(email string) {
+func createSuperUser(email string) {
 	conf := config.LoadConfig(apiConfig.Config{})
 	log.Println("Connecting to MongoDB")
 	mongo, err := database.ConnectToMongoDB(conf.MongoDBURI, conf.MongoDBName)
@@ -31,6 +37,17 @@ func createsuperuser(email string) {
 	}
 	log.Println("Connected to MongoDB")
 	auth.CreateSuperuser(mongo, email)
+}
+
+func createSecretKey() {
+	_ = config.LoadConfig(apiConfig.Config{})
+	log.Println("Creating secret key...")
+	keyStore := variables.NewK8sSecretKey(SystemNamespace)
+	err := keyStore.Generate()
+	if err != nil {
+		log.Panic(err)
+	}
+	log.Println("Secret key created")
 }
 
 func main() {
@@ -51,6 +68,7 @@ func main() {
 		fmt.Printf("  Commands available:\n")
 		fmt.Printf("\trunserver        Run the HTTP server\n")
 		fmt.Printf("\tcreatesuperuser  Create the super user for your account\n")
+		fmt.Printf("\tcreatesecretkey  Create the secret key for your account\n")
 	}
 	if len(os.Args) >= 2 {
 		subcommand = os.Args[1]
@@ -62,7 +80,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("failed to start the server: %v", err)
 		}
-		runserver(*addressServer, *portServer)
+		runServer(*addressServer, *portServer)
 	case "createsuperuser":
 		err := createsuperuserCmd.Parse(os.Args[2:])
 		if err != nil {
@@ -73,7 +91,9 @@ func main() {
 			createsuperuserCmd.Usage()
 			os.Exit(1)
 		}
-		createsuperuser(*emailSuperuser)
+		createSuperUser(*emailSuperuser)
+	case "createsecretkey":
+		createSecretKey()
 	default:
 		flag.Usage()
 	}

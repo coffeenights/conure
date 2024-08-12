@@ -3,12 +3,13 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	k8sV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"strings"
 )
 
 func GetDeploymentsByLabels(clientset *kubernetes.Clientset, namespace string, labels map[string]string) ([]k8sV1.Deployment, error) {
@@ -95,4 +96,13 @@ func GetApplicationByLabels(clientset *GenericClientset, namespace string, label
 		return nil, ErrApplicationNotFound
 	}
 	return &applications.Items[0], nil
+}
+
+func CreateSecret(clientset *GenericClientset, namespace string, secret *corev1.Secret) error {
+	_, err := clientset.K8s.CoreV1().Secrets(namespace).Create(context.Background(), secret, metav1.CreateOptions{})
+	return err
+}
+
+func GetSecret(clientset *GenericClientset, namespace, name string) (*corev1.Secret, error) {
+	return clientset.K8s.CoreV1().Secrets(namespace).Get(context.Background(), name, metav1.GetOptions{})
 }

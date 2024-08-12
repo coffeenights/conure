@@ -25,7 +25,17 @@ func GenerateRouter() *gin.Engine {
 	}
 	log.Println("Connected to MongoDB")
 	var keyStorage variables.SecretKeyStorage
-	if conf.AESStorageStrategy == "local" {
+	switch conf.AESStorageStrategy {
+	case "k8s":
+		keyStorage = variables.NewK8sSecretKey("conure-system")
+		_, err := keyStorage.Load()
+		if err != nil {
+			err = keyStorage.Generate()
+			if err != nil {
+				log.Panic(err)
+			}
+		}
+	case "local":
 		keyStorage = variables.NewLocalSecretKey("secret.key")
 		_, err := keyStorage.Load()
 		if err != nil {
@@ -34,6 +44,8 @@ func GenerateRouter() *gin.Engine {
 				log.Panic(err)
 			}
 		}
+	default:
+		log.Panic("Unknown AES storage strategy")
 	}
 
 	router := gin.New()
