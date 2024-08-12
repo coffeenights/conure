@@ -13,7 +13,7 @@ import (
 }
 
 #Storage: {
-	size: timoniv1.#StorageQuantity
+	size: string
 	name: string
 	mountPath: string
 }
@@ -54,18 +54,17 @@ import (
 		cpu:      timoniv1.#CPUQuantity
 		memory:   timoniv1.#MemoryQuantity
 	}
-	source: {
-		image: string
+	sourceSettings: {
+		repository: string
 		command: [...string]
 		workingDir: string
 	}
-
-	network?: {
-		type: *"ClusterIP" | "NodePort" | "LoadBalancer"
+	network: {
+		type: *"public" | "private"
 		ports: [...#Port]
 	}
 	storage?: [...#Storage]
-	imagePullSecrets?: [...timoniv1.#ObjectReference]
+//	imagePullSecrets?: [...timoniv1.#ObjectReference]
 }
 
 // Instance takes the config values and outputs the Kubernetes objects.
@@ -75,5 +74,8 @@ import (
 	objects: {
 		deploy: #Deployment & {#config: config}
 		service: #Service & {#config: config}
+		for index, value in config.storage {
+			"\(config.metadata.name)-pvc-\(index)": #PVC & {#config: config, #index: index, #value: value}
+		}
 	}
 }

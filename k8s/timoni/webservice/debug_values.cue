@@ -7,35 +7,34 @@ package main
 values: {
   "resources": {
     "replicas": 1,
-    "cpu": 0.2,
-    "memory": 256
+    "cpu": "200m",
+    "memory": "256Mi"
   },
-  "source": {
+  "sourceSettings": {
     "repository": "coffeenights/django:latest",
-    "command": "python manage.py runserver 0.0.0.0:9091"
+    "command": ["python", "manage.py", "runserver", "0.0.0.0:9091"],
     "workingDir": "/app"
   },
   "network": {
-    "exposed": true,
     "type": "public",
     "ports": [
       {
-        "host_port": 9091,
-        "container_port": 9091,
-        "protocol": "tcp"
+        "hostPort": 9091,
+        "containerPort": 9091,
+        "protocol": "TCP"
       }
     ]
   },
   "storage": [
     {
-      "size": 2,
-      "name": "backend-service-pvc",
-      "mount_path": "/mnt/storage"
+      "size": "2Gi",
+      "name": "temporal",
+      "mountPath": "/mnt/storage"
     },
     {
-      "size": 3,
-      "name": "backend-service-2-pvc",
-      "mount_path": "/mnt/storage2"
+      "size": "3Gi",
+      "name": "cache",
+      "mountPath": "/mnt/storage2"
     }
   ]
 }

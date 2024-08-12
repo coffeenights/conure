@@ -24,11 +24,11 @@ import (
 				containers: [
 					{
 						name: #config.metadata.name
-						image: #config.source.image
-						if #config.source.command != _|_ {
-							command: #config.source.command
+						image: #config.sourceSettings.repository
+						if #config.sourceSettings.command != _|_ {
+							command: #config.sourceSettings.command
 						}
-						workingDir: #config.source.workingDir
+						workingDir: #config.sourceSettings.workingDir
 						imagePullPolicy: "IfNotPresent"
 						resources: {
 							requests: {
@@ -41,18 +41,24 @@ import (
 							}
 						}
 						if #config.storage != _|_ {
-              volumes: [for item in #config.storage {
-                name: item.name
-                persistentVolumeClaim: {
-                  claimName: item.claimName
-                }
-              }]
+							volumeMounts: [for item in #config.storage {
+								mountPath: item.mountPath
+								name: item.name
+							}]
 						}
 					}
 				]
-				if #config.pod.imagePullSecrets != _|_ {
-					imagePullSecrets: #config.pod.imagePullSecrets
+				if #config.storage != _|_ {
+					volumes: [for item in #config.storage {
+						name: item.name
+						persistentVolumeClaim: {
+							claimName: #config.metadata.name + "-" + item.name
+						}
+					}]
 				}
+//				if #config.pod.imagePullSecrets != _|_ {
+//					imagePullSecrets: #config.pod.imagePullSecrets
+//				}
 			}
 		}
 	}

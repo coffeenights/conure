@@ -47,8 +47,7 @@ spec:
               mountPath: "/mnt/storage2"
       volumes:
         - name: backend-service-pvc
-          persistentVolumeClaim:
-            claimName: backend-service-pvc
+
         - name: backend-service-2-pvc
           persistentVolumeClaim:
             claimName: backend-service-2-pvc

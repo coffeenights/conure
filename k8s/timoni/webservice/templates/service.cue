@@ -13,10 +13,10 @@ import (
 		metadata: annotations: #config.service.annotations
 	}
 	spec: corev1.#ServiceSpec & {
-	  if #config.service.type == "Public" {
+	  if #config.network.type == "public" {
 		  type: corev1.#ServiceTypeLoadBalancer
 		}
-		if #config.service.type == "Private" {
+		if #config.network.type == "private" {
 		  type: corev1.#ServiceTypeClusterIP
 		}
 
