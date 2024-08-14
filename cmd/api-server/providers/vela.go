@@ -60,6 +60,7 @@ type ProviderStatusVela struct {
 	ApplicationID   string
 	Namespace       string
 	VelaApplication *v1beta1.Application
+	VelaApp         *unstructured.Unstructured
 }
 
 func NewProviderStatusVela(organizationID string, applicationID string, namespace string) (*ProviderStatusVela, error) {
@@ -74,6 +75,7 @@ func NewProviderStatusVela(organizationID string, applicationID string, namespac
 	}
 
 	velaApplication, err := k8sUtils.GetApplicationByLabels(clientset, namespace, filter)
+	velaApp, err := k8sUtils.GetApplicationByLabelsNew(clientset, namespace, filter)
 	if err != nil {
 		return nil, err
 	}
@@ -83,11 +85,20 @@ func NewProviderStatusVela(organizationID string, applicationID string, namespac
 		ApplicationID:   applicationID,
 		Namespace:       namespace,
 		VelaApplication: velaApplication,
+		VelaApp:         velaApp,
 	}, nil
 }
 
 func (p *ProviderStatusVela) GetApplicationStatus() (string, error) {
-	return string(p.VelaApplication.Status.Phase), nil
+	statusMap, ok := p.VelaApp.Object["status"].(map[string]interface{})
+	if !ok {
+		return "", conureerrors.ErrInternalError
+	}
+	status, ok := statusMap["status"].(string)
+	if !ok {
+		return "", conureerrors.ErrInternalError
+	}
+	return status, nil
 }
 
 func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*ComponentStatusHealth, error) {
