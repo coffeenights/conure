@@ -1,8 +1,7 @@
 package k8s
 
 import (
-	"github.com/coffeenights/conure/pkg/client/core_conure"
-	coreOAMDevClientset "github.com/oam-dev/kubevela-core-api/pkg/generated/client/clientset/versioned"
+	"github.com/coffeenights/conure/pkg/client/oam_conure"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
@@ -10,9 +9,8 @@ import (
 )
 
 type GenericClientset struct {
-	Conure  *core_conure.Clientset
+	Conure  *oam_conure.Clientset
 	K8s     *kubernetes.Clientset
-	Vela    *coreOAMDevClientset.Clientset
 	Dynamic *dynamic.DynamicClient
 	Config  *rest.Config
 }
@@ -32,12 +30,7 @@ func GetClientset() (*GenericClientset, error) {
 		return nil, err
 	}
 
-	vela, err := coreOAMDevClientset.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	conure, err := core_conure.NewForConfig(config)
+	conure, err := oam_conure.NewForConfig(config)
 	if err != nil {
 		return nil, err
 	}
@@ -47,5 +40,5 @@ func GetClientset() (*GenericClientset, error) {
 		return nil, err
 	}
 
-	return &GenericClientset{Conure: conure, K8s: k8s, Vela: vela, Dynamic: dynamicClient, Config: config}, nil
+	return &GenericClientset{Conure: conure, K8s: k8s, Dynamic: dynamicClient, Config: config}, nil
 }

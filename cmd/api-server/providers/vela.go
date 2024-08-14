@@ -5,11 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/coffeenights/conure/api/vela"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/mitchellh/mapstructure"
-	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/common"
-	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	"io"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -22,8 +21,8 @@ import (
 )
 
 type VelaComponent struct {
-	ComponentSpec   *common.ApplicationComponent
-	ComponentStatus *common.ApplicationComponentStatus
+	ComponentSpec   *vela.ApplicationComponent
+	ComponentStatus *vela.ApplicationComponentStatus
 }
 
 type PVCStorageTrait struct {
@@ -60,7 +59,7 @@ type ProviderStatusVela struct {
 	OrganizationID  string
 	ApplicationID   string
 	Namespace       string
-	VelaApplication *v1beta1.Application
+	VelaApplication *vela.Application
 }
 
 func NewProviderStatusVela(organizationID string, applicationID string, namespace string) (*ProviderStatusVela, error) {
@@ -435,7 +434,7 @@ func getNetworkPropertiesFromService(clientset *k8sUtils.GenericClientset, names
 	return nil
 }
 
-func getExposeTraitProperties(trait *common.ApplicationTrait, properties *NetworkProperties) error {
+func getExposeTraitProperties(trait *vela.ApplicationTrait, properties *NetworkProperties) error {
 	traitsData, err := k8sUtils.ExtractMapFromRawExtension(trait.Properties)
 	if err != nil {
 		return err
