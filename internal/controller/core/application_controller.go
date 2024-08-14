@@ -35,7 +35,7 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	err = handler.ReconcileWorkloads()
+	err = handler.ReconcileComponents()
 	if err != nil {
 		return ctrl.Result{}, err
 	}

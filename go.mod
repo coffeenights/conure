@@ -5,6 +5,7 @@ go 1.22.4
 require (
 	github.com/gin-contrib/cors v1.5.0
 	github.com/gin-gonic/gin v1.9.1
+	github.com/go-logr/logr v1.4.2
 	github.com/go-playground/validator/v10 v10.18.0
 	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/joho/godotenv v1.5.1
@@ -23,7 +24,7 @@ require (
 	k8s.io/api v0.31.0-rc.0
 	k8s.io/apimachinery v0.31.0-rc.0
 	k8s.io/client-go v0.31.0-rc.0
-	sigs.k8s.io/controller-runtime v0.18.4
+	sigs.k8s.io/controller-runtime v0.18.5
 )
 
 require (
@@ -76,7 +77,6 @@ require (
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.5.0 // indirect
 	github.com/go-git/go-git/v5 v5.11.0 // indirect
-	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-logr/zapr v1.3.0 // indirect
 	github.com/go-logr/zerologr v1.2.3 // indirect
@@ -238,6 +238,6 @@ require (
 
 replace sigs.k8s.io/apiserver-network-proxy/konnectivity-client => sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.36
 
-replace sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.13.2
+// replace sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.13.2
 
 replace github.com/stefanprodan/timoni => github.com/coffeenights/timoni v0.22.1-0.20240723100837-97fd2f73c78f

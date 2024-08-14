@@ -1,4 +1,4 @@
-package workload
+package controller
 
 import (
 	"encoding/hex"
