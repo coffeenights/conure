@@ -238,6 +238,6 @@ require (
 
 replace sigs.k8s.io/apiserver-network-proxy/konnectivity-client => sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.0.36
 
-// replace sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.13.2
+replace sigs.k8s.io/controller-runtime => sigs.k8s.io/controller-runtime v0.13.2
 
 replace github.com/stefanprodan/timoni => github.com/coffeenights/timoni v0.22.1-0.20240723100837-97fd2f73c78f
