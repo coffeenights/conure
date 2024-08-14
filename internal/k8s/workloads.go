@@ -3,6 +3,8 @@ package k8s
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"strings"
 
 	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
@@ -89,6 +91,26 @@ func GetApplicationByLabels(clientset *GenericClientset, namespace string, label
 	}
 
 	applications, err := clientset.Vela.CoreV1beta1().Applications(namespace).List(context.Background(), listOptions)
+	if err != nil {
+		return nil, err
+	}
+	if len(applications.Items) == 0 {
+		return nil, ErrApplicationNotFound
+	}
+	return &applications.Items[0], nil
+}
+
+func GetApplicationByLabelsNew(clientset *GenericClientset, namespace string, labels map[string]string) (*unstructured.Unstructured, error) {
+
+	var labelSelector []string
+	for key, value := range labels {
+		labelSelector = append(labelSelector, fmt.Sprintf("%s=%s", key, value))
+	}
+	listOptions := metav1.ListOptions{
+		LabelSelector: strings.Join(labelSelector, ","),
+	}
+	appRes := schema.GroupVersionResource{Group: "core.oam.dev", Version: "v1beta1", Resource: "applications"}
+	applications, err := clientset.Dynamic.Resource(appRes).Namespace(namespace).List(context.Background(), listOptions)
 	if err != nil {
 		return nil, err
 	}
