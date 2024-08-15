@@ -2,6 +2,7 @@ package templates
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"strconv"
 )
 
 #Service: corev1.#Service & {
@@ -22,10 +23,10 @@ import (
 
 		selector: #config.selector.labels
 		ports: [ for item in #config.network.ports {
-      port:       item.hostPort
+      port:       strconv.Atoi(item.hostPort)
+      targetPort: strconv.Atoi(item.containerPort)
       protocol:   item.protocol
       name:       "http"
-      targetPort: item.containerPort
     }]
 	}
 }

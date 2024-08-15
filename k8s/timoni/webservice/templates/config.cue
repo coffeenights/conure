@@ -7,8 +7,8 @@ import (
 
 
 #Port: {
-	hostPort: int32
-	containerPort: int32
+	hostPort: string
+	containerPort: string
 	protocol: corev1.#Protocol
 }
 
@@ -52,7 +52,7 @@ import (
 	buildWorkflow: bool
 
 	resources: {
-		replicas: int & >=0
+		replicas: string // int & >=0
 		cpu:      timoniv1.#CPUQuantity
 		memory:   timoniv1.#MemoryQuantity
 	}

@@ -7,7 +7,7 @@ package main
 values: {
 	"buildWorkflow": false
   "resources": {
-    "replicas": 1,
+    "replicas": "1",
     "cpu": "200m",
     "memory": "256Mi"
   },

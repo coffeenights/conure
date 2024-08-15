@@ -3,6 +3,7 @@ package templates
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"strconv"
 )
 
 #Deployment: appsv1.#Deployment & {
@@ -11,7 +12,7 @@ import (
 	kind:       "Deployment"
 	metadata:   #config.metadata
 	spec: appsv1.#DeploymentSpec & {
-		replicas: #config.resources.replicas
+		replicas: strconv.Atoi(#config.resources.replicas)
 		selector: matchLabels: #config.selector.labels
 		template: {
 			metadata: {
