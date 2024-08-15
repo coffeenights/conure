@@ -63,12 +63,9 @@ func (a *ActionsHandler) RunAction(action *coreconureiov1alpha1.Action) error {
 	}
 	logger := log.FromContext(a.Ctx)
 	logger.Info("Running action", "action", action.Name)
-	rawValues, err := k8s.ExtractMapFromRawExtension(action.Values)
+	values, err := k8s.ExtractValuesFromRawExtension(action.Values)
 	if err != nil {
 		return err
-	}
-	values := map[string]interface{}{
-		"values": rawValues,
 	}
 	modManager, err := module.NewManager(a.Ctx, actionDefinition.Name, actionDefinition.Spec.OCIRepository, actionDefinition.Spec.OCITag, a.Namespace, a.OCIRepoCredentials, values)
 	if err != nil {
