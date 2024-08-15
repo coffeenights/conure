@@ -5,15 +5,21 @@ package main
 // Values used by debug_tool.cue.
 // Debug example 'cue cmd -t debug -t name=test -t namespace=test -t mv=1.0.0 -t kv=1.28.0 build'.
 values: {
+	"buildWorkflow": false
   "resources": {
     "replicas": 1,
     "cpu": "200m",
     "memory": "256Mi"
   },
   "sourceSettings": {
-    "repository": "coffeenights/django:latest",
+  	type: "git",
+    "gitRepository": "https://github.com/coffeenights/conure.git",
+    "gitBranch": "main",
+    "buildTool": "dockerfile",
+    "dockerfilePath": "cmd/api-server/Dockerfile",
     "command": ["python", "manage.py", "runserver", "0.0.0.0:9091"],
-    "workingDir": "/app"
+    "workingDir": "/app",
+    "imagePullSecretsName": "regcred",
   },
   "network": {
     "type": "public",

@@ -15,7 +15,7 @@ import (
 	kind:       "Job"
 	metadata: timoniv1.#MetaComponent & {
 		#Meta:      #config.metadata
-		#Component: "build-image"
+		#Component: #config.nameSuffix
 	}
 	metadata: annotations: timoniv1.Action.Force
 	spec: batchv1.#JobSpec & {

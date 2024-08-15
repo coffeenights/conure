@@ -24,7 +24,7 @@ import (
 				containers: [
 					{
 						name: #config.metadata.name
-						image: #config.sourceSettings.repository
+						image: #config.sourceSettings.ociRepository
 						if #config.sourceSettings.command != _|_ {
 							command: #config.sourceSettings.command
 						}

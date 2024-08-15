@@ -49,22 +49,40 @@ import (
 	// from the instance name and can't be overwritten.
 	selector: timoniv1.#Selector & {#Name: metadata.name}
 
+	buildWorkflow: bool
+
 	resources: {
 		replicas: int & >=0
 		cpu:      timoniv1.#CPUQuantity
 		memory:   timoniv1.#MemoryQuantity
 	}
 	sourceSettings: {
-		repository: string
+		type: "git" | "oci"
+		if type == "git" {
+        gitRepository: string
+        gitBranch: string
+        buildTool: "nixpack" | *"dockerfile"
+				if buildTool == "dockerfile" {
+						dockerfilePath: string
+				}
+				if buildTool == "nixpack" {
+						nixpackPath: string
+				}
+				ociRepository: "registry-service.conure-system.svc.cluster.local:5000/services/" + metadata.name
+    }
+    if type == "oci" {
+        ociRepository: string
+        tag: string
+    }
 		command: [...string]
 		workingDir: string
+		imagePullSecretsName: string
 	}
 	network: {
 		type: *"public" | "private"
 		ports: [...#Port]
 	}
 	storage?: [...#Storage]
-//	imagePullSecrets?: [...timoniv1.#ObjectReference]
 }
 
 // Instance takes the config values and outputs the Kubernetes objects.
@@ -72,10 +90,15 @@ import (
 	config: #Config
 
 	objects: {
-		deploy: #Deployment & {#config: config}
-		service: #Service & {#config: config}
-		for index, value in config.storage {
-			"\(config.metadata.name)-pvc-\(index)": #PVC & {#config: config, #index: index, #value: value}
+		if config.buildWorkflow {
+			workflow: #ComponentWorkflow & {#config: config}
+		}
+		if !config.buildWorkflow {
+			deploy: #Deployment & {#config: config}
+			service: #Service & {#config: config}
+			for index, value in config.storage {
+				"\(config.metadata.name)-pvc-\(index)": #PVC & {#config: config, #index: index, #value: value}
+			}
 		}
 	}
 }

@@ -59,6 +59,9 @@ import (
 	// App settings.
 	message!: string
 
+	// The suffix to add to the job's name, eg: build-image-234bkjc
+	nameSuffix!: string
+
 
 
 	// Pod optional settings.
