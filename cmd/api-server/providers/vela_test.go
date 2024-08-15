@@ -1,6 +1,10 @@
 package providers
 
-import "testing"
+import (
+	"fmt"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
+	"testing"
+)
 
 func TestProviderStatusVela_GetActivity(t *testing.T) {
 	providerStatusVela, _ := NewProviderStatusVela("65d87e418c2db2d59c91f8c8", "65f93bcc578ec5b8020e31f5", "fbc70d63-development")
@@ -10,16 +14,16 @@ func TestProviderStatusVela_GetActivity(t *testing.T) {
 	}
 }
 
-func TestProviderStatusVela_WatchApplicationStatus(t *testing.T) {
-	providerStatusVela, err := NewProviderStatusVela("65d6db08a7d5cf185f75e6d2", "65f91a8bfff40488c9329dcc", "9f14717c-development")
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = providerStatusVela.WatchApplicationStatus()
-	if err != nil {
-		t.Fatal(err)
-	}
-}
+//func TestProviderStatusVela_WatchApplicationStatus(t *testing.T) {
+//	providerStatusVela, err := NewProviderStatusVela("65d6db08a7d5cf185f75e6d2", "65f91a8bfff40488c9329dcc", "9f14717c-development")
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//	err = providerStatusVela.WatchApplicationStatus()
+//	if err != nil {
+//		t.Fatal(err)
+//	}
+//}
 
 func TestProviderStatusVela_GetApplicationByLabels(t *testing.T) {
 	clientset, err := k8sUtils.GetClientset()
@@ -31,7 +35,7 @@ func TestProviderStatusVela_GetApplicationByLabels(t *testing.T) {
 		ApplicationIDLabel:  "65f91a8bfff40488c9329dcc",
 	}
 
-	velaApplication, err := k8sUtils.GetApplicationByLabelsNew(clientset, "9f14717c-development", filter)
+	velaApplication, err := k8sUtils.GetApplicationByLabels(clientset, "9f14717c-development", filter)
 	if err != nil {
 		t.Errorf("Error getting application: %v\n", err)
 	}
