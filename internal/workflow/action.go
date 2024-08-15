@@ -8,6 +8,7 @@ import (
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/stefanprodan/timoni/pkg/module"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -60,7 +61,8 @@ func (a *ActionsHandler) RunAction(action *coreconureiov1alpha1.Action) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println(actionDefinition)
+	logger := log.FromContext(a.Ctx)
+	logger.Info("Running action", "action", action.Name)
 	rawValues, err := k8s.ExtractMapFromRawExtension(action.Values)
 	if err != nil {
 		return err
