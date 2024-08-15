@@ -2,10 +2,9 @@ package workflow
 
 import (
 	"context"
-	"fmt"
 	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
-	"github.com/coffeenights/conure/internal/k8s"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
+	"github.com/coffeenights/conure/internal/timoni"
 	"github.com/stefanprodan/timoni/pkg/module"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -21,6 +20,7 @@ type ActionsHandler struct {
 	Actions            []coreconureiov1alpha1.Action
 	OCIRepoCredentials string
 	Namespace          string
+	ID                 string
 }
 
 func NewActionsHandler(ctx context.Context, Namespace string) (*ActionsHandler, error) {
@@ -36,8 +36,8 @@ func NewActionsHandler(ctx context.Context, Namespace string) (*ActionsHandler, 
 	}, nil
 }
 
-func (a *ActionsHandler) GetActions(serviceType string) error {
-	workflow, err := a.Clientset.Conure.CoreV1alpha1().Workflows(ConureSystemNamespace).Get(a.Ctx, serviceType, metav1.GetOptions{})
+func (a *ActionsHandler) GetActions(workflowName string) error {
+	workflow, err := a.Clientset.Conure.CoreV1alpha1().Workflows(a.Namespace).Get(a.Ctx, workflowName, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -56,18 +56,18 @@ func (a *ActionsHandler) RunActions() error {
 }
 
 func (a *ActionsHandler) RunAction(action *coreconureiov1alpha1.Action) error {
-	fmt.Printf("Running action %s", action.Name)
+	logger := log.FromContext(a.Ctx)
+	logger.Info("Retrieving action definition", "action", action.Name)
 	actionDefinition, err := a.Clientset.Conure.CoreV1alpha1().ActionDefinitions(ConureSystemNamespace).Get(a.Ctx, action.Name, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
-	logger := log.FromContext(a.Ctx)
 	logger.Info("Running action", "action", action.Name)
-	values, err := k8s.ExtractValuesFromRawExtension(action.Values)
-	if err != nil {
+	values := timoni.Values{}
+	if err = values.ExtractFromRawExtension(action.Values); err != nil {
 		return err
 	}
-	modManager, err := module.NewManager(a.Ctx, actionDefinition.Name, actionDefinition.Spec.OCIRepository, actionDefinition.Spec.OCITag, a.Namespace, a.OCIRepoCredentials, values)
+	modManager, err := module.NewManager(a.Ctx, actionDefinition.Name, actionDefinition.Spec.OCIRepository, actionDefinition.Spec.OCITag, a.Namespace, a.OCIRepoCredentials, values.Get())
 	if err != nil {
 		return err
 	}
