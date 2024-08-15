@@ -36,6 +36,9 @@ func (a *ApplicationHandler) ReconcileComponents() error {
 }
 
 func (a *ApplicationHandler) ReconcileComponent(component *coreconureiov1alpha1.Component) error {
+	logger := log.FromContext(a.Ctx)
+	logger.Info("Reconciling component", "component", component.Name)
+
 	actionsHandler, err := workflow.NewActionsHandler(a.Ctx, a.Application.Namespace)
 	if err != nil {
 		return err
