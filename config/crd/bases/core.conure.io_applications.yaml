@@ -44,6 +44,8 @@ spec:
                       type: string
                     ociRepository:
                       type: string
+                    ociTag:
+                      type: string
                     type:
                       type: string
                     values:
@@ -52,6 +54,7 @@ spec:
                   required:
                   - name
                   - ociRepository
+                  - ociTag
                   - type
                   - values
                   type: object

@@ -7,5 +7,6 @@ type Component struct {
 	Name          string                `json:"name"`
 	ComponentType string                `json:"type"`
 	OCIRepository string                `json:"ociRepository"`
+	OCITag        string                `json:"ociTag"`
 	Values        *runtime.RawExtension `json:"values"`
 }
