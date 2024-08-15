@@ -3,8 +3,10 @@ package controller
 import (
 	"context"
 	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
+	"github.com/coffeenights/conure/internal/timoni"
 	"github.com/coffeenights/conure/internal/workflow"
 	"github.com/go-logr/logr"
+	"github.com/stefanprodan/timoni/pkg/module"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -39,11 +41,28 @@ func (a *ApplicationHandler) ReconcileComponent(component *coreconureiov1alpha1.
 	logger := log.FromContext(a.Ctx)
 	logger.Info("Reconciling component", "component", component.Name)
 
+	// Pull the component template
+	values := timoni.Values{}
+	if err := values.ExtractFromRawExtension(component.Values); err != nil {
+		return err
+	}
+	values.Flag("buildWorkflow", true)
+	// TODO: Add credentials
+	componentTemplate, err := module.NewManager(a.Ctx, component.Name, component.OCIRepository, component.OCITag, a.Application.Namespace, "", values.Get())
+	if err != nil {
+		return err
+	}
+	// Update workflow manifest
+	if err = componentTemplate.Apply(); err != nil {
+		return err
+	}
+	values.Flag("buildWorkflow", false)
+
 	actionsHandler, err := workflow.NewActionsHandler(a.Ctx, a.Application.Namespace)
 	if err != nil {
 		return err
 	}
-	err = actionsHandler.GetActions(component.ComponentType)
+	err = actionsHandler.GetActions(component.Name)
 	if err != nil {
 		return err
 	}

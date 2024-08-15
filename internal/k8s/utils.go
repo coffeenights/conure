@@ -18,14 +18,3 @@ func ExtractMapFromRawExtension(data *runtime.RawExtension) (map[string]interfac
 	}
 	return result, err
 }
-
-// ExtractValuesFromRawExtension extracts values used in timoni templates from a RawExtension and return a map of values with the correct format
-func ExtractValuesFromRawExtension(valuesRaw *runtime.RawExtension) (map[string]interface{}, error) {
-	rawValues, err := ExtractMapFromRawExtension(valuesRaw)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]interface{}{
-		"values": rawValues,
-	}, nil
-}
