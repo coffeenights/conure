@@ -2,10 +2,12 @@ package k8s
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/coffeenights/conure/api/vela"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"strings"
 
-	"github.com/oam-dev/kubevela-core-api/apis/core.oam.dev/v1beta1"
 	k8sV1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -78,8 +80,7 @@ func GetServicesByLabels(clientset *GenericClientset, namespace string, labels m
 	return services.Items, nil
 }
 
-func GetApplicationByLabels(clientset *GenericClientset, namespace string, labels map[string]string) (*v1beta1.Application, error) {
-
+func GetApplicationByLabels(clientset *GenericClientset, namespace string, labels map[string]string) (*vela.Application, error) {
 	var labelSelector []string
 	for key, value := range labels {
 		labelSelector = append(labelSelector, fmt.Sprintf("%s=%s", key, value))
@@ -87,15 +88,25 @@ func GetApplicationByLabels(clientset *GenericClientset, namespace string, label
 	listOptions := metav1.ListOptions{
 		LabelSelector: strings.Join(labelSelector, ","),
 	}
-
-	applications, err := clientset.Vela.CoreV1beta1().Applications(namespace).List(context.Background(), listOptions)
+	appRes := schema.GroupVersionResource{Group: "core.oam.dev", Version: "v1beta1", Resource: "applications"}
+	applications, err := clientset.Dynamic.Resource(appRes).Namespace(namespace).List(context.Background(), listOptions)
 	if err != nil {
 		return nil, err
 	}
 	if len(applications.Items) == 0 {
 		return nil, ErrApplicationNotFound
 	}
-	return &applications.Items[0], nil
+
+	appJson, err := json.Marshal(applications.Items[0].Object)
+	if err != nil {
+		return nil, err
+	}
+	var app vela.Application
+	if err = json.Unmarshal(appJson, &app); err != nil {
+		return nil, err
+	}
+
+	return &app, nil
 }
 
 func CreateSecret(clientset *GenericClientset, namespace string, secret *corev1.Secret) error {
