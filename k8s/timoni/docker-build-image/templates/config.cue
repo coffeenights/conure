@@ -56,9 +56,6 @@ import (
 	// Name of the git branch in which to pull the code from.
 	branch: string
 
-	// App settings.
-	message!: string
-
 	// The suffix to add to the job's name, eg: build-image-234bkjc
 	nameSuffix!: string
 
