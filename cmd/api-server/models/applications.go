@@ -2,11 +2,9 @@ package models
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
 	"errors"
 	"fmt"
-	"io"
+	"github.com/coffeenights/conure/internal/k8s"
 	"log"
 	"time"
 
@@ -434,26 +432,13 @@ type Environment struct {
 
 func NewEnvironment(name string) *Environment {
 	return &Environment{
-		ID:   generate8DigitHash(),
+		ID:   k8s.Generate8DigitHash(),
 		Name: name,
 	}
 }
 
 func (e *Environment) GetNamespace() string {
 	return fmt.Sprintf("%s-%s", e.ID, e.Name)
-}
-
-func generate8DigitHash() string {
-	// Create a new random seed
-	seed := make([]byte, 16)
-	_, err := io.ReadFull(rand.Reader, seed)
-	if err != nil {
-		log.Panicf("Error generating random seed")
-	}
-	// Hash the seed
-	hash := sha256.Sum256(seed)
-	// Return the first 8 characters of the hexadecimal representation of the hash
-	return fmt.Sprintf("%x", hash)[:8]
 }
 
 type ResourcesSettings struct {
