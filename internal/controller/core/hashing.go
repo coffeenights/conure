@@ -4,15 +4,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"golang.org/x/crypto/ripemd160"
-	"hash"
 )
 
 const HashLabelName = "core.conure.io/hash"
 
 func GetHashForSpec(specStruct interface{}) string {
 	byteArray, _ := json.Marshal(specStruct)
-	var hasher hash.Hash
-	hasher = ripemd160.New()
+	hasher := ripemd160.New()
 	hasher.Reset()
 	hasher.Write(byteArray)
 	return hex.EncodeToString(hasher.Sum(nil))

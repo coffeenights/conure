@@ -33,6 +33,7 @@ func NewActionsHandler(ctx context.Context, Namespace string) (*ActionsHandler, 
 		Clientset:          clientset,
 		OCIRepoCredentials: "", // TODO: Take it from integrations
 		Namespace:          Namespace,
+		ID:                 k8sUtils.Generate8DigitHash(),
 	}, nil
 }
 
@@ -67,6 +68,7 @@ func (a *ActionsHandler) RunAction(action *coreconureiov1alpha1.Action) error {
 	if err = values.ExtractFromRawExtension(action.Values); err != nil {
 		return err
 	}
+	values["nameSuffix"] = a.ID
 	modManager, err := module.NewManager(a.Ctx, actionDefinition.Name, actionDefinition.Spec.OCIRepository, actionDefinition.Spec.OCITag, a.Namespace, a.OCIRepoCredentials, values.Get())
 	if err != nil {
 		return err
