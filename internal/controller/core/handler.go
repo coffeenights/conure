@@ -2,12 +2,14 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/timoni"
-	"github.com/coffeenights/conure/internal/workflow"
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"strings"
 )
 
 type ApplicationHandler struct {
@@ -42,33 +44,62 @@ func (a *ApplicationHandler) ReconcileComponent(component *coreconureiov1alpha1.
 	logger.Info("Reconciling component", "component", component.Name)
 
 	// Pull the component template
-	values := timoni.Values{}
-	if err := values.ExtractFromRawExtension(component.Values); err != nil {
+	//advancedValues := timoni.Values{}
+	//if component.Values.Advanced != nil {
+	//	if err := advancedValues.ExtractFromRawExtension(component.Values.Advanced); err != nil {
+	//		return err
+	//	}
+	//}
+
+	// Transform the values to a map
+	valuesJSON, err := json.Marshal(component.Values)
+	if err != nil {
 		return err
 	}
-	values.Flag("buildWorkflow", true)
-	// TODO: Add credentials
+	values := timoni.Values{}
+	d := json.NewDecoder(strings.NewReader(string(valuesJSON)))
+	d.UseNumber()
+	err = d.Decode(&values)
+	if err != nil {
+		return err
+	}
 	componentTemplate, err := module.NewManager(a.Ctx, component.Name, component.OCIRepository, component.OCITag, a.Application.Namespace, "", values.Get())
 	if err != nil {
 		return err
 	}
-	// Update workflow manifest
-	if err = componentTemplate.Apply(); err != nil {
-		return err
-	}
-	values.Flag("buildWorkflow", false)
 
-	actionsHandler, err := workflow.NewActionsHandler(a.Ctx, a.Application.Namespace)
+	applySets, err := componentTemplate.GetApplySets()
 	if err != nil {
 		return err
 	}
-	err = actionsHandler.GetActions(component.Name)
+	wflw := &unstructured.Unstructured{}
+	logger.Info("Applying workflow", "workflow", component.Name)
+	for _, applySet := range applySets {
+		for _, obj := range applySet.Objects {
+			if obj.GetKind() == "Workflow" {
+				wflw = obj
+				break
+			}
+		}
+	}
+	// Update workflow manifest
+	_, err = componentTemplate.ApplyObject(wflw, false)
 	if err != nil {
 		return err
 	}
-	err = actionsHandler.RunActions()
-	if err != nil {
-		return err
-	}
+
+	// Determine if the workflow should run
+	//actionsHandler, err := workflow.NewActionsHandler(a.Ctx, a.Application.Namespace)
+	//if err != nil {
+	//	return err
+	//}
+	//err = actionsHandler.GetActions(component.Name)
+	//if err != nil {
+	//	return err
+	//}
+	//err = actionsHandler.RunActions()
+	//if err != nil {
+	//	return err
+	//}
 	return nil
 }
