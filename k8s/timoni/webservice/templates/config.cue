@@ -8,7 +8,7 @@ import (
 
 #Port: {
 	hostPort: string
-	containerPort: string
+	targetPort: string
 	protocol: corev1.#Protocol
 }
 
@@ -49,16 +49,14 @@ import (
 	// from the instance name and can't be overwritten.
 	selector: timoniv1.#Selector & {#Name: metadata.name}
 
-	buildWorkflow: bool
-
 	resources: {
-		replicas: string // int & >=0
+		replicas: string //int & >=0
 		cpu:      timoniv1.#CPUQuantity
 		memory:   timoniv1.#MemoryQuantity
 	}
-	sourceSettings: {
-		type: "git" | "oci"
-		if type == "git" {
+	source: {
+		sourceType: "git" | "oci"
+		if sourceType == "git" {
         gitRepository: string
         gitBranch: string
         buildTool: "nixpack" | *"dockerfile"
@@ -69,8 +67,9 @@ import (
 						nixpackPath: string
 				}
 				ociRepository: "registry-service.conure-system.svc.cluster.local:5000/services/" + metadata.name
+				tag: string
     }
-    if type == "oci" {
+    if sourceType == "oci" {
         ociRepository: string
         tag: string
     }
@@ -79,6 +78,7 @@ import (
 		imagePullSecretsName: string
 	}
 	network: {
+		exposed: bool
 		type: *"public" | "private"
 		ports: [...#Port]
 	}
@@ -90,15 +90,11 @@ import (
 	config: #Config
 
 	objects: {
-		if config.buildWorkflow {
 			workflow: #ComponentWorkflow & {#config: config}
-		}
-		if !config.buildWorkflow {
 			deploy: #Deployment & {#config: config}
 			service: #Service & {#config: config}
 			for index, value in config.storage {
 				"\(config.metadata.name)-pvc-\(index)": #PVC & {#config: config, #index: index, #value: value}
 			}
-		}
 	}
 }

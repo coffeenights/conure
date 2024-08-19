@@ -12,16 +12,16 @@ import (
 	metadata: #config.metadata
 	spec: conurev1.#WorkflowSpec & {
 		actions: [
-			if #config.sourceSettings.type == "git" {
-				if #config.sourceSettings.buildTool == "dockerfile" {
+			if #config.source.sourceType == "git" {
+				if #config.source.buildTool == "dockerfile" {
 					{
 						name: "build-image",
 						values: {
-							branch: #config.sourceSettings.gitBranch
-							dockerFile: #config.sourceSettings.dockerfilePath
-							gitRepository: #config.sourceSettings.gitRepository
-							imagePullSecretsName: #config.sourceSettings.imagePullSecretsName
-							ociRepository: #config.sourceSettings.ociRepository
+							branch: #config.source.gitBranch
+							dockerFile: #config.source.dockerfilePath
+							gitRepository: #config.source.gitRepository
+							imagePullSecretsName: #config.source.imagePullSecretsName
+							ociRepository: #config.source.ociRepository
 							ociTag: "latest"
 						}
 					},

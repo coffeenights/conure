@@ -4,32 +4,39 @@ package main
 
 // Values used by debug_tool.cue.
 // Debug example 'cue cmd -t debug -t name=test -t namespace=test -t mv=1.0.0 -t kv=1.28.0 build'.
-values: {
-	"buildWorkflow": false
+
+"values": {
   "resources": {
-    "replicas": "1",
+    "replicas": "2",
     "cpu": "200m",
     "memory": "256Mi"
   },
-  "sourceSettings": {
-  	type: "git",
+  "network": {
+    "exposed": true,
+    "type": "public",
+    "ports": [
+      {
+        "hostPort": "9091",
+        "targetPort": "9091",
+        "protocol": "TCP"
+      }
+    ]
+  },
+  "source": {
+    "sourceType": "git",
     "gitRepository": "https://github.com/coffeenights/conure.git",
     "gitBranch": "main",
     "buildTool": "dockerfile",
     "dockerfilePath": "cmd/api-server/Dockerfile",
-    "command": ["python", "manage.py", "runserver", "0.0.0.0:9091"],
+    "tag": "latest",
+    "command": [
+      "python",
+      "manage.py",
+      "runserver",
+      "0.0.0.0:9091"
+    ],
     "workingDir": "/app",
-    "imagePullSecretsName": "regcred",
-  },
-  "network": {
-    "type": "public",
-    "ports": [
-      {
-        "hostPort": 9091,
-        "containerPort": 9091,
-        "protocol": "TCP"
-      }
-    ]
+    "imagePullSecretsName": "regcred"
   },
   "storage": [
     {

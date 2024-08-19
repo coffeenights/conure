@@ -24,7 +24,7 @@ import (
 		selector: #config.selector.labels
 		ports: [ for item in #config.network.ports {
       port:       strconv.Atoi(item.hostPort)
-      targetPort: strconv.Atoi(item.containerPort)
+      targetPort: strconv.Atoi(item.targetPort)
       protocol:   item.protocol
       name:       "http"
     }]

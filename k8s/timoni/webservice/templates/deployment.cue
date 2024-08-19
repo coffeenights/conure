@@ -25,11 +25,11 @@ import (
 				containers: [
 					{
 						name: #config.metadata.name
-						image: #config.sourceSettings.ociRepository
-						if #config.sourceSettings.command != _|_ {
-							command: #config.sourceSettings.command
+						image: #config.source.ociRepository
+						if #config.source.command != _|_ {
+							command: #config.source.command
 						}
-						workingDir: #config.sourceSettings.workingDir
+						workingDir: #config.source.workingDir
 						imagePullPolicy: "IfNotPresent"
 						resources: {
 							requests: {
