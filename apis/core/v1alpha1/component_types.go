@@ -20,9 +20,9 @@ type Values struct {
 }
 
 type Resources struct {
-	Replicas int     `json:"replicas"`
-	CPU      float32 `json:"cpu"`
-	Memory   int     `json:"memory"`
+	Replicas int    `json:"replicas"`
+	CPU      string `json:"cpu"`
+	Memory   string `json:"memory"`
 }
 
 type AccessType string
@@ -40,8 +40,8 @@ const (
 )
 
 type Port struct {
-	HostPort   int      `json:"host_port"`
-	TargetPort int      `json:"target_port"`
+	HostPort   int      `json:"hostPort"`
+	TargetPort int      `json:"targetPort"`
 	Protocol   Protocol `json:"protocol"`
 }
 
@@ -52,12 +52,21 @@ type Network struct {
 }
 
 type Source struct {
-	Repository string `json:"repository"`
-	Command    string `json:"command"`
+	SourceType           string   `json:"sourceType"`
+	GitRepository        string   `json:"gitRepository,omitempty"`
+	GitBranch            string   `json:"gitBranch,omitempty"`
+	BuildTool            string   `json:"buildTool,omitempty"`
+	DockerfilePath       string   `json:"dockerfilePath,omitempty"`
+	NixpackPath          string   `json:"nixpackPath,omitempty"`
+	OCIRepository        string   `json:"ociRepository,omitempty"`
+	Tag                  string   `json:"tag,omitempty"`
+	Command              []string `json:"command"`
+	WorkingDir           string   `json:"workingDir"`
+	ImagePullSecretsName string   `json:"imagePullSecretsName"`
 }
 
 type Storage struct {
-	Size      float32 `json:"size"`
-	Name      string  `json:"name"`
-	MountPath string  `json:"mount_path"`
+	Size      string `json:"size"`
+	Name      string `json:"name"`
+	MountPath string `json:"mountPath"`
 }
