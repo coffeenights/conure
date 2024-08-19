@@ -14,7 +14,7 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/onsi/ginkgo/v2 v2.19.0
 	github.com/onsi/gomega v1.33.1
-	github.com/stefanprodan/timoni v0.0.0-00010101000000-000000000000
+	github.com/stefanprodan/timoni v0.22.0
 	github.com/stretchr/testify v1.9.0
 	go.mongodb.org/mongo-driver v1.16.0
 	golang.org/x/crypto v0.24.0
@@ -215,4 +215,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/stefanprodan/timoni => github.com/coffeenights/timoni v0.22.1-0.20240723100837-97fd2f73c78f
+replace github.com/stefanprodan/timoni v0.22.0 => github.com/coffeenights/timoni v0.22.1-0.20240819063302-a1ebf242d16c
