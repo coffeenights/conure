@@ -15,11 +15,11 @@ func ExtractMapFromRawExtension(data *runtime.RawExtension) (map[string]interfac
 	var result map[string]interface{}
 	bytesData, err := data.MarshalJSON()
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	err = json.Unmarshal(bytesData, &result)
 	if err != nil {
-		panic(err)
+		return nil, err
 	}
 	return result, err
 }
