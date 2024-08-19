@@ -17,13 +17,15 @@ spec:
       ociTag: latest
       values:
         resources:
-          replicas: "2"
+          replicas: 2
           cpu: "200m"
           memory: "256Mi"
-        sourceSettings:
-          type: git
+        source:
+          sourceType: git
           gitRepository: https://github.com/coffeenights/conure.git
           gitBranch: main
+          # ociRepository: oci://dev.conure.local:5000/components/webservice
+          tag: latest
           buildTool: dockerfile
           dockerfilePath: cmd/api-server/Dockerfile
           command:
@@ -35,9 +37,10 @@ spec:
           imagePullSecretsName: regcred
         network:
           type: public
+          exposed: true
           ports:
-            - hostPort: "9091"
-              containerPort: "9091"
+            - hostPort: 9091
+              targetPort: 9091
               protocol: TCP
         storage:
           - size: 2Gi
