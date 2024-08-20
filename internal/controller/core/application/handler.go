@@ -1,4 +1,4 @@
-package controller
+package application
 
 import (
 	"context"
@@ -7,7 +7,6 @@ import (
 	"github.com/coffeenights/conure/internal/timoni"
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"strings"
 )
@@ -29,7 +28,7 @@ func NewApplicationHandler(ctx context.Context, application *coreconureiov1alpha
 }
 
 func (a *ApplicationHandler) ReconcileComponents() error {
-	// Check if the application exists
+
 	for _, component := range a.Application.Spec.Components {
 		err := a.ReconcileComponent(&component)
 		if err != nil {
@@ -43,14 +42,6 @@ func (a *ApplicationHandler) ReconcileComponent(component *coreconureiov1alpha1.
 	logger := log.FromContext(a.Ctx)
 	logger.Info("Reconciling component", "component", component.Name)
 
-	// Pull the component template
-	//advancedValues := timoni.Values{}
-	//if component.Values.Advanced != nil {
-	//	if err := advancedValues.ExtractFromRawExtension(component.Values.Advanced); err != nil {
-	//		return err
-	//	}
-	//}
-
 	// Transform the values to a map
 	valuesJSON, err := json.Marshal(component.Values)
 	if err != nil {
@@ -58,6 +49,7 @@ func (a *ApplicationHandler) ReconcileComponent(component *coreconureiov1alpha1.
 	}
 	values := timoni.Values{}
 	d := json.NewDecoder(strings.NewReader(string(valuesJSON)))
+	// Turn numbers into strings, otherwise the decoder will take ints and turn them into floats
 	d.UseNumber()
 	err = d.Decode(&values)
 	if err != nil {
@@ -67,26 +59,30 @@ func (a *ApplicationHandler) ReconcileComponent(component *coreconureiov1alpha1.
 	if err != nil {
 		return err
 	}
-
-	applySets, err := componentTemplate.GetApplySets()
+	_, err = componentTemplate.Build()
 	if err != nil {
 		return err
 	}
-	wflw := &unstructured.Unstructured{}
-	logger.Info("Applying workflow", "workflow", component.Name)
-	for _, applySet := range applySets {
-		for _, obj := range applySet.Objects {
-			if obj.GetKind() == "Workflow" {
-				wflw = obj
-				break
-			}
-		}
-	}
-	// Update workflow manifest
-	_, err = componentTemplate.ApplyObject(wflw, false)
+	err = componentTemplate.Apply()
 	if err != nil {
 		return err
 	}
+	//applySets, err := componentTemplate.GetApplySets()
+	//if err != nil {
+	//	return err
+	//}
+	//logger.Info("Applying workflow", "workflow", component.Name)
+	//for _, applySet := range applySets {
+	//	for _, obj := range applySet.Objects {
+	//		if obj.GetKind() == "Workflow" {
+	//			// Update workflow manifest
+	//			_, err = componentTemplate.ApplyObject(obj, false)
+	//			if err != nil {
+	//				return err
+	//			}
+	//		}
+	//	}
+	//}
 
 	// Determine if the workflow should run
 	//actionsHandler, err := workflow.NewActionsHandler(a.Ctx, a.Application.Namespace)

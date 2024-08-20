@@ -19,6 +19,7 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"github.com/coffeenights/conure/internal/controller/core"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -36,7 +37,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
-	"github.com/coffeenights/conure/internal/controller/core"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -144,13 +144,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controller.ApplicationReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
+	if err = controller.Setup(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Application")
 		os.Exit(1)
 	}
+
 	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

@@ -1,4 +1,4 @@
-package controller
+package application
 
 import (
 	"context"
@@ -66,4 +66,12 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&coreconureiov1alpha1.Application{}).
 		Complete(r)
+}
+
+func Setup(mgr ctrl.Manager) error {
+	reconciler := ApplicationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}
+	return reconciler.SetupWithManager(mgr)
 }
