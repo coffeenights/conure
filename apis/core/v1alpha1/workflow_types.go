@@ -43,6 +43,40 @@ type WorkflowList struct {
 	Items           []Workflow `json:"items"`
 }
 
+// WorkflowRunSpec defines the desired state of WorkflowRun
+type WorkflowRunSpec struct {
+	WorkflowName  string `json:"workflowName"`
+	ApplicationID string `json:"applicationID"`
+	ComponentID   string `json:"componentID"`
+}
+
+type WorkflowRunStatus struct {
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+}
+
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
+//+genclient
+
+// WorkflowRun triggers and records the run of a workflow
+type WorkflowRun struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   WorkflowRunSpec   `json:"spec,omitempty"`
+	Status WorkflowRunStatus `json:"status,omitempty"`
+}
+
+//+kubebuilder:object:root=true
+
+// WorkflowRunList contains a list of WorkflowRun
+type WorkflowRunList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []WorkflowRun `json:"items"`
+}
+
 func init() {
-	SchemeBuilder.Register(&Workflow{}, &WorkflowList{})
+	SchemeBuilder.Register(&Workflow{}, &WorkflowList{}, &WorkflowRun{}, &WorkflowRunList{})
 }
