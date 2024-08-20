@@ -67,35 +67,5 @@ func (a *ApplicationHandler) ReconcileComponent(component *coreconureiov1alpha1.
 	if err != nil {
 		return err
 	}
-	//applySets, err := componentTemplate.GetApplySets()
-	//if err != nil {
-	//	return err
-	//}
-	//logger.Info("Applying workflow", "workflow", component.Name)
-	//for _, applySet := range applySets {
-	//	for _, obj := range applySet.Objects {
-	//		if obj.GetKind() == "Workflow" {
-	//			// Update workflow manifest
-	//			_, err = componentTemplate.ApplyObject(obj, false)
-	//			if err != nil {
-	//				return err
-	//			}
-	//		}
-	//	}
-	//}
-
-	// Determine if the workflow should run
-	//actionsHandler, err := workflow.NewActionsHandler(a.Ctx, a.Application.Namespace)
-	//if err != nil {
-	//	return err
-	//}
-	//err = actionsHandler.GetActions(component.Name)
-	//if err != nil {
-	//	return err
-	//}
-	//err = actionsHandler.RunActions()
-	//if err != nil {
-	//	return err
-	//}
 	return nil
 }

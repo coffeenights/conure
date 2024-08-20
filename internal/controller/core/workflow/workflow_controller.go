@@ -16,7 +16,25 @@ type WorkflowReconciler struct {
 }
 
 func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	logger := log.FromContext(ctx)
+
+	var wflr coreconureiov1alpha1.WorkflowRun
+	if err := r.Get(ctx, req.NamespacedName, &wflr); err != nil {
+		logger.Info("WorkflowRun resource not found.")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	actionsHandler, err := NewActionsHandler(ctx, wflr.Namespace)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	err = actionsHandler.GetActions(component.Name)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	err = actionsHandler.RunActions()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	return ctrl.Result{}, nil
 }
 
