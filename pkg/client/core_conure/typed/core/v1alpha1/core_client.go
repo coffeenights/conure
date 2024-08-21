@@ -30,6 +30,7 @@ type CoreV1alpha1Interface interface {
 	ActionDefinitionsGetter
 	ApplicationsGetter
 	WorkflowsGetter
+	WorkflowRunsGetter
 }
 
 // CoreV1alpha1Client is used to interact with features provided by the  group.
@@ -47,6 +48,10 @@ func (c *CoreV1alpha1Client) Applications(namespace string) ApplicationInterface
 
 func (c *CoreV1alpha1Client) Workflows(namespace string) WorkflowInterface {
 	return newWorkflows(c, namespace)
+}
+
+func (c *CoreV1alpha1Client) WorkflowRuns(namespace string) WorkflowRunInterface {
+	return newWorkflowRuns(c, namespace)
 }
 
 // NewForConfig creates a new CoreV1alpha1Client for the given config.

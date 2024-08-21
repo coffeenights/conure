@@ -39,6 +39,10 @@ func (c *FakeCoreV1alpha1) Workflows(namespace string) v1alpha1.WorkflowInterfac
 	return &FakeWorkflows{c, namespace}
 }
 
+func (c *FakeCoreV1alpha1) WorkflowRuns(namespace string) v1alpha1.WorkflowRunInterface {
+	return &FakeWorkflowRuns{c, namespace}
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeCoreV1alpha1) RESTClient() rest.Interface {
