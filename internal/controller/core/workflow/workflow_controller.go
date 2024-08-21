@@ -27,7 +27,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	err = actionsHandler.GetActions(component.Name)
+	err = actionsHandler.GetActions(wflr.Spec.WorkflowName)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
