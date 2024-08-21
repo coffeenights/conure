@@ -24,17 +24,12 @@ package main
   },
   "source": {
     "sourceType": "git",
-    "gitRepository": "https://github.com/coffeenights/conure.git",
+    "gitRepository": "https://github.com/mredvard/fastapi_demo.git",
     "gitBranch": "main",
     "buildTool": "dockerfile",
-    "dockerfilePath": "cmd/api-server/Dockerfile",
+    "dockerfilePath": "Dockerfile",
     "tag": "latest",
-    "command": [
-      "python",
-      "manage.py",
-      "runserver",
-      "0.0.0.0:9091"
-    ],
+    "command": ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"],
     "workingDir": "/app",
     "imagePullSecretsName": "regcred"
   },

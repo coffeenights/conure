@@ -23,23 +23,39 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Info("WorkflowRun resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	actionsHandler, err := NewActionsHandler(ctx, wflr.Namespace)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	err = actionsHandler.GetActions(wflr.Spec.WorkflowName)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-	err = actionsHandler.RunActions()
-	if err != nil {
-		return ctrl.Result{}, err
+	if !wflr.Status.Finished {
+		actionsHandler, err := NewActionsHandler(ctx, wflr.Namespace)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		err = actionsHandler.GetActions(wflr.Spec.WorkflowName)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		err = actionsHandler.RunActions()
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *WorkflowReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &coreconureiov1alpha1.Workflow{}, ".metadata.controller", func(rawObj client.Object) []string {
+		wfl := rawObj.(*coreconureiov1alpha1.Workflow)
+		labels := wfl.GetLabels()
+		if labels == nil {
+			return nil
+		}
+		if labels["app.kubernetes.io/managed-by"] != "timoni" {
+			return nil
+		}
+		r := []string{rawObj.GetName()}
+		return r
+	}); err != nil {
+		return err
+	}
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&coreconureiov1alpha1.WorkflowRun{}).
 		Complete(r)
