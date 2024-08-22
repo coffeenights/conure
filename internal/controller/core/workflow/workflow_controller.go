@@ -23,6 +23,11 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Info("WorkflowRun resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	var app coreconureiov1alpha1.Application
+	opts := client.GetOptions{
+		Raw: nil,
+	}
+	r.Get(ctx, req.NamespacedName, &app)
 	if !wflr.Status.Finished {
 		actionsHandler, err := NewActionsHandler(ctx, wflr.Namespace)
 		if err != nil {
