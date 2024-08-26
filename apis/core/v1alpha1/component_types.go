@@ -1,14 +1,58 @@
 package v1alpha1
 
-import "k8s.io/apimachinery/pkg/runtime"
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+)
 
-// Component A component is a part of an application and represents a single unit of deployment.
-type Component struct {
-	Name          string `json:"name"`
+type ComponentSpec struct {
 	ComponentType string `json:"type"`
 	OCIRepository string `json:"ociRepository"`
 	OCITag        string `json:"ociTag"`
 	Values        Values `json:"values"`
+}
+
+type ComponentStatus struct {
+	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Important: Run "make" to regenerate code after modifying this file
+}
+
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
+//+genclient
+
+// Component A component is a part of an application and represents a single unit of deployment.
+type Component struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   ComponentSpec   `json:"spec,omitempty"`
+	Status ComponentStatus `json:"status,omitempty"`
+}
+
+// ComponentTemplate is simply a template for adding inline components into an application.
+type ComponentTemplate struct {
+	ComponentTemplateMetadata `json:"metadata"`
+	Spec                      ComponentSpec `json:"spec,omitempty"`
+}
+
+// ComponentTemplateMetadata is the metadata for a ComponentTemplate (Used this in replacement of metav1.ObjectMeta as it wasn't working from some reason).
+type ComponentTemplateMetadata struct {
+	Name        string            `json:"name"`
+	Labels      map[string]string `json:"labels,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
+}
+
+//+kubebuilder:object:root=true
+
+type ComponentList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Component `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&Component{}, &ComponentList{})
 }
 
 type Values struct {

@@ -37,120 +37,137 @@ spec:
             properties:
               components:
                 items:
-                  description: Component A component is a part of an application and
-                    represents a single unit of deployment.
+                  description: ComponentTemplate is simply a template for adding inline
+                    components into an application.
                   properties:
-                    name:
-                      type: string
-                    ociRepository:
-                      type: string
-                    ociTag:
-                      type: string
-                    type:
-                      type: string
-                    values:
+                    metadata:
                       properties:
-                        advanced:
+                        annotations:
+                          additionalProperties:
+                            type: string
                           type: object
-                          x-kubernetes-preserve-unknown-fields: true
-                        network:
+                        labels:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        name:
+                          type: string
+                      required:
+                      - name
+                      type: object
+                    spec:
+                      properties:
+                        ociRepository:
+                          type: string
+                        ociTag:
+                          type: string
+                        type:
+                          type: string
+                        values:
                           properties:
-                            exposed:
-                              type: boolean
-                            ports:
+                            advanced:
+                              type: object
+                              x-kubernetes-preserve-unknown-fields: true
+                            network:
+                              properties:
+                                exposed:
+                                  type: boolean
+                                ports:
+                                  items:
+                                    properties:
+                                      hostPort:
+                                        type: integer
+                                      protocol:
+                                        type: string
+                                      targetPort:
+                                        type: integer
+                                    required:
+                                    - hostPort
+                                    - protocol
+                                    - targetPort
+                                    type: object
+                                  type: array
+                                type:
+                                  type: string
+                              required:
+                              - exposed
+                              - ports
+                              - type
+                              type: object
+                            resources:
+                              properties:
+                                cpu:
+                                  type: string
+                                memory:
+                                  type: string
+                                replicas:
+                                  type: integer
+                              required:
+                              - cpu
+                              - memory
+                              - replicas
+                              type: object
+                            source:
+                              properties:
+                                buildTool:
+                                  type: string
+                                command:
+                                  items:
+                                    type: string
+                                  type: array
+                                dockerfilePath:
+                                  type: string
+                                gitBranch:
+                                  type: string
+                                gitRepository:
+                                  type: string
+                                imagePullSecretsName:
+                                  type: string
+                                nixpackPath:
+                                  type: string
+                                ociRepository:
+                                  type: string
+                                sourceType:
+                                  type: string
+                                tag:
+                                  type: string
+                                workingDir:
+                                  type: string
+                              required:
+                              - command
+                              - imagePullSecretsName
+                              - sourceType
+                              - workingDir
+                              type: object
+                            storage:
                               items:
                                 properties:
-                                  hostPort:
-                                    type: integer
-                                  protocol:
+                                  mountPath:
                                     type: string
-                                  targetPort:
-                                    type: integer
+                                  name:
+                                    type: string
+                                  size:
+                                    type: string
                                 required:
-                                - hostPort
-                                - protocol
-                                - targetPort
+                                - mountPath
+                                - name
+                                - size
                                 type: object
                               type: array
-                            type:
-                              type: string
                           required:
-                          - exposed
-                          - ports
-                          - type
+                          - network
+                          - resources
+                          - source
+                          - storage
                           type: object
-                        resources:
-                          properties:
-                            cpu:
-                              type: string
-                            memory:
-                              type: string
-                            replicas:
-                              type: integer
-                          required:
-                          - cpu
-                          - memory
-                          - replicas
-                          type: object
-                        source:
-                          properties:
-                            buildTool:
-                              type: string
-                            command:
-                              items:
-                                type: string
-                              type: array
-                            dockerfilePath:
-                              type: string
-                            gitBranch:
-                              type: string
-                            gitRepository:
-                              type: string
-                            imagePullSecretsName:
-                              type: string
-                            nixpackPath:
-                              type: string
-                            ociRepository:
-                              type: string
-                            sourceType:
-                              type: string
-                            tag:
-                              type: string
-                            workingDir:
-                              type: string
-                          required:
-                          - command
-                          - imagePullSecretsName
-                          - sourceType
-                          - workingDir
-                          type: object
-                        storage:
-                          items:
-                            properties:
-                              mountPath:
-                                type: string
-                              name:
-                                type: string
-                              size:
-                                type: string
-                            required:
-                            - mountPath
-                            - name
-                            - size
-                            type: object
-                          type: array
                       required:
-                      - network
-                      - resources
-                      - source
-                      - storage
+                      - ociRepository
+                      - ociTag
+                      - type
+                      - values
                       type: object
                   required:
-                  - name
-                  - ociRepository
-                  - ociTag
-                  - type
-                  - values
+                  - metadata
                   type: object
                 type: array
             required:

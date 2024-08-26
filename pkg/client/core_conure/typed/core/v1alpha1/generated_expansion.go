@@ -21,6 +21,8 @@ type ActionDefinitionExpansion interface{}
 
 type ApplicationExpansion interface{}
 
+type ComponentExpansion interface{}
+
 type WorkflowExpansion interface{}
 
 type WorkflowRunExpansion interface{}

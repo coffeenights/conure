@@ -6,7 +6,7 @@ import (
 
 // ApplicationSpec defines the desired state of Application
 type ApplicationSpec struct {
-	Components []Component `json:"components"`
+	Components []ComponentTemplate `json:"components"`
 }
 
 // ApplicationStatus defines the observed state of Application

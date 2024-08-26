@@ -35,6 +35,10 @@ func (c *FakeCoreV1alpha1) Applications(namespace string) v1alpha1.ApplicationIn
 	return &FakeApplications{c, namespace}
 }
 
+func (c *FakeCoreV1alpha1) Components(namespace string) v1alpha1.ComponentInterface {
+	return &FakeComponents{c, namespace}
+}
+
 func (c *FakeCoreV1alpha1) Workflows(namespace string) v1alpha1.WorkflowInterface {
 	return &FakeWorkflows{c, namespace}
 }

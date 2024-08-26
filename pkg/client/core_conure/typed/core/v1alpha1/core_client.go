@@ -29,6 +29,7 @@ type CoreV1alpha1Interface interface {
 	RESTClient() rest.Interface
 	ActionDefinitionsGetter
 	ApplicationsGetter
+	ComponentsGetter
 	WorkflowsGetter
 	WorkflowRunsGetter
 }
@@ -44,6 +45,10 @@ func (c *CoreV1alpha1Client) ActionDefinitions(namespace string) ActionDefinitio
 
 func (c *CoreV1alpha1Client) Applications(namespace string) ApplicationInterface {
 	return newApplications(c, namespace)
+}
+
+func (c *CoreV1alpha1Client) Components(namespace string) ComponentInterface {
+	return newComponents(c, namespace)
 }
 
 func (c *CoreV1alpha1Client) Workflows(namespace string) WorkflowInterface {
