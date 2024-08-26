@@ -12,4 +12,6 @@ metadata:
 spec:
   workflowName: backend-service
   applicationID: "65c084eaff5e41522cc80f99"
+  applicationName: "first-app"
   componentID: "65c084eaff5e41522cc80f99"
+  componentName: "backend-service"

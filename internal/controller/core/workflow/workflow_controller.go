@@ -3,7 +3,9 @@ package workflow
 import (
 	"context"
 	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -24,16 +26,32 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	var app coreconureiov1alpha1.Application
-	opts := client.GetOptions{
-		Raw: nil,
+	nsn := types.NamespacedName{
+		Namespace: req.Namespace,
+		Name:      wflr.Spec.ApplicationName,
 	}
-	r.Get(ctx, req.NamespacedName, &app)
+	err := r.Get(ctx, nsn, &app)
+	if err != nil {
+		logger.Info("Application resource not found.")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+	var wflw coreconureiov1alpha1.Workflow
+	nsn = types.NamespacedName{
+		Namespace: req.Namespace,
+		Name:      wflr.Spec.WorkflowName,
+	}
+	err = r.Get(ctx, nsn, &wflw)
+	if err != nil {
+		logger.Info("Workflow resource not found.")
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
 	if !wflr.Status.Finished {
-		actionsHandler, err := NewActionsHandler(ctx, wflr.Namespace)
+		actionsHandler, err := NewActionsHandler(ctx, r.Client, wflr.Namespace, &wflw)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		err = actionsHandler.GetActions(wflr.Spec.WorkflowName)
+		err = actionsHandler.GetActions()
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -43,6 +61,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		}
 		wflr.Status.Finished = true
 	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -50,6 +69,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 func (r *WorkflowReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&coreconureiov1alpha1.WorkflowRun{}).
+		Owns(&batchv1.Job{}).
 		Complete(r)
 }
 

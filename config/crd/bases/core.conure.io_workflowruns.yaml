@@ -37,13 +37,19 @@ spec:
             properties:
               applicationID:
                 type: string
+              applicationName:
+                type: string
               componentID:
+                type: string
+              componentName:
                 type: string
               workflowName:
                 type: string
             required:
             - applicationID
+            - applicationName
             - componentID
+            - componentName
             - workflowName
             type: object
           status:

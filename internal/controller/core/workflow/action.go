@@ -6,7 +6,7 @@ import (
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/coffeenights/conure/internal/timoni"
 	"github.com/stefanprodan/timoni/pkg/module"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -16,33 +16,27 @@ const (
 
 type ActionsHandler struct {
 	Ctx                context.Context
-	Clientset          *k8sUtils.GenericClientset
+	Client             client.Client
 	Actions            []coreconureiov1alpha1.Action
+	Workflow           *coreconureiov1alpha1.Workflow
 	OCIRepoCredentials string
 	Namespace          string
 	ID                 string
 }
 
-func NewActionsHandler(ctx context.Context, Namespace string) (*ActionsHandler, error) {
-	clientset, err := k8sUtils.GetClientset()
-	if err != nil {
-		return nil, err
-	}
+func NewActionsHandler(ctx context.Context, client client.Client, Namespace string, wflw *coreconureiov1alpha1.Workflow) (*ActionsHandler, error) {
 	return &ActionsHandler{
 		Ctx:                ctx,
-		Clientset:          clientset,
+		Client:             client,
 		OCIRepoCredentials: "", // TODO: Take it from integrations
 		Namespace:          Namespace,
 		ID:                 k8sUtils.Generate8DigitHash(),
+		Workflow:           wflw,
 	}, nil
 }
 
-func (a *ActionsHandler) GetActions(workflowName string) error {
-	workflow, err := a.Clientset.Conure.CoreV1alpha1().Workflows(a.Namespace).Get(a.Ctx, workflowName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	a.Actions = workflow.Spec.Actions
+func (a *ActionsHandler) GetActions() error {
+	a.Actions = a.Workflow.Spec.Actions
 	return nil
 }
 
@@ -59,7 +53,8 @@ func (a *ActionsHandler) RunActions() error {
 func (a *ActionsHandler) RunAction(action *coreconureiov1alpha1.Action) error {
 	logger := log.FromContext(a.Ctx)
 	logger.Info("Retrieving action definition", "action", action.Name)
-	actionDefinition, err := a.Clientset.Conure.CoreV1alpha1().ActionDefinitions(ConureSystemNamespace).Get(a.Ctx, action.Name, metav1.GetOptions{})
+	var actionDefinition coreconureiov1alpha1.ActionDefinition
+	err := a.Client.Get(a.Ctx, client.ObjectKey{Namespace: ConureSystemNamespace, Name: action.Name}, &actionDefinition)
 	if err != nil {
 		return err
 	}
