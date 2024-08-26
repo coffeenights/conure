@@ -9,6 +9,7 @@ import (
 	"github.com/stefanprodan/timoni/pkg/module"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"strings"
@@ -64,6 +65,7 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *coreconureiov1alp
 	err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: metadata.Name}, &existingComponent)
 	if apierrors.IsNotFound(err) {
 		logger.Info("Creating component", "component", component.Name)
+		ctrl.SetControllerReference(a.Application, &component, a.Reconciler.Scheme)
 		err = a.Reconciler.Create(a.Ctx, &component)
 		if err != nil {
 			return err
