@@ -12,7 +12,7 @@ metadata:
 spec:
   components:
     - metadata:
-        name: backend-server
+        name: backend-service
         annotations:
           dapr.io/enabled: "true"
           dapr.io/app-id: "api-server"
