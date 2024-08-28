@@ -62,10 +62,13 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *coreconureiov1alp
 		Kind:       "Component",
 		APIVersion: a.Application.APIVersion,
 	}
-	err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: metadata.Name}, &existingComponent)
+	err := ctrl.SetControllerReference(a.Application, &component, a.Reconciler.Scheme)
+	if err != nil {
+		return err
+	}
+	err = a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: metadata.Name}, &existingComponent)
 	if apierrors.IsNotFound(err) {
 		logger.Info("Creating component", "component", component.Name)
-		ctrl.SetControllerReference(a.Application, &component, a.Reconciler.Scheme)
 		err = a.Reconciler.Create(a.Ctx, &component)
 		if err != nil {
 			return err
