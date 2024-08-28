@@ -11,6 +11,7 @@ func Setup(mgr ctrl.Manager) error {
 	setupFunctions := []func(ctrl.Manager) error{
 		application.Setup,
 		workflow.Setup,
+		// component.Setup,
 	}
 	// Iterate over each setup function
 	for _, setup := range setupFunctions {
