@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
-	"github.com/coffeenights/conure/cmd/api-server/providers"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"strings"
 )
@@ -95,11 +95,11 @@ func BuildApplicationManifest(application *models.Application, environment *mode
 		"metadata": map[string]interface{}{
 			"name": application.Name,
 			"labels": map[string]interface{}{
-				providers.ApplicationIDLabel:  application.ID.Hex(),
-				providers.OrganizationIDLabel: application.OrganizationID.Hex(),
-				providers.EnvironmentLabel:    environment.Name,
-				providers.CreatedByLabel:      "conure",
-				providers.NamespaceLabel:      environment.GetNamespace(),
+				k8sUtils.ApplicationIDLabel:  application.ID.Hex(),
+				k8sUtils.OrganizationIDLabel: application.OrganizationID.Hex(),
+				k8sUtils.EnvironmentLabel:    environment.Name,
+				k8sUtils.CreatedByLabel:      "conure",
+				k8sUtils.NamespaceLabel:      environment.GetNamespace(),
 			},
 			"annotations": map[string]interface{}{
 				"conure.io/description": application.Description,
