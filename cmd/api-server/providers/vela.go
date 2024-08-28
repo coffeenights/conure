@@ -19,6 +19,11 @@ import (
 	"log"
 )
 
+const (
+	ComponentNameLabel   = "app.oam.dev/component"
+	ApplicationNameLabel = "app.oam.dev/name"
+)
+
 type VelaComponent struct {
 	ComponentSpec   *vela.ApplicationComponent
 	ComponentStatus *vela.ApplicationComponentStatus
@@ -43,17 +48,6 @@ const (
 	StatefulSet WorkloadName = "StatefulSet"
 )
 
-const (
-	ApplicationIDLabel   = "conure.io/application-id"
-	OrganizationIDLabel  = "conure.io/organization-id"
-	EnvironmentLabel     = "conure.io/environment"
-	CreatedByLabel       = "conure.io/created-by"
-	NamespaceLabel       = "conure.io/namespace"
-	ComponentNameLabel   = "app.oam.dev/component"
-	ApplicationNameLabel = "app.oam.dev/name"
-	ComponentIDLabel     = "conure.io/component-id"
-)
-
 type ProviderStatusVela struct {
 	OrganizationID  string
 	ApplicationID   string
@@ -68,8 +62,8 @@ func NewProviderStatusVela(organizationID string, applicationID string, namespac
 		return nil, err
 	}
 	filter := map[string]string{
-		OrganizationIDLabel: organizationID,
-		ApplicationIDLabel:  applicationID,
+		k8sUtils.OrganizationIDLabel: organizationID,
+		k8sUtils.ApplicationIDLabel:  applicationID,
 	}
 
 	velaApplication, err := k8sUtils.GetApplicationByLabels(clientset, namespace, filter)
@@ -125,10 +119,10 @@ func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*Componen
 		return nil, err
 	}
 	labels := map[string]string{
-		ApplicationIDLabel:  p.ApplicationID,
-		OrganizationIDLabel: p.OrganizationID,
-		NamespaceLabel:      p.Namespace,
-		ComponentNameLabel:  comp.ComponentSpec.Name,
+		k8sUtils.ApplicationIDLabel:  p.ApplicationID,
+		k8sUtils.OrganizationIDLabel: p.OrganizationID,
+		k8sUtils.NamespaceLabel:      p.Namespace,
+		ComponentNameLabel:           comp.ComponentSpec.Name,
 	}
 	deployments, err := k8sUtils.GetDeploymentsByLabels(clientset.K8s, p.Namespace, labels)
 	if err != nil {
@@ -194,8 +188,8 @@ func (p *ProviderStatusVela) GetNetworkProperties(componentName string) (*Networ
 		return nil, err
 	}
 	filter := map[string]string{
-		OrganizationIDLabel: p.OrganizationID,
-		ApplicationIDLabel:  p.ApplicationID,
+		k8sUtils.OrganizationIDLabel: p.OrganizationID,
+		k8sUtils.ApplicationIDLabel:  p.ApplicationID,
 	}
 	err = getNetworkPropertiesFromService(clientset, p.Namespace, filter, &properties)
 	if err != nil {
@@ -309,10 +303,10 @@ func (p *ProviderStatusVela) GetActivity(componentID string) error {
 		return err
 	}
 	labels := map[string]string{
-		ApplicationIDLabel:  p.ApplicationID,
-		OrganizationIDLabel: p.OrganizationID,
-		NamespaceLabel:      p.Namespace,
-		ComponentIDLabel:    componentID,
+		k8sUtils.ApplicationIDLabel:  p.ApplicationID,
+		k8sUtils.OrganizationIDLabel: p.OrganizationID,
+		k8sUtils.NamespaceLabel:      p.Namespace,
+		k8sUtils.ComponentIDLabel:    componentID,
 	}
 	deployments, err := k8sUtils.GetDeploymentsByLabels(clientset.K8s, p.Namespace, labels)
 	if err != nil {
@@ -461,9 +455,9 @@ func (p *ProviderDispatcherVela) createNamespace(clientset *k8sUtils.GenericClie
 		ObjectMeta: metav1.ObjectMeta{
 			Name: p.Namespace,
 			Labels: map[string]string{
-				ApplicationIDLabel:  p.ApplicationID,
-				OrganizationIDLabel: p.OrganizationID,
-				EnvironmentLabel:    p.Environment,
+				k8sUtils.ApplicationIDLabel:  p.ApplicationID,
+				k8sUtils.OrganizationIDLabel: p.OrganizationID,
+				k8sUtils.EnvironmentLabel:    p.Environment,
 			},
 		},
 	}
