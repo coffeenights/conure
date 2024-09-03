@@ -5,7 +5,6 @@ import (
 	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -26,32 +25,32 @@ func NewApplicationHandler(ctx context.Context, component *coreconureiov1alpha1.
 }
 
 func (a *ComponentHandler) findWorkflow() error {
-	wflRaw := &unstructured.Unstructured{}
-	for _, applySet := range applySets {
-		for _, obj := range applySet.Objects {
-			if obj.GetKind() == "Workflow" {
-				wflRaw = obj.DeepCopy()
-			}
-		}
-	}
+	//wflRaw := &unstructured.Unstructured{}
+	//for _, applySet := range applySets {
+	//	for _, obj := range applySet.Objects {
+	//		if obj.GetKind() == "Workflow" {
+	//			wflRaw = obj.DeepCopy()
+	//		}
+	//	}
+	//}
 	return nil
 }
 
 func (a *ComponentHandler) CompareWorkflow(componentTemplate *module.Manager) error {
-	applySets, err := componentTemplate.GetApplySets()
-	if err != nil {
-		return err
-	}
-
-	// Find the workflow manifest
-	wflRaw := &unstructured.Unstructured{}
-	for _, applySet := range applySets {
-		for _, obj := range applySet.Objects {
-			if obj.GetKind() == "Workflow" {
-				wflRaw = obj.DeepCopy()
-			}
-		}
-	}
+	//applySets, err := componentTemplate.GetApplySets()
+	//if err != nil {
+	//	return err
+	//}
+	//
+	//// Find the workflow manifest
+	//wflRaw := &unstructured.Unstructured{}
+	//for _, applySet := range applySets {
+	//	for _, obj := range applySet.Objects {
+	//		if obj.GetKind() == "Workflow" {
+	//			wflRaw = obj.DeepCopy()
+	//		}
+	//	}
+	//}
 	return nil
 }
 

@@ -5,6 +5,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+const ComponentKind = "Component"
+
 type ComponentSpec struct {
 	ComponentType string `json:"type"`
 	OCIRepository string `json:"ociRepository"`
@@ -13,8 +15,7 @@ type ComponentSpec struct {
 }
 
 type ComponentStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Conditions []metav1.Condition `json:"conditions"`
 }
 
 //+kubebuilder:object:root=true

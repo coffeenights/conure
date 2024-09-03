@@ -30,6 +30,20 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
+	//conditions := common.ConureConditions{}
+	//conditions = append(conditions, metav1.Condition{
+	//	Type:               common.TypeRunning.String(),
+	//	Status:             metav1.ConditionTrue,
+	//	Reason:             common.ReasonFailedApply.String(),
+	//	LastTransitionTime: metav1.Time{Time: time.Now()},
+	//	Message:            "Component is running",
+	//})
+	//component.Status.Conditions = conditions
+	//err := r.Status().Update(ctx, &component)
+	//if err != nil {
+	//	return ctrl.Result{}, err
+	//}
+
 	// Transform the values to a map
 	valuesJSON, err := json.Marshal(component.Spec.Values)
 	if err != nil {
@@ -47,10 +61,11 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	_, err = componentTemplate.Build()
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	_ = componentTemplate
+	//_, err = componentTemplate.Build()
+	//if err != nil {
+	//	return ctrl.Result{}, err
+	//}
 
 	return ctrl.Result{}, nil
 }
@@ -59,6 +74,7 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 func (r *ComponentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&coreconureiov1alpha1.Component{}).
+		Owns(&coreconureiov1alpha1.WorkflowRun{}).
 		Complete(r)
 }
 

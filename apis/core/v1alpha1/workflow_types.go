@@ -46,9 +46,7 @@ type WorkflowList struct {
 // WorkflowRunSpec defines the desired state of WorkflowRun
 type WorkflowRunSpec struct {
 	WorkflowName    string `json:"workflowName"`
-	ApplicationID   string `json:"applicationID"`
 	ApplicationName string `json:"applicationName"`
-	ComponentID     string `json:"componentID"`
 	ComponentName   string `json:"componentName"`
 }
 
