@@ -35,20 +35,14 @@ spec:
           spec:
             description: WorkflowRunSpec defines the desired state of WorkflowRun
             properties:
-              applicationID:
-                type: string
               applicationName:
-                type: string
-              componentID:
                 type: string
               componentName:
                 type: string
               workflowName:
                 type: string
             required:
-            - applicationID
             - applicationName
-            - componentID
             - componentName
             - workflowName
             type: object

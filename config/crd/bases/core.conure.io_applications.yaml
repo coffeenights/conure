@@ -41,6 +41,9 @@ spec:
                     components into an application.
                   properties:
                     metadata:
+                      description: ComponentTemplateMetadata is the metadata for a
+                        ComponentTemplate (Used this in replacement of metav1.ObjectMeta
+                        as it wasn't working from some reason).
                       properties:
                         annotations:
                           additionalProperties:
