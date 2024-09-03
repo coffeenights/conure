@@ -45,6 +45,7 @@ func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&coreconureiov1alpha1.Application{}).
 		Owns(&coreconureiov1alpha1.Component{}).
+		Owns(&coreconureiov1alpha1.WorkflowRun{}).
 		Complete(r)
 }
 
