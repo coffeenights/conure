@@ -6,6 +6,29 @@ import (
 )
 
 const ComponentKind = "Component"
+const (
+	WorkflowRunNamelabel = "conure.io/workflow-run-name"
+)
+
+type ComponentConditionType string
+
+func (t ComponentConditionType) String() string {
+	return string(t)
+}
+
+type ComponentConditionReason string
+
+func (t ComponentConditionReason) String() string {
+	return string(t)
+}
+
+const (
+	ComponentConditionTypeWorkflow   ComponentConditionType   = "Workflow"
+	ComponentWorkflowTriggeredReason ComponentConditionReason = "WorkflowTriggered"
+	ComponentWorkflowRunningReason   ComponentConditionReason = "WorkflowRunning"
+	ComponentWorkFlowFailedReason    ComponentConditionReason = "WorkflowFailed"
+	ComponentWorkFlowSucceedReason   ComponentConditionReason = "WorkflowSucceed"
+)
 
 type ComponentSpec struct {
 	ComponentType string `json:"type"`
