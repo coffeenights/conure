@@ -3,8 +3,10 @@ package application
 import (
 	"context"
 	"encoding/json"
-	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
+	"fmt"
+	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/controller/core/common"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/coffeenights/conure/internal/timoni"
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
@@ -15,37 +17,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"strings"
-	"time"
-)
-
-type ComponentConditionType string
-
-func (t ComponentConditionType) String() string {
-	return string(t)
-}
-
-type ComponentConditionReason string
-
-func (t ComponentConditionReason) String() string {
-	return string(t)
-}
-
-const (
-	ConditionTypeWorkflow   ComponentConditionType   = "Workflow"
-	WorkflowTriggeredReason ComponentConditionReason = "WorkflowTriggered"
-	WorkflowRunningReason   ComponentConditionReason = "WorkflowRunning"
-	WorkFlowFailedReason    ComponentConditionReason = "WorkflowFailed"
-	WorkFlowSucceedReason   ComponentConditionReason = "WorkflowSucceed"
 )
 
 type ApplicationHandler struct {
-	Application *coreconureiov1alpha1.Application
+	Application *conurev1alpha1.Application
 	Reconciler  *ApplicationReconciler
 	Ctx         context.Context
 	Logger      logr.Logger
 }
 
-func NewApplicationHandler(ctx context.Context, application *coreconureiov1alpha1.Application, reconciler *ApplicationReconciler) (*ApplicationHandler, error) {
+func NewApplicationHandler(ctx context.Context, application *conurev1alpha1.Application, reconciler *ApplicationReconciler) (*ApplicationHandler, error) {
 	var handler ApplicationHandler
 	handler.Logger = log.FromContext(ctx)
 	handler.Application = application
@@ -64,14 +45,14 @@ func (a *ApplicationHandler) ReconcileComponents() error {
 	return nil
 }
 
-func (a *ApplicationHandler) ReconcileComponent(componentTemp *coreconureiov1alpha1.ComponentTemplate) error {
+func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.ComponentTemplate) error {
 	logger := log.FromContext(a.Ctx)
 	logger.Info("Reconciling component", "component", componentTemp.Name)
 
 	// Build the component object
 	var (
-		component         coreconureiov1alpha1.Component
-		existingComponent coreconureiov1alpha1.Component
+		component         conurev1alpha1.Component
+		existingComponent conurev1alpha1.Component
 	)
 	component.ObjectMeta = metav1.ObjectMeta{
 		Name:        componentTemp.Name,
@@ -80,7 +61,7 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *coreconureiov1alp
 	}
 	component.Spec = componentTemp.Spec
 	component.TypeMeta = metav1.TypeMeta{
-		Kind:       coreconureiov1alpha1.ComponentKind,
+		Kind:       conurev1alpha1.ComponentKind,
 		APIVersion: a.Application.APIVersion,
 	}
 	specHashTarget := common.GetHashForSpec(&component.Spec)
@@ -98,14 +79,14 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *coreconureiov1alp
 		if err != nil {
 			return err
 		}
-		a.setConditionWorkflow(&component, metav1.ConditionTrue, WorkflowTriggeredReason, "Workflow was triggered")
+		a.setConditionWorkflow(&component, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow was triggered")
 		err = a.Reconciler.Status().Update(a.Ctx, &component)
 		if err != nil {
 			return err
 		}
 		err = a.runComponentWorkflow(&component)
 		if err != nil {
-			a.setConditionWorkflow(&component, metav1.ConditionFalse, WorkflowTriggeredReason, "Workflow failed to trigger")
+			a.setConditionWorkflow(&component, metav1.ConditionFalse, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow failed to trigger")
 			return err
 		}
 		return nil
@@ -113,6 +94,42 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *coreconureiov1alp
 		return err
 	}
 
+	// Find workflow runs associated with the component
+	wflrName := existingComponent.ObjectMeta.Labels[conurev1alpha1.WorkflowRunNamelabel]
+	var wflr conurev1alpha1.WorkflowRun
+	err = a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: wflrName}, &wflr)
+	if apierrors.IsNotFound(err) {
+		logger.Info("Workflow run not found", "component", component.Name)
+	} else if err != nil {
+		return err
+	}
+
+	if !reflect.DeepEqual(wflr, conurev1alpha1.WorkflowRun{}) {
+		index, exists := common.ContainsCondition(wflr.Status.Conditions, conurev1alpha1.ConditionTypeRunningAction.String())
+		if exists {
+			if wflr.Status.Conditions[index].Status == metav1.ConditionTrue {
+				logger.Info("Workflow is running, skipping the component", "component", component.Name)
+				a.setConditionWorkflow(&existingComponent, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowRunningReason, fmt.Sprintf("Workflow %s is running", wflr.Name))
+			} else {
+				logger.Info("Workflow failed", "component", component.Name)
+				a.setConditionWorkflow(&existingComponent, metav1.ConditionFalse, conurev1alpha1.ComponentWorkFlowFailedReason, fmt.Sprintf("Workflow %s failed", wflr.Name))
+			}
+		}
+		index, exists = common.ContainsCondition(wflr.Status.Conditions, conurev1alpha1.ConditionTypeFinished.String())
+		if exists {
+			if wflr.Status.Conditions[index].Status == metav1.ConditionTrue {
+				logger.Info("Workflow finished", "component", component.Name)
+				a.setConditionWorkflow(&existingComponent, metav1.ConditionTrue, conurev1alpha1.ComponentWorkFlowSucceedReason, fmt.Sprintf("Workflow %s finished", wflr.Name))
+			} else {
+				logger.Info("Workflow failed", "component", component.Name)
+				a.setConditionWorkflow(&existingComponent, metav1.ConditionFalse, conurev1alpha1.ComponentWorkFlowFailedReason, fmt.Sprintf("Workflow %s failed", wflr.Name))
+			}
+		}
+	}
+	err = a.Reconciler.Status().Update(a.Ctx, &existingComponent)
+	if err != nil {
+		return err
+	}
 	// Check differences between the existing component and the new component
 	specHashActual := common.GetHashForSpec(existingComponent.Spec)
 
@@ -120,10 +137,10 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *coreconureiov1alp
 		logger.Info("Updating component", "component", component.Name)
 		// Run workflow if the source has changed
 		if !reflect.DeepEqual(existingComponent.Spec.Values.Source, component.Spec.Values.Source) {
-			a.setConditionWorkflow(&existingComponent, metav1.ConditionTrue, WorkflowTriggeredReason, "Workflow was triggered")
+			a.setConditionWorkflow(&existingComponent, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow was triggered")
 			err = a.runComponentWorkflow(&component)
 			if err != nil {
-				a.setConditionWorkflow(&existingComponent, metav1.ConditionFalse, WorkflowTriggeredReason, "Workflow failed to trigger")
+				a.setConditionWorkflow(&existingComponent, metav1.ConditionFalse, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow failed to trigger")
 				return err
 			}
 		}
@@ -142,8 +159,8 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *coreconureiov1alp
 	return nil
 }
 
-func (a *ApplicationHandler) runComponentWorkflow(component *coreconureiov1alpha1.Component) error {
-	var wfl coreconureiov1alpha1.Workflow
+func (a *ApplicationHandler) runComponentWorkflow(component *conurev1alpha1.Component) error {
+	var wfl conurev1alpha1.Workflow
 	err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: component.Name}, &wfl)
 	// If there is no workflow present, simply ignore the error
 	if apierrors.IsNotFound(err) {
@@ -151,12 +168,16 @@ func (a *ApplicationHandler) runComponentWorkflow(component *coreconureiov1alpha
 	} else if err != nil {
 		return err
 	}
-	workflow := coreconureiov1alpha1.WorkflowRun{
+	workflow := conurev1alpha1.WorkflowRun{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: component.Name + "-",
 			Namespace:    a.Application.Namespace,
+			Labels: map[string]string{
+				k8sUtils.ApplicationNameLabel: a.Application.Name,
+				k8sUtils.ComponentNameLabel:   component.Name,
+			},
 		},
-		Spec: coreconureiov1alpha1.WorkflowRunSpec{
+		Spec: conurev1alpha1.WorkflowRunSpec{
 			ApplicationName: a.Application.Name,
 			ComponentName:   component.Name,
 			WorkflowName:    wfl.Name,
@@ -169,23 +190,19 @@ func (a *ApplicationHandler) runComponentWorkflow(component *coreconureiov1alpha
 	return nil
 }
 
-func (a *ApplicationHandler) setConditionWorkflow(component *coreconureiov1alpha1.Component, status metav1.ConditionStatus, reason ComponentConditionReason, message string) {
-	condition := metav1.Condition{
-		Type:               ConditionTypeWorkflow.String(),
-		Status:             status,
-		Reason:             reason.String(),
-		Message:            message,
-		LastTransitionTime: metav1.Time{Time: time.Now()},
-	}
-	index, exists := common.ContainsCondition(component.Status.Conditions, ConditionTypeWorkflow.String())
-	if exists {
-		component.Status.Conditions[index] = condition
-	} else {
-		component.Status.Conditions = append(component.Status.Conditions, condition)
-	}
+func (a *ApplicationHandler) setConditionWorkflow(component *conurev1alpha1.Component, status metav1.ConditionStatus, reason conurev1alpha1.ComponentConditionReason, message string) {
+	component.Status.Conditions = common.SetCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeWorkflow.String(), status, reason.String(), message)
 }
 
-func (a *ApplicationHandler) ReconcileComponentOld(component *coreconureiov1alpha1.ComponentTemplate) error {
+func (a *ApplicationHandler) getConditionWorkflow(component *conurev1alpha1.Component) metav1.Condition {
+	index, exists := common.ContainsCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeWorkflow.String())
+	if exists {
+		return component.Status.Conditions[index]
+	}
+	return metav1.Condition{}
+}
+
+func (a *ApplicationHandler) ReconcileComponentOld(component *conurev1alpha1.ComponentTemplate) error {
 	logger := log.FromContext(a.Ctx)
 	logger.Info("Reconciling component", "component", component.Name)
 
