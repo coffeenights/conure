@@ -5,6 +5,34 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
+type WorkflowConditionType string
+
+func (t WorkflowConditionType) String() string {
+	return string(t)
+}
+
+type WorkflowConditionReason string
+
+func (t WorkflowConditionReason) String() string {
+	return string(t)
+}
+
+const (
+	ConditionTypeRunningAction WorkflowConditionType = "RunningAction"
+
+	RunningActionRenderingReason WorkflowConditionReason = "RunningActionRendering"
+	RunningActionFailedReason    WorkflowConditionReason = "RunningActionFailed"
+	RunningActionSucceedReason   WorkflowConditionReason = "RunningActionSucceed"
+	RunningActionReason          WorkflowConditionReason = "RunningAction"
+
+	ConditionTypeFinishedAction WorkflowConditionType   = "FinishedAction"
+	FinishedActionReason        WorkflowConditionReason = "FinishedAction"
+
+	ConditionTypeFinished     WorkflowConditionType   = "Finished"
+	FinishedSuccesfullyReason WorkflowConditionReason = "FinishedSuccesfully"
+	FinishedFailedReason      WorkflowConditionReason = "FinishedFailed"
+)
+
 type Action struct {
 	Name   string                `json:"name"`
 	Values *runtime.RawExtension `json:"values"`
@@ -53,8 +81,7 @@ type WorkflowRunSpec struct {
 type WorkflowRunStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	//Conditions []Condition `json:"conditions,omitempty"`
-	Finished bool `json:"finished"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true
