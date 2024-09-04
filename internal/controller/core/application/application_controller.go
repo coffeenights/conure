@@ -7,7 +7,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	coreconureiov1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
+	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 )
 
 // ApplicationReconciler reconciles an Application object
@@ -22,7 +22,7 @@ type ApplicationReconciler struct {
 
 func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	var application coreconureiov1alpha1.Application
+	var application conurev1alpha1.Application
 	if err := r.Get(ctx, req.NamespacedName, &application); err != nil {
 		logger.Info("Application resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -43,9 +43,9 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 // SetupWithManager sets up the controller with the Manager.
 func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&coreconureiov1alpha1.Application{}).
-		Owns(&coreconureiov1alpha1.Component{}).
-		Owns(&coreconureiov1alpha1.WorkflowRun{}).
+		For(&conurev1alpha1.Application{}).
+		Owns(&conurev1alpha1.Component{}).
+		Owns(&conurev1alpha1.WorkflowRun{}).
 		Complete(r)
 }
 
