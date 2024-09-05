@@ -62,10 +62,10 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 	_ = componentTemplate
-	//_, err = componentTemplate.Build()
-	//if err != nil {
-	//	return ctrl.Result{}, err
-	//}
+	_, err = componentTemplate.Build()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	return ctrl.Result{}, nil
 }

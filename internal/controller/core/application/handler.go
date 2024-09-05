@@ -79,6 +79,10 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.Co
 		if err != nil {
 			return err
 		}
+		err = a.setComponentWorkflow(&component)
+		if err != nil {
+			return err
+		}
 		a.setConditionWorkflow(&component, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow was triggered")
 		err = a.Reconciler.Status().Update(a.Ctx, &component)
 		if err != nil {
@@ -159,6 +163,42 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.Co
 	return nil
 }
 
+func (a *ApplicationHandler) setComponentWorkflow(component *conurev1alpha1.Component) error {
+	// Transform the values to a map
+	valuesJSON, err := json.Marshal(component.Spec.Values)
+	if err != nil {
+		return err
+	}
+	values := timoni.Values{}
+	d := json.NewDecoder(strings.NewReader(string(valuesJSON)))
+	// Turn numbers into strings, otherwise the decoder will take ints and turn them into floats
+	d.UseNumber()
+	err = d.Decode(&values)
+	if err != nil {
+		return err
+	}
+	componentTemplate, err := module.NewManager(a.Ctx, component.Name, component.Spec.OCIRepository, component.Spec.OCITag, a.Application.Namespace, "", values.Get())
+	if err != nil {
+		return err
+	}
+	sets, err := componentTemplate.GetApplySets()
+	if err != nil {
+		return err
+	}
+	// find the workflow and apply it
+	for _, set := range sets {
+		for _, obj := range set.Objects {
+			if obj.GetKind() == "Workflow" {
+				_, err = componentTemplate.ApplyObject(obj, false)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (a *ApplicationHandler) runComponentWorkflow(component *conurev1alpha1.Component) error {
 	var wfl conurev1alpha1.Workflow
 	err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: component.Name}, &wfl)
@@ -168,7 +208,7 @@ func (a *ApplicationHandler) runComponentWorkflow(component *conurev1alpha1.Comp
 	} else if err != nil {
 		return err
 	}
-	workflow := conurev1alpha1.WorkflowRun{
+	workflowRun := conurev1alpha1.WorkflowRun{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: component.Name + "-",
 			Namespace:    a.Application.Namespace,
@@ -183,7 +223,7 @@ func (a *ApplicationHandler) runComponentWorkflow(component *conurev1alpha1.Comp
 			WorkflowName:    wfl.Name,
 		},
 	}
-	err = a.Reconciler.Create(a.Ctx, &workflow)
+	err = a.Reconciler.Create(a.Ctx, &workflowRun)
 	if err != nil {
 		return err
 	}
