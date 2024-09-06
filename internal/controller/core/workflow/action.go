@@ -96,9 +96,9 @@ func (a *ActionsHandler) RunAction(action *coreconureiov1alpha1.Action) error {
 			}
 			obj.SetOwnerReferences(ownerRefs)
 			// Inject the action name as a label
-			obj.SetLabels(map[string]string{
-				coreconureiov1alpha1.WorkflowActionNamelabel: action.Name,
-			})
+			labels := obj.GetLabels()
+			labels[coreconureiov1alpha1.WorkflowActionNamelabel] = action.Name
+			obj.SetLabels(labels)
 			_, err = modManager.ApplyObject(obj, false)
 			if err != nil {
 				return err
