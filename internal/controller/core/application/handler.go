@@ -65,13 +65,12 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.Co
 	}
 	specHashTarget := common.GetHashForSpec(&component.Spec)
 	component.Labels = common.SetHashToLabels(componentTemp.Labels, specHashTarget)
-	err := ctrl.SetControllerReference(a.Application, &component, a.Reconciler.Scheme)
-	if err != nil {
+	if err := ctrl.SetControllerReference(a.Application, &component, a.Reconciler.Scheme); err != nil {
 		return err
 	}
 
 	// Find an existing component
-	err = a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: component.Name}, &existingComponent)
+	err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: component.Name}, &existingComponent)
 
 	// If the component does not exist, create it and run its workflow
 	if apierrors.IsNotFound(err) {
@@ -128,14 +127,13 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.Co
 }
 
 func (a *ApplicationHandler) createComponent(component *conurev1alpha1.Component) error {
-	err := a.Reconciler.Create(a.Ctx, component)
-	if err != nil {
+	if err := a.Reconciler.Create(a.Ctx, component); err != nil {
 		return err
 	}
-	if err = a.setComponentWorkflow(component); err != nil {
+	if err := a.setComponentWorkflow(component); err != nil {
 		return err
 	}
-	if err = a.setConditionWorkflow(component, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow was triggered"); err != nil {
+	if err := a.setConditionWorkflow(component, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow was triggered"); err != nil {
 		return err
 	}
 	wflr, err := a.runComponentWorkflow(component)
@@ -198,8 +196,7 @@ func (a *ApplicationHandler) setComponentWorkflow(component *conurev1alpha1.Comp
 	d := json.NewDecoder(strings.NewReader(string(valuesJSON)))
 	// Turn numbers into strings, otherwise the decoder will take ints and turn them into floats
 	d.UseNumber()
-	err = d.Decode(&values)
-	if err != nil {
+	if err = d.Decode(&values); err != nil {
 		return err
 	}
 	componentTemplate, err := module.NewManager(a.Ctx, component.Name, component.Spec.OCIRepository, component.Spec.OCITag, a.Application.Namespace, "", values.Get())
@@ -226,9 +223,7 @@ func (a *ApplicationHandler) setComponentWorkflow(component *conurev1alpha1.Comp
 
 func (a *ApplicationHandler) runComponentWorkflow(component *conurev1alpha1.Component) (*conurev1alpha1.WorkflowRun, error) {
 	var wfl conurev1alpha1.Workflow
-	err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: component.Name}, &wfl)
-	// If there is no workflow present, simply ignore the error
-	if err != nil {
+	if err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: component.Name}, &wfl); err != nil {
 		return nil, err
 	}
 	workflowRun := conurev1alpha1.WorkflowRun{
@@ -246,8 +241,7 @@ func (a *ApplicationHandler) runComponentWorkflow(component *conurev1alpha1.Comp
 			WorkflowName:    wfl.Name,
 		},
 	}
-	err = a.Reconciler.Create(a.Ctx, &workflowRun)
-	if err != nil {
+	if err := a.Reconciler.Create(a.Ctx, &workflowRun); err != nil {
 		return nil, err
 	}
 	return &workflowRun, nil
@@ -264,36 +258,4 @@ func (a *ApplicationHandler) getConditionWorkflow(component *conurev1alpha1.Comp
 		return component.Status.Conditions[index]
 	}
 	return metav1.Condition{}
-}
-
-func (a *ApplicationHandler) ReconcileComponentOld(component *conurev1alpha1.ComponentTemplate) error {
-	logger := log.FromContext(a.Ctx)
-	logger.Info("Reconciling component", "component", component.Name)
-
-	// Transform the values to a map
-	valuesJSON, err := json.Marshal(component.Spec.Values)
-	if err != nil {
-		return err
-	}
-	values := timoni.Values{}
-	d := json.NewDecoder(strings.NewReader(string(valuesJSON)))
-	// Turn numbers into strings, otherwise the decoder will take ints and turn them into floats
-	d.UseNumber()
-	err = d.Decode(&values)
-	if err != nil {
-		return err
-	}
-	componentTemplate, err := module.NewManager(a.Ctx, component.Name, component.Spec.OCIRepository, component.Spec.OCITag, a.Application.Namespace, "", values.Get())
-	if err != nil {
-		return err
-	}
-	_, err = componentTemplate.Build()
-	if err != nil {
-		return err
-	}
-	err = componentTemplate.Apply()
-	if err != nil {
-		return err
-	}
-	return nil
 }
