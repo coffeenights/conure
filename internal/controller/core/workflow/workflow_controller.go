@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"context"
+	"fmt"
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/controller/core/common"
 	batchv1 "k8s.io/api/batch/v1"
@@ -36,8 +37,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		Namespace: req.Namespace,
 		Name:      wflr.Spec.ApplicationName,
 	}
-	err := r.Get(ctx, nsn, &app)
-	if err != nil {
+	if err := r.Get(ctx, nsn, &app); err != nil {
 		logger.Info("Application resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -46,11 +46,18 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		Namespace: req.Namespace,
 		Name:      wflr.Spec.WorkflowName,
 	}
-	err = r.Get(ctx, nsn, &wflw)
-	if err != nil {
+	if err := r.Get(ctx, nsn, &wflw); err != nil {
 		logger.Info("Workflow resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	if r.isFinished(&wflr) {
+		return ctrl.Result{}, nil
+	}
+
+	actionsHandler := NewActionsHandler(ctx, wflr.Namespace, &wflw, &wflr, r)
+	actions := actionsHandler.GetActions()
+	// Get the last action
+	lastAction := actions[len(actions)-1]
 
 	// Find any action job running
 	var childJobs batchv1.JobList
@@ -58,50 +65,50 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		logger.Error(err, "unable to list child Jobs")
 		return ctrl.Result{}, err
 	}
-	actionsHandler := NewActionsHandler(ctx, wflr.Namespace, &wflw, &wflr, r)
-	actions := actionsHandler.GetActions()
-	// Get the last action
-	lastAction := actions[len(actions)-1]
 	for _, job := range childJobs.Items {
 		labels := job.GetLabels()
-		if labels[conurev1alpha1.WorkflowActionNamelabel] == lastAction.Name {
-			for _, condition := range job.Status.Conditions {
-				if condition.Type == batchv1.JobComplete {
-					err = r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeFinished, metav1.ConditionTrue, conurev1alpha1.FinishedSuccesfullyReason, "Finished")
-					if err != nil {
-						return ctrl.Result{}, err
-					}
-				} else if condition.Type == batchv1.JobFailed {
-					err = r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeFinished, metav1.ConditionFalse, conurev1alpha1.FinishedFailedReason, "Failed")
-					if err != nil {
-						return ctrl.Result{}, err
-					}
-				}
+
+		// If there is still an active job, mark as running and return
+		if job.Status.Active > 0 {
+			message := fmt.Sprintf("Running action %s", job.GetLabels()[conurev1alpha1.WorkflowActionNamelabel])
+			if err := r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeRunningAction, metav1.ConditionTrue, conurev1alpha1.RunningActionReason, message); err != nil {
+				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
 		}
+		for _, condition := range job.Status.Conditions {
+			// If the job is completed, check if it was the last action and set the condition
+			if condition.Type == batchv1.JobComplete && labels[conurev1alpha1.WorkflowActionNamelabel] == lastAction.Name {
+				if err := r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeFinished, metav1.ConditionTrue, conurev1alpha1.FinishedSuccesfullyReason, "Finished"); err != nil {
+					return ctrl.Result{}, err
+				}
+			} else if condition.Type == batchv1.JobFailed {
+				if err := r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeFinished, metav1.ConditionFalse, conurev1alpha1.FinishedFailedReason, "Failed"); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+		}
 	}
 
-	if !r.isFinished(&wflr) {
-		err = r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeRunningAction, metav1.ConditionTrue, conurev1alpha1.RunningActionReason, "Running actions")
+	// If there are no active jobs and the run is not marked as finished, run the actions
+	if !r.isFinished(&wflr) && !r.isRunning(&wflr) {
+		err := r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeRunningAction, metav1.ConditionTrue, conurev1alpha1.RunningActionReason, "Running actions")
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		err = actionsHandler.RunActions()
 		if err != nil {
-			condErr := r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeFinished, metav1.ConditionFalse, conurev1alpha1.FinishedFailedReason, "Failed to run actions")
-			if condErr != nil {
-				logger.Error(condErr, "Failed to set condition")
+			if err = r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeFinished, metav1.ConditionFalse, conurev1alpha1.FinishedFailedReason, "Failed to run actions"); err != nil {
+				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, err
 		}
-		err = r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeFinished, metav1.ConditionTrue, conurev1alpha1.FinishedSuccesfullyReason, "Finished")
-		if err != nil {
-			return ctrl.Result{}, err
-		}
 	}
-
 	return ctrl.Result{}, nil
+}
+
+func (r *WorkflowReconciler) getJobStatus(job *batchv1.Job) {
+
 }
 
 func (r *WorkflowReconciler) setCondition(ctx context.Context, wflr *conurev1alpha1.WorkflowRun, conditionType conurev1alpha1.WorkflowConditionType, status metav1.ConditionStatus, reason conurev1alpha1.WorkflowConditionReason, message string) error {
@@ -115,11 +122,12 @@ func (r *WorkflowReconciler) setCondition(ctx context.Context, wflr *conurev1alp
 }
 
 func (r *WorkflowReconciler) isFinished(wflr *conurev1alpha1.WorkflowRun) bool {
-	index, exists := common.ContainsCondition(wflr.Status.Conditions, conurev1alpha1.ConditionTypeFinished.String())
-	if exists && wflr.Status.Conditions[index].Reason == conurev1alpha1.FinishedSuccesfullyReason.String() {
-		return true
-	}
-	return false
+	_, exists := common.ContainsCondition(wflr.Status.Conditions, conurev1alpha1.ConditionTypeFinished.String())
+	return exists
+}
+func (r *WorkflowReconciler) isRunning(wflr *conurev1alpha1.WorkflowRun) bool {
+	_, exists := common.ContainsCondition(wflr.Status.Conditions, conurev1alpha1.ConditionTypeRunningAction.String())
+	return exists
 }
 
 // SetupWithManager sets up the controller with the Manager.
