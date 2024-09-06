@@ -107,10 +107,6 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	return ctrl.Result{}, nil
 }
 
-func (r *WorkflowReconciler) getJobStatus(job *batchv1.Job) {
-
-}
-
 func (r *WorkflowReconciler) setCondition(ctx context.Context, wflr *conurev1alpha1.WorkflowRun, conditionType conurev1alpha1.WorkflowConditionType, status metav1.ConditionStatus, reason conurev1alpha1.WorkflowConditionReason, message string) error {
 	var newConditions []metav1.Condition
 	wflr.Status.Conditions = common.SetCondition(newConditions, string(conditionType), status, string(reason), message)
