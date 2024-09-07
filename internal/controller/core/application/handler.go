@@ -171,9 +171,9 @@ func (a *ApplicationHandler) updateComponent(component *conurev1alpha1.Component
 				}
 				return err
 			}
-			labels := component.GetLabels()
+			labels := existingComponent.GetLabels()
 			labels[conurev1alpha1.WorkflowRunNamelabel] = wflr.Name
-			component.SetLabels(labels)
+			existingComponent.SetLabels(labels)
 		}
 		existingComponent.Spec = *component.Spec.DeepCopy()
 		if err := a.Reconciler.Update(a.Ctx, existingComponent); err != nil {
