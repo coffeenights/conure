@@ -11,8 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sort"
 	"strings"
 )
 
@@ -21,43 +22,49 @@ type ComponentHandler struct {
 	Reconciler        *ComponentReconciler
 	Ctx               context.Context
 	Logger            logr.Logger
-	ComponentTemplate *module.Manager
+	componentTemplate *module.Manager
 	applySet          []*unstructured.Unstructured
 }
 
-func NewComponentHandler(ctx context.Context, component *conurev1alpha1.Component, reconciler *ComponentReconciler) *ComponentHandler {
-	var handler ComponentHandler
-	handler.Logger = log.FromContext(ctx)
-	handler.Component = component
-	handler.Ctx = ctx
-	handler.Reconciler = reconciler
-	return &handler
-}
-func (c *ComponentHandler) reconcileResources(ctx context.Context, component *conurev1alpha1.Component, namespace string) error {
-	if err := c.renderComponent(ctx, component, namespace); err != nil {
-		return err
-	}
-	var reconcile []*unstructured.Unstructured
-	for _, o := range c.applySet {
-		var existingResource unstructured.Unstructured
-		if err := c.Reconciler.Get(ctx, client.ObjectKey{Namespace: namespace, Name: o.GetName()}, &existingResource); err != nil {
-			if errors.IsNotFound(err) {
-				reconcile = append(reconcile, o)
-			} else if err != nil {
-				return err
-			} else {
-				//if c.hasResourceChanged(o, &existingResource) {
-				//	reconcile = append(reconcile, o)
-				//}
-			}
-		}
-	}
-	return nil
+var orderMap = map[string]int{
+	"Namespace":                1,
+	"ResourceQuota":            2,
+	"LimitRange":               3,
+	"PodSecurityPolicy":        4,
+	"Secret":                   5,
+	"ConfigMap":                6,
+	"StorageClass":             7,
+	"PersistentVolume":         8,
+	"PersistentVolumeClaim":    9,
+	"ServiceAccount":           10,
+	"CustomResourceDefinition": 11,
+	"ClusterRole":              12,
+	"ClusterRoleBinding":       13,
+	"Role":                     14,
+	"RoleBinding":              15,
+	"Service":                  16,
+	"DaemonSet":                17,
+	"Pod":                      18,
+	"ReplicationController":    19,
+	"ReplicaSet":               20,
+	"Deployment":               21,
+	"StatefulSet":              22,
+	"Job":                      23,
+	"CronJob":                  24,
 }
 
-func (c *ComponentHandler) renderComponent(ctx context.Context, component *conurev1alpha1.Component, namespace string) error {
+func NewComponentHandler(ctx context.Context, component *conurev1alpha1.Component, reconciler *ComponentReconciler) *ComponentHandler {
+	return &ComponentHandler{
+		Component:  component,
+		Reconciler: reconciler,
+		Ctx:        ctx,
+		Logger:     log.FromContext(ctx),
+	}
+}
+
+func (c *ComponentHandler) renderComponent() error {
 	// Transform the values to a map
-	valuesJSON, err := json.Marshal(component.Spec.Values)
+	valuesJSON, err := json.Marshal(c.Component.Spec.Values)
 	if err != nil {
 		return err
 	}
@@ -68,31 +75,91 @@ func (c *ComponentHandler) renderComponent(ctx context.Context, component *conur
 	if err = d.Decode(&values); err != nil {
 		return err
 	}
-	componentTemplate, err := module.NewManager(ctx, component.Name, component.Spec.OCIRepository, component.Spec.OCITag, namespace, "", values.Get())
+	c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", values.Get())
 	if err != nil {
 		return err
 	}
-	sets, err := componentTemplate.GetApplySets()
+	sets, err := c.componentTemplate.GetApplySets()
 	if err != nil {
 		return err
 	}
 	for _, set := range sets {
 		for _, o := range set.Objects {
+			hash := common.GetHashForSpec(o.Object["spec"].(map[string]interface{}))
+			labels := common.SetHashToLabels(o.GetLabels(), hash)
+			o.SetLabels(labels)
 			c.applySet = append(c.applySet, o)
 		}
 	}
 	return nil
 }
 
-func (c *ComponentHandler) setConditionReady(ctx context.Context, component *conurev1alpha1.Component, reason conurev1alpha1.ComponentConditionReason, message string) error {
+func (c *ComponentHandler) hasResourceChanged(resource *unstructured.Unstructured) bool {
+	var obj unstructured.Unstructured
+	if err := c.Reconciler.Get(c.Ctx, types.NamespacedName{Namespace: c.Component.Namespace, Name: resource.GetName()}, &obj); err != nil {
+		if errors.IsNotFound(err) {
+			return true
+		}
+	}
+	existingHash := common.GetHashFromLabels(obj.GetLabels())
+	newHash := common.GetHashFromLabels(resource.GetLabels())
+	return existingHash != newHash
+}
+
+func (c *ComponentHandler) setConditionReady(reason conurev1alpha1.ComponentConditionReason, message string) error {
 	status := metav1.ConditionFalse
 	if reason == conurev1alpha1.ComponentReadyRunningReason {
 		status = metav1.ConditionTrue
 	}
-	component.Status.Conditions = common.SetCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String(), status, reason.String(), message)
-	return c.Reconciler.Status().Update(ctx, component)
+	c.Component.Status.Conditions = common.SetCondition(c.Component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String(), status, reason.String(), message)
+	return c.Reconciler.Status().Update(c.Ctx, c.Component)
+}
+
+func (c *ComponentHandler) GetConditionReady() *metav1.Condition {
+	index, exists := common.ContainsCondition(c.Component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String())
+	if exists {
+		return &c.Component.Status.Conditions[index]
+	}
+	return nil
 }
 
 func (c *ComponentHandler) ReconcileComponent() error {
+	if err := c.setConditionReady(conurev1alpha1.ComponentReadyRenderingReason, "Component is being rendered"); err != nil {
+		return err
+	}
+	if err := c.renderComponent(); err != nil {
+		if err = c.setConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, "Component failed to render"); err != nil {
+			return err
+		}
+		return err
+	}
+	if err := c.setConditionReady(conurev1alpha1.ComponentReadyRenderingSucceedReason, "Component rendered successfully"); err != nil {
+		return err
+	}
+
+	return c.applyResources()
+}
+
+func (c *ComponentHandler) applyResources() error {
+	sort.SliceStable(c.applySet, func(i, j int) bool {
+		return orderMap[c.applySet[i].GetKind()] < orderMap[c.applySet[j].GetKind()]
+	})
+	if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingReason, "Deploying Component"); err != nil {
+		return err
+	}
+	for _, resource := range c.applySet {
+		if c.hasResourceChanged(resource) {
+			_, err := c.componentTemplate.ApplyObject(resource, false)
+			if err != nil {
+				if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, "Component failed to deploy"); err != nil {
+					return err
+				}
+				return err
+			}
+		}
+	}
+	if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingSucceedReason, "Component deployed succesfully"); err != nil {
+		return err
+	}
 	return nil
 }
