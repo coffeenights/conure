@@ -3,12 +3,15 @@ package component
 import (
 	"context"
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
+	"github.com/coffeenights/conure/internal/controller/core/common"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"time"
 )
+
+const RequeueAfter = time.Minute * 10
 
 type ComponentReconciler struct {
 	client.Client
@@ -26,17 +29,16 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		logger.Info("Component resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	componentHandler := NewComponentHandler(ctx, &component, r)
-	if err := componentHandler.ReconcileComponent(); err != nil {
-		return ctrl.Result{}, err
+
+	// Reconcile component if is pending deployment, meaning, workflow just finished succesfully
+	index, exists := common.ContainsCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String())
+	if exists && component.Status.Conditions[index].Reason == conurev1alpha1.ComponentReadyPendingReason.String() {
+		componentHandler := NewComponentHandler(ctx, &component, r)
+		if err := componentHandler.ReconcileComponent(); err != nil {
+			return ctrl.Result{}, err
+		}
 	}
-	//index, exists := common.ContainsCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeWorkflow.String())
-	//if exists && component.Status.Conditions[index].Reason == conurev1alpha1.ComponentWorkFlowSucceedReason.String() {
-	//	if err := r.reconcileResources(ctx, &component, req.Namespace); err != nil {
-	//		return ctrl.Result{}, err
-	//	}
-	//}
-	return ctrl.Result{RequeueAfter: time.Minute * 1}, nil
+	return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
