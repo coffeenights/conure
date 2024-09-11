@@ -30,6 +30,17 @@ const (
 	ComponentWorkFlowSucceedReason   ComponentConditionReason = "WorkflowSucceed"
 )
 
+const (
+	ComponentConditionTypeReady          ComponentConditionType   = "Ready"
+	ComponentReadyRenderingReason        ComponentConditionReason = "Rendering"
+	ComponentReadyRenderingFailedReason  ComponentConditionReason = "RenderingFailed"
+	ComponentReadyRenderingSucceedReason ComponentConditionReason = "RenderingSucceed"
+	ComponentReadyDeployingReason        ComponentConditionReason = "Deploying"
+	ComponentReadyDeployingFailedReason  ComponentConditionReason = "DeployingFailed"
+	ComponentReadyDeployingSucceedReason ComponentConditionReason = "DeployingSucceed"
+	ComponentReadyRunningReason          ComponentConditionReason = "Running"
+)
+
 type ComponentSpec struct {
 	ComponentType string `json:"type"`
 	OCIRepository string `json:"ociRepository"`
