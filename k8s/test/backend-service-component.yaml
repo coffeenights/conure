@@ -1,0 +1,46 @@
+apiVersion: core.conure.io/v1alpha1
+kind: Component
+metadata:
+  name: backend-server
+  labels:
+    type: app
+    name: api-server
+    protocol: http
+spec:
+  type: webservice
+  ociRepository: oci://dev.conure.local:5000/components/webservice
+  ociTag: latest
+  values:
+    resources:
+      replicas: 2
+      cpu: "200m"
+      memory: "256Mi"
+    source:
+      sourceType: git
+      gitRepository: https://github.com/coffeenights/conure.git
+      gitBranch: main
+      # ociRepository: oci://dev.conure.local:5000/components/webservice
+      tag: latest
+      buildTool: dockerfile
+      dockerfilePath: cmd/api-server/Dockerfile
+      command:
+        - python
+        - manage.py
+        - runserver
+        - 0.0.0.0:9091
+      workingDir: "/app"
+      imagePullSecretsName: regcred
+    network:
+      type: public
+      exposed: true
+      ports:
+        - hostPort: 9091
+          targetPort: 9091
+          protocol: TCP
+    storage:
+      - size: 2Gi
+        name: temporal
+        mountPath: "/mnt/storage"
+      - size: 3Gi
+        name: cache
+        mountPath: "/mnt/storage2"

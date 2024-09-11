@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/coffeenights/conure/api/vela"
+	"github.com/coffeenights/conure/apis/vela"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/mitchellh/mapstructure"
@@ -17,6 +17,11 @@ import (
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"log"
+)
+
+const (
+	ComponentNameLabel   = "app.oam.dev/component"
+	ApplicationNameLabel = "app.oam.dev/name"
 )
 
 type VelaComponent struct {
@@ -43,17 +48,6 @@ const (
 	StatefulSet WorkloadName = "StatefulSet"
 )
 
-const (
-	ApplicationIDLabel   = "conure.io/application-id"
-	OrganizationIDLabel  = "conure.io/organization-id"
-	EnvironmentLabel     = "conure.io/environment"
-	CreatedByLabel       = "conure.io/created-by"
-	NamespaceLabel       = "conure.io/namespace"
-	ComponentNameLabel   = "app.oam.dev/component"
-	ApplicationNameLabel = "app.oam.dev/name"
-	ComponentIDLabel     = "conure.io/component-id"
-)
-
 type ProviderStatusVela struct {
 	OrganizationID  string
 	ApplicationID   string
@@ -68,8 +62,8 @@ func NewProviderStatusVela(organizationID string, applicationID string, namespac
 		return nil, err
 	}
 	filter := map[string]string{
-		OrganizationIDLabel: organizationID,
-		ApplicationIDLabel:  applicationID,
+		k8sUtils.OrganizationIDLabel: organizationID,
+		k8sUtils.ApplicationIDLabel:  applicationID,
 	}
 
 	velaApplication, err := k8sUtils.GetApplicationByLabels(clientset, namespace, filter)
@@ -89,6 +83,32 @@ func (p *ProviderStatusVela) GetApplicationStatus() (string, error) {
 	return string(p.VelaApplication.Status.Phase), nil
 }
 
+// TODO: Migrate this function to use the dynamic client
+//func (p *ProviderStatusVela) WatchApplicationStatus() error {
+//	clientset, err := k8sUtils.GetClientset()
+//	if err != nil {
+//		return err
+//	}
+//	watchInterface, err := clientset.Vela.CoreV1beta1().Applications(p.Namespace).Watch(context.Background(), metav1.ListOptions{})
+//	if err != nil {
+//		log.Fatalf("Error opening watch: %v", err)
+//	}
+//	defer watchInterface.Stop()
+//	for event := range watchInterface.ResultChan() {
+//		switch event.Type {
+//		case watch.Added:
+//			fmt.Println("Application added:", event.Object)
+//		case watch.Modified:
+//			fmt.Println("Application modified:", event.Object)
+//		case watch.Deleted:
+//			fmt.Println("Application deleted:", event.Object)
+//		case watch.Error:
+//			fmt.Println("Error:", event.Object)
+//		}
+//	}
+//	return nil
+//}
+
 func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*ComponentStatusHealth, error) {
 	comp, err := p.getVelaComponent(componentName)
 	if err != nil {
@@ -99,10 +119,10 @@ func (p *ProviderStatusVela) GetComponentStatus(componentName string) (*Componen
 		return nil, err
 	}
 	labels := map[string]string{
-		ApplicationIDLabel:  p.ApplicationID,
-		OrganizationIDLabel: p.OrganizationID,
-		NamespaceLabel:      p.Namespace,
-		ComponentNameLabel:  comp.ComponentSpec.Name,
+		k8sUtils.ApplicationIDLabel:  p.ApplicationID,
+		k8sUtils.OrganizationIDLabel: p.OrganizationID,
+		k8sUtils.NamespaceLabel:      p.Namespace,
+		ComponentNameLabel:           comp.ComponentSpec.Name,
 	}
 	deployments, err := k8sUtils.GetDeploymentsByLabels(clientset.K8s, p.Namespace, labels)
 	if err != nil {
@@ -168,8 +188,8 @@ func (p *ProviderStatusVela) GetNetworkProperties(componentName string) (*Networ
 		return nil, err
 	}
 	filter := map[string]string{
-		OrganizationIDLabel: p.OrganizationID,
-		ApplicationIDLabel:  p.ApplicationID,
+		k8sUtils.OrganizationIDLabel: p.OrganizationID,
+		k8sUtils.ApplicationIDLabel:  p.ApplicationID,
 	}
 	err = getNetworkPropertiesFromService(clientset, p.Namespace, filter, &properties)
 	if err != nil {
@@ -283,10 +303,10 @@ func (p *ProviderStatusVela) GetActivity(componentID string) error {
 		return err
 	}
 	labels := map[string]string{
-		ApplicationIDLabel:  p.ApplicationID,
-		OrganizationIDLabel: p.OrganizationID,
-		NamespaceLabel:      p.Namespace,
-		ComponentIDLabel:    componentID,
+		k8sUtils.ApplicationIDLabel:  p.ApplicationID,
+		k8sUtils.OrganizationIDLabel: p.OrganizationID,
+		k8sUtils.NamespaceLabel:      p.Namespace,
+		k8sUtils.ComponentIDLabel:    componentID,
 	}
 	deployments, err := k8sUtils.GetDeploymentsByLabels(clientset.K8s, p.Namespace, labels)
 	if err != nil {
@@ -435,9 +455,9 @@ func (p *ProviderDispatcherVela) createNamespace(clientset *k8sUtils.GenericClie
 		ObjectMeta: metav1.ObjectMeta{
 			Name: p.Namespace,
 			Labels: map[string]string{
-				ApplicationIDLabel:  p.ApplicationID,
-				OrganizationIDLabel: p.OrganizationID,
-				EnvironmentLabel:    p.Environment,
+				k8sUtils.ApplicationIDLabel:  p.ApplicationID,
+				k8sUtils.OrganizationIDLabel: p.OrganizationID,
+				k8sUtils.EnvironmentLabel:    p.Environment,
 			},
 		},
 	}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/coffeenights/conure/api/vela"
+	"github.com/coffeenights/conure/apis/vela"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"strings"
 

@@ -6,7 +6,7 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - oam.conure.io
+  - core.conure.io
   resources:
   - applications
   verbs:
@@ -18,13 +18,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - oam.conure.io
+  - core.conure.io
   resources:
   - applications/finalizers
   verbs:
   - update
 - apiGroups:
-  - oam.conure.io
+  - core.conure.io
   resources:
   - applications/status
   verbs:
