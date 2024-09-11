@@ -118,6 +118,9 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.Co
 				if err = a.setConditionWorkflow(&existingComponent, metav1.ConditionTrue, conurev1alpha1.ComponentWorkFlowSucceedReason, fmt.Sprintf("Workflow %s finished", wflr.Name)); err != nil {
 					return err
 				}
+				if err = a.setConditionReady(&existingComponent, conurev1alpha1.ComponentReadyPendingReason, "Component is pending a deployment"); err != nil {
+					return err
+				}
 			} else {
 				a.Logger.Info("Workflow failed", "component", component.Name)
 				if err = a.setConditionWorkflow(&existingComponent, metav1.ConditionFalse, conurev1alpha1.ComponentWorkFlowFailedReason, fmt.Sprintf("Workflow %s failed", wflr.Name)); err != nil {
@@ -259,4 +262,13 @@ func (a *ApplicationHandler) getConditionWorkflow(component *conurev1alpha1.Comp
 		return component.Status.Conditions[index]
 	}
 	return metav1.Condition{}
+}
+
+func (a *ApplicationHandler) setConditionReady(component *conurev1alpha1.Component, reason conurev1alpha1.ComponentConditionReason, message string) error {
+	status := metav1.ConditionFalse
+	if reason == conurev1alpha1.ComponentReadyRunningReason {
+		status = metav1.ConditionTrue
+	}
+	component.Status.Conditions = common.SetCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String(), status, reason.String(), message)
+	return a.Reconciler.Status().Update(a.Ctx, component)
 }

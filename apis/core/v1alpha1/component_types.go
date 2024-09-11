@@ -32,6 +32,7 @@ const (
 
 const (
 	ComponentConditionTypeReady          ComponentConditionType   = "Ready"
+	ComponentReadyPendingReason          ComponentConditionReason = "Pending"
 	ComponentReadyRenderingReason        ComponentConditionReason = "Rendering"
 	ComponentReadyRenderingFailedReason  ComponentConditionReason = "RenderingFailed"
 	ComponentReadyRenderingSucceedReason ComponentConditionReason = "RenderingSucceed"
