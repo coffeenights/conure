@@ -1,3 +1,13 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: certificate-secret
+  namespace: conure-system
+type: Opaque
+data:
+  domain.crt: a=
+  domain.key: a==
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,11 +25,28 @@ spec:
       labels:
         app: registry
     spec:
+      hostname: conure.io
+      subdomain: image-registry
       containers:
       - name: registry
         image: registry:2.8
         ports:
         - containerPort: 5000
+        volumeMounts:
+          - name: certificate-volume
+            mountPath: /etc/certs
+            readOnly: true
+        env:
+          - name: REGISTRY_HTTP_ADDR
+            value: "0.0.0.0:443"
+          - name: REGISTRY_HTTP_TLS_CERTIFICATE
+            value: "/etc/certs/domain.crt"
+          - name: REGISTRY_HTTP_TLS_KEY
+            value: "/etc/certs/domain.key"
+      volumes:
+        - name: certificate-volume
+          secret:
+            secretName: certificate-secret
 ---
 apiVersion: v1
 kind: Service
@@ -35,4 +62,5 @@ spec:
   ports:
   - protocol: TCP
     port: 5000
-    targetPort: 5000
+    targetPort: 443
+---
