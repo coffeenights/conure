@@ -18,7 +18,7 @@ spec:
           dapr.io/app-id: "api-server"
       spec:
         type: webservice
-        ociRepository: oci://dev.conure.local:5000/components/webservice
+        ociRepository: oci://dev.conure.local:30050/components/webservice
         ociTag: latest
         values:
           resources:
@@ -32,11 +32,7 @@ spec:
             tag: latest
             buildTool: dockerfile
             dockerfilePath: Dockerfile
-            command:
-              - python
-              - manage.py
-              - runserver
-              - 0.0.0.0:9091
+            command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9091"]
             workingDir: "/app"
             imagePullSecretsName: regcred
           network:

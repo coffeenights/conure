@@ -1,12 +1,30 @@
 apiVersion: v1
-kind: Secret
+kind: Namespace
 metadata:
-  name: certificate-secret
+  name: conure-system
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: self-signed
   namespace: conure-system
-type: Opaque
-data:
-  domain.crt: a=
-  domain.key: a==
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: registry-tls
+  namespace: conure-system
+spec:
+  dnsNames:
+    - "registry-service.conure-system.svc.cluster.local"
+    - "registry-service.conure-system.svc"
+    - "registry-service.conure-system"
+    - "dev.conure.local"
+  secretName: registry-tls
+  issuerRef:
+    name: self-signed
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -25,8 +43,6 @@ spec:
       labels:
         app: registry
     spec:
-      hostname: conure.io
-      subdomain: image-registry
       containers:
       - name: registry
         image: registry:2.8
@@ -40,13 +56,13 @@ spec:
           - name: REGISTRY_HTTP_ADDR
             value: "0.0.0.0:443"
           - name: REGISTRY_HTTP_TLS_CERTIFICATE
-            value: "/etc/certs/domain.crt"
+            value: "/etc/certs/tls.crt"
           - name: REGISTRY_HTTP_TLS_KEY
-            value: "/etc/certs/domain.key"
+            value: "/etc/certs/tls.key"
       volumes:
         - name: certificate-volume
           secret:
-            secretName: certificate-secret
+            secretName: registry-tls
 ---
 apiVersion: v1
 kind: Service
@@ -58,9 +74,10 @@ metadata:
 spec:
   selector:
     app: registry
-  type: LoadBalancer
+  type: NodePort
   ports:
   - protocol: TCP
     port: 5000
     targetPort: 443
+    nodePort: 30050
 ---

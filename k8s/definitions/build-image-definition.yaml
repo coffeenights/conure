@@ -4,6 +4,6 @@ metadata:
   name: build-image
   namespace: conure-system
 spec:
-  ociRepository: "oci://dev.conure.local:5000/definitions/build-image"
+  ociRepository: "oci://dev.conure.local:30050/definitions/build-image"
   ociTag: "0.0.2"
   configDocs: "https://conure.local"
