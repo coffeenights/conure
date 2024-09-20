@@ -75,7 +75,7 @@ func (c *ComponentHandler) renderComponent() error {
 	if err = d.Decode(&values); err != nil {
 		return err
 	}
-	c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", values.Get())
+	c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, values.Get())
 	if err != nil {
 		return err
 	}

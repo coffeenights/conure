@@ -69,7 +69,7 @@ func (a *ActionsHandler) RunAction(action *coreconureiov1alpha1.Action) error {
 		return err
 	}
 	values["nameSuffix"] = a.ID
-	modManager, err := module.NewManager(a.Ctx, actionDefinition.Name, actionDefinition.Spec.OCIRepository, actionDefinition.Spec.OCITag, a.Namespace, a.OCIRepoCredentials, values.Get())
+	modManager, err := module.NewManager(a.Ctx, actionDefinition.Name, actionDefinition.Spec.OCIRepository, actionDefinition.Spec.OCITag, a.Namespace, a.OCIRepoCredentials, true, values.Get())
 	if err != nil {
 		return err
 	}

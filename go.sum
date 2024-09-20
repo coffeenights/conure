@@ -50,8 +50,8 @@ github.com/chzyer/test v0.0.0-20180213035817-a1ea475d72b1/go.mod h1:Q3SI9o4m/ZMn
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cockroachdb/apd/v3 v3.2.1 h1:U+8j7t0axsIgvQUqthuNm82HIrYXodOV2iWLWtEaIwg=
 github.com/cockroachdb/apd/v3 v3.2.1/go.mod h1:klXJcjp+FffLTHlhIG69tezTDvdP065naDsHzKhYSqc=
-github.com/coffeenights/timoni v0.22.1-0.20240819063302-a1ebf242d16c h1:Pf1q5KEeZTq4P0zMrASgJSRvg84PMsUwXgIsK4NxzTU=
-github.com/coffeenights/timoni v0.22.1-0.20240819063302-a1ebf242d16c/go.mod h1:eHcAf0ygBaNGu4azu+iODD73khJgaBMjyGG6aI3blV0=
+github.com/coffeenights/timoni v0.22.1-0.20240920042704-551a89fbff94 h1:V8+HJ3vzdM7k97ixrVbnfdV4kJkHxiqJBTW6pgJi67A=
+github.com/coffeenights/timoni v0.22.1-0.20240920042704-551a89fbff94/go.mod h1:eHcAf0ygBaNGu4azu+iODD73khJgaBMjyGG6aI3blV0=
 github.com/containerd/stargz-snapshotter/estargz v0.14.3 h1:OqlDCK3ZVUO6C3B/5FSkDwbkEETK84kQgEeFwDC+62k=
 github.com/containerd/stargz-snapshotter/estargz v0.14.3/go.mod h1:KY//uOCIkSuNAHhJogcZtrNHdKrA99/FCCRjE3HD36o=
 github.com/coreos/go-systemd/v22 v22.5.0 h1:RrqgGjYQKalulkV8NGVIfkXQf6YYmOyiJKk8iXXhfZs=

@@ -200,7 +200,7 @@ func (a *ApplicationHandler) setComponentWorkflow(component *conurev1alpha1.Comp
 	if err = d.Decode(&values); err != nil {
 		return err
 	}
-	componentTemplate, err := module.NewManager(a.Ctx, component.Name, component.Spec.OCIRepository, component.Spec.OCITag, a.Application.Namespace, "", values.Get())
+	componentTemplate, err := module.NewManager(a.Ctx, component.Name, component.Spec.OCIRepository, component.Spec.OCITag, a.Application.Namespace, "", true, values.Get())
 	if err != nil {
 		return err
 	}
