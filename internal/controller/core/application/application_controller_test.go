@@ -16,7 +16,6 @@ var _ = Describe("Test Application Controller", func() {
 		ApplicationNamespace = "default"
 		ComponentName        = "test-component"
 		timeout              = time.Second * 20
-		duration             = time.Second * 10
 		interval             = time.Millisecond * 250
 	)
 
@@ -100,6 +99,26 @@ var _ = Describe("Test Application Controller", func() {
 				err := k8sClient.Get(ctx, lk, createdComponent)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
+
+			By("Updating the component status")
+			createdComponent.TypeMeta.APIVersion = conurev1alpha1.GroupVersion.String()
+			createdComponent.TypeMeta.Kind = "Component"
+			createdComponent.Status.Conditions = []v1.Condition{
+				{
+					Type:   conurev1alpha1.ComponentConditionTypeReady.String(),
+					Status: v1.ConditionTrue,
+					Reason: conurev1alpha1.ComponentReadyDeployingReason.String(),
+					LastTransitionTime: v1.Time{
+						Time: time.Now(),
+					},
+					Message: "Test",
+				},
+			}
+			Expect(k8sClient.Status().Update(ctx, createdComponent)).Should(Succeed())
+			//Eventually(func() bool {
+			//	k8sClient.Get(ctx, lk, createdApplication)
+			//	return createdApplication.Status.TotalComponents == 1
+			//}, timeout, interval).Should(BeTrue())
 		})
 	})
 })
