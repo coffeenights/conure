@@ -79,7 +79,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		for _, condition := range job.Status.Conditions {
 			// If the job is completed, check if it was the last action and set the condition
 			if condition.Type == batchv1.JobComplete && labels[conurev1alpha1.WorkflowActionNamelabel] == lastAction.Name {
-				if err := r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeFinished, metav1.ConditionTrue, conurev1alpha1.FinishedSuccesfullyReason, "Finished"); err != nil {
+				if err := r.setCondition(ctx, &wflr, conurev1alpha1.ConditionTypeFinished, metav1.ConditionTrue, conurev1alpha1.FinishedSuccessfullyReason, "Finished"); err != nil {
 					return ctrl.Result{}, err
 				}
 			} else if condition.Type == batchv1.JobFailed {

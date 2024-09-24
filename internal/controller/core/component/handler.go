@@ -75,7 +75,7 @@ func (c *ComponentHandler) renderComponent() error {
 	if err = d.Decode(&values); err != nil {
 		return err
 	}
-	c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", values.Get())
+	c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, values.Get())
 	if err != nil {
 		return err
 	}
@@ -128,8 +128,8 @@ func (c *ComponentHandler) ReconcileComponent() error {
 		return err
 	}
 	if err := c.renderComponent(); err != nil {
-		if err = c.setConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, "Component failed to render"); err != nil {
-			return err
+		if err2 := c.setConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, "Component failed to render"); err2 != nil {
+			return err2
 		}
 		return err
 	}
@@ -151,8 +151,8 @@ func (c *ComponentHandler) applyResources() error {
 		if c.hasResourceChanged(resource) {
 			_, err := c.componentTemplate.ApplyObject(resource, false)
 			if err != nil {
-				if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, "Component failed to deploy"); err != nil {
-					return err
+				if err2 := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, "Component failed to deploy"); err2 != nil {
+					return err2
 				}
 				return err
 			}

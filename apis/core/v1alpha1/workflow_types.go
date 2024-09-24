@@ -28,9 +28,9 @@ const (
 	ConditionTypeFinishedAction WorkflowConditionType   = "FinishedAction"
 	FinishedActionReason        WorkflowConditionReason = "FinishedAction"
 
-	ConditionTypeFinished     WorkflowConditionType   = "Finished"
-	FinishedSuccesfullyReason WorkflowConditionReason = "FinishedSuccesfully"
-	FinishedFailedReason      WorkflowConditionReason = "FinishedFailed"
+	ConditionTypeFinished      WorkflowConditionType   = "Finished"
+	FinishedSuccessfullyReason WorkflowConditionReason = "FinishedSuccessfully"
+	FinishedFailedReason       WorkflowConditionReason = "FinishedFailed"
 )
 
 type Action struct {
