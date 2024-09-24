@@ -191,7 +191,8 @@ func (a *ApplicationHandler) createComponent(component *conurev1alpha1.Component
 	}
 	wflr, err := a.runComponentWorkflow(component)
 	if apierrors.IsNotFound(err) {
-		a.Logger.Info("Workflow run not found", "component", component.Name)
+		a.Logger.Info("Workflow not found", "component", component.Name)
+		return a.Reconciler.Update(a.Ctx, component)
 	} else if err != nil {
 		if err2 := a.setConditionWorkflow(component, metav1.ConditionFalse, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow failed to trigger"); err2 != nil {
 			return err2
