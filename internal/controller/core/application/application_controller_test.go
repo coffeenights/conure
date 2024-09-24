@@ -11,19 +11,23 @@ import (
 )
 
 var _ = Describe("Test Application Controller", func() {
-	const (
-		ApplicationName      = "test-application"
-		ApplicationNamespace = "default"
-		ComponentName        = "test-component"
-		timeout              = time.Second * 20
-		interval             = time.Millisecond * 250
-	)
+	Context("When the application is created", func() {
+		const (
+			ApplicationName      = "test-application"
+			ApplicationNamespace = "default"
+			ComponentName        = "test-component"
+			ComponentType        = "webservice"
+			timeout              = time.Second * 10
+			interval             = time.Millisecond * 250
+		)
+		var (
+			componentValues conurev1alpha1.Values
+			application     *conurev1alpha1.Application
+		)
+		ctx := context.Background()
 
-	Context("Test Application Controller", func() {
-		It("Test Application Controller", func() {
-			By("Creating a new Application resource")
-			ctx := context.Background()
-			componentValues := conurev1alpha1.Values{
+		BeforeEach(func() {
+			componentValues = conurev1alpha1.Values{
 				Resources: conurev1alpha1.Resources{
 					Replicas: 1,
 					CPU:      "200m",
@@ -54,7 +58,7 @@ var _ = Describe("Test Application Controller", func() {
 				Storage:  []conurev1alpha1.Storage{},
 				Advanced: nil,
 			}
-			application := &conurev1alpha1.Application{
+			application = &conurev1alpha1.Application{
 				TypeMeta: v1.TypeMeta{
 					APIVersion: conurev1alpha1.GroupVersion.String(),
 					Kind:       "Application",
@@ -72,7 +76,7 @@ var _ = Describe("Test Application Controller", func() {
 								Annotations: nil,
 							},
 							Spec: conurev1alpha1.ComponentSpec{
-								ComponentType: "webservice",
+								ComponentType: ComponentType,
 								OCIRepository: "oci://dev.conure.local:30050/components/webservice",
 								OCITag:        "latest",
 								Values:        componentValues,
@@ -82,43 +86,62 @@ var _ = Describe("Test Application Controller", func() {
 				},
 				Status: conurev1alpha1.ApplicationStatus{},
 			}
-			Expect(k8sClient.Create(ctx, application)).Should(Succeed())
+		})
 
-			By("Retrieving the created Application resource")
+		It("creates an application in k8s", func() {
+			Expect(k8sClient.Create(ctx, application)).Should(Succeed())
 			createdApplication := &conurev1alpha1.Application{}
 			lk := types.NamespacedName{Name: ApplicationName, Namespace: ApplicationNamespace}
 			Eventually(func() bool {
 				err := k8sClient.Get(ctx, lk, createdApplication)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
-
-			By("Waiting for the component to be created")
+		})
+		It("creates a component in k8s", func() {
 			createdComponent := &conurev1alpha1.Component{}
-			lk = types.NamespacedName{Name: ComponentName, Namespace: ApplicationNamespace}
 			Eventually(func() bool {
+				lk := types.NamespacedName{Name: ComponentName, Namespace: ApplicationNamespace}
 				err := k8sClient.Get(ctx, lk, createdComponent)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
-
-			By("Updating the component status")
-			createdComponent.TypeMeta.APIVersion = conurev1alpha1.GroupVersion.String()
-			createdComponent.TypeMeta.Kind = "Component"
-			createdComponent.Status.Conditions = []v1.Condition{
-				{
-					Type:   conurev1alpha1.ComponentConditionTypeReady.String(),
-					Status: v1.ConditionTrue,
-					Reason: conurev1alpha1.ComponentReadyDeployingReason.String(),
-					LastTransitionTime: v1.Time{
-						Time: time.Now(),
-					},
-					Message: "Test",
-				},
-			}
-			Expect(k8sClient.Status().Update(ctx, createdComponent)).Should(Succeed())
-			//Eventually(func() bool {
-			//	k8sClient.Get(ctx, lk, createdApplication)
-			//	return createdApplication.Status.TotalComponents == 1
-			//}, timeout, interval).Should(BeTrue())
 		})
+		It("creates a workflow in k8s", func() {
+			createdWorkflow := &conurev1alpha1.Workflow{}
+			Eventually(func() bool {
+				lk := types.NamespacedName{Name: ComponentType, Namespace: ApplicationNamespace}
+				err := k8sClient.Get(ctx, lk, createdWorkflow)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+		})
+
+		//By("Updating the component status")
+		//createdComponent.TypeMeta.APIVersion = conurev1alpha1.GroupVersion.String()
+		//createdComponent.TypeMeta.Kind = "Component"
+		//createdComponent.Status.Conditions = []v1.Condition{
+		//	{
+		//		Type:   conurev1alpha1.ComponentConditionTypeReady.String(),
+		//		Status: v1.ConditionTrue,
+		//		Reason: conurev1alpha1.ComponentReadyDeployingReason.String(),
+		//		LastTransitionTime: v1.Time{
+		//			Time: time.Now(),
+		//		},
+		//		Message: "Test",
+		//	},
+		//}
+		//Expect(k8sClient.Status().Update(ctx, createdComponent)).Should(Succeed())
+		//
+		//Eventually(func() bool {
+		//	var wflw conurev1alpha1.Workflow
+		//	lk = types.NamespacedName{Name: createdComponent.Spec.ComponentType, Namespace: ApplicationNamespace}
+		//	err := k8sClient.Get(ctx, lk, &wflw)
+		//	return err == nil
+		//}, timeout, interval).Should(BeTrue())
+		//
+		//Eventually(func() bool {
+		//	lk = types.NamespacedName{Name: ApplicationName, Namespace: ApplicationNamespace}
+		//	k8sClient.Get(ctx, lk, createdApplication)
+		//	return createdApplication.Status.TotalComponents == 1
+		//}, timeout, interval).Should(BeTrue())
+		//})
 	})
 })
