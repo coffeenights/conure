@@ -8,6 +8,7 @@ import (
 const ComponentKind = "Component"
 const (
 	WorkflowRunNamelabel = "conure.io/workflow-run-name"
+	ApplySetsAnnotation  = "conure.io/apply-sets"
 )
 
 type ComponentConditionType string

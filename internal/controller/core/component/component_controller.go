@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-const RequeueAfter = time.Minute * 10
+const RequeueAfter = time.Minute * 3
 
 type ComponentReconciler struct {
 	client.Client
@@ -30,11 +30,16 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Reconcile component if is pending deployment, meaning, workflow just finished succesfully
+	// Reconcile deployed objects
+	componentHandler := NewComponentHandler(ctx, &component, r)
+	if err := componentHandler.ReconcileDeployedObjects(); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Reconcile component if it is pending deployment, meaning, workflow just finished succesfully
 	index, exists := common.ContainsCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String())
 	if exists && component.Status.Conditions[index].Reason == conurev1alpha1.ComponentReadyPendingReason.String() {
-		componentHandler := NewComponentHandler(ctx, &component, r)
-		if err := componentHandler.ReconcileComponent(); err != nil {
+		if err := componentHandler.RenderComponent(); err != nil {
 			return ctrl.Result{}, err
 		}
 	}

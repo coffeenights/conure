@@ -1,17 +1,22 @@
 package component
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/controller/core/common"
 	"github.com/coffeenights/conure/internal/timoni"
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
+	"io"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sort"
 	"strings"
@@ -70,6 +75,7 @@ func (c *ComponentHandler) renderComponent() error {
 	}
 	values := timoni.Values{}
 	d := json.NewDecoder(strings.NewReader(string(valuesJSON)))
+
 	// Turn numbers into strings, otherwise the decoder will take ints and turn them into floats
 	d.UseNumber()
 	if err = d.Decode(&values); err != nil {
@@ -83,6 +89,8 @@ func (c *ComponentHandler) renderComponent() error {
 	if err != nil {
 		return err
 	}
+
+	// Add the spec hashes to every object and add them to the apply set
 	for _, set := range sets {
 		for _, o := range set.Objects {
 			hash := common.GetHashForSpec(o.Object["spec"].(map[string]interface{}))
@@ -91,17 +99,49 @@ func (c *ComponentHandler) renderComponent() error {
 			c.applySet = append(c.applySet, o)
 		}
 	}
+	// Compress, encode and add the sets to the component annotations
+	setsJSON, err := c.componentTemplate.MarshalApplySets(sets)
+	if err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	gzipWriter := gzip.NewWriter(&buf)
+	_, err = gzipWriter.Write(setsJSON)
+	if err != nil {
+		return err
+	}
+	if err = gzipWriter.Close(); err != nil {
+		return err
+	}
+	compressedData := buf.Bytes()
+	setsBase64 := base64.StdEncoding.EncodeToString(compressedData)
+	// Create a patch with the new annotations
+	c.Component.Annotations[conurev1alpha1.ApplySetsAnnotation] = setsBase64
+	patch := map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"annotations": c.Component.GetAnnotations(),
+		},
+	}
+	patchBytes, err := json.Marshal(patch)
+	if err != nil {
+		return err
+	}
+	if err = c.Reconciler.Patch(c.Ctx, c.Component, client.RawPatch(types.MergePatchType, patchBytes)); err != nil {
+		return err
+	}
 	return nil
 }
 
 func (c *ComponentHandler) hasResourceChanged(resource *unstructured.Unstructured) bool {
 	var obj unstructured.Unstructured
+	obj.SetKind(resource.GetKind())
+	obj.SetAPIVersion(resource.GetAPIVersion())
 	if err := c.Reconciler.Get(c.Ctx, types.NamespacedName{Namespace: c.Component.Namespace, Name: resource.GetName()}, &obj); err != nil {
 		if errors.IsNotFound(err) {
 			return true
 		}
 	}
-	existingHash := common.GetHashFromLabels(obj.GetLabels())
+	existingHash := common.GetHashForSpec(obj.Object["spec"].(map[string]interface{}))
 	newHash := common.GetHashFromLabels(resource.GetLabels())
 	return existingHash != newHash
 }
@@ -123,7 +163,7 @@ func (c *ComponentHandler) GetConditionReady() *metav1.Condition {
 	return nil
 }
 
-func (c *ComponentHandler) ReconcileComponent() error {
+func (c *ComponentHandler) RenderComponent() error {
 	if err := c.setConditionReady(conurev1alpha1.ComponentReadyRenderingReason, "Component is being rendered"); err != nil {
 		return err
 	}
@@ -136,19 +176,19 @@ func (c *ComponentHandler) ReconcileComponent() error {
 	if err := c.setConditionReady(conurev1alpha1.ComponentReadyRenderingSucceedReason, "Component rendered successfully"); err != nil {
 		return err
 	}
-
 	return c.applyResources()
 }
 
+// applyResources applies the resources in the applySet to the cluster only if they have changed since the last apply or if they are new
 func (c *ComponentHandler) applyResources() error {
 	sort.SliceStable(c.applySet, func(i, j int) bool {
 		return orderMap[c.applySet[i].GetKind()] < orderMap[c.applySet[j].GetKind()]
 	})
-	if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingReason, "Deploying Component"); err != nil {
-		return err
-	}
 	for _, resource := range c.applySet {
 		if c.hasResourceChanged(resource) {
+			if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingReason, "Deploying Component"); err != nil {
+				return err
+			}
 			_, err := c.componentTemplate.ApplyObject(resource, false)
 			if err != nil {
 				if err2 := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, "Component failed to deploy"); err2 != nil {
@@ -161,5 +201,38 @@ func (c *ComponentHandler) applyResources() error {
 	if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingSucceedReason, "Component deployed succesfully"); err != nil {
 		return err
 	}
+	// Clear the apply set
+	c.applySet = nil
 	return nil
+}
+
+func (c *ComponentHandler) ReconcileDeployedObjects() error {
+	annotations := c.Component.GetAnnotations()
+	if annotations[conurev1alpha1.ApplySetsAnnotation] != "" {
+		decoded, err := base64.StdEncoding.DecodeString(annotations[conurev1alpha1.ApplySetsAnnotation])
+		if err != nil {
+			return err
+		}
+		reader, err := gzip.NewReader(bytes.NewReader(decoded))
+		if err != nil {
+			return err
+		}
+		defer reader.Close()
+
+		setsJSON, err := io.ReadAll(reader)
+		if err != nil {
+			return err
+		}
+		sets, err := c.componentTemplate.UnmarshalApplySets(setsJSON)
+		if err != nil {
+			return err
+		}
+		for _, set := range sets {
+			c.applySet = append(c.applySet, set.Objects...)
+		}
+	}
+	if c.applySet == nil {
+		return nil
+	}
+	return c.applyResources()
 }
