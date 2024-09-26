@@ -229,4 +229,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/stefanprodan/timoni v0.22.0 => github.com/coffeenights/timoni v0.22.1-0.20240920042704-551a89fbff94
+replace github.com/stefanprodan/timoni v0.22.0 => github.com/coffeenights/timoni v0.22.1-0.20240926061352-26cc8eb619c4
