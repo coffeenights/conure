@@ -12,7 +12,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
 	"io"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -29,6 +28,7 @@ type ComponentHandler struct {
 	Logger            logr.Logger
 	componentTemplate *module.Manager
 	applySet          []*unstructured.Unstructured
+	appliedSet        []*unstructured.Unstructured
 }
 
 var orderMap = map[string]int{
@@ -132,27 +132,13 @@ func (c *ComponentHandler) renderComponent() error {
 	return nil
 }
 
-func (c *ComponentHandler) hasResourceChanged(resource *unstructured.Unstructured) bool {
-	var obj unstructured.Unstructured
-	obj.SetKind(resource.GetKind())
-	obj.SetAPIVersion(resource.GetAPIVersion())
-	if err := c.Reconciler.Get(c.Ctx, types.NamespacedName{Namespace: c.Component.Namespace, Name: resource.GetName()}, &obj); err != nil {
-		if errors.IsNotFound(err) {
-			return true
-		}
-	}
-	existingHash := common.GetHashForSpec(obj.Object["spec"].(map[string]interface{}))
-	newHash := common.GetHashFromLabels(resource.GetLabels())
-	return existingHash != newHash
-}
-
 func (c *ComponentHandler) setConditionReady(reason conurev1alpha1.ComponentConditionReason, message string) error {
 	status := metav1.ConditionFalse
 	if reason == conurev1alpha1.ComponentReadyRunningReason {
 		status = metav1.ConditionTrue
 	}
 	c.Component.Status.Conditions = common.SetCondition(c.Component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String(), status, reason.String(), message)
-	return c.Reconciler.Status().Update(c.Ctx, c.Component)
+	return common.ApplyStatus(c.Ctx, c.Component, c.Reconciler.Client)
 }
 
 func (c *ComponentHandler) GetConditionReady() *metav1.Condition {
@@ -179,23 +165,19 @@ func (c *ComponentHandler) RenderComponent() error {
 	return c.applyResources()
 }
 
-// applyResources applies the resources in the applySet to the cluster only if they have changed since the last apply or if they are new
+// applyResources applies the resources in the applySet to the cluster only if they have changed since the last apply or if they are new.
+// The configuration drift detection is done by the fluxcd/pkg/ssa package.
 func (c *ComponentHandler) applyResources() error {
 	sort.SliceStable(c.applySet, func(i, j int) bool {
 		return orderMap[c.applySet[i].GetKind()] < orderMap[c.applySet[j].GetKind()]
 	})
 	for _, resource := range c.applySet {
-		if c.hasResourceChanged(resource) {
-			if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingReason, "Deploying Component"); err != nil {
-				return err
+		_, err := c.componentTemplate.ApplyObject(resource, false)
+		if err != nil {
+			if err2 := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, "Component failed to deploy"); err2 != nil {
+				return err2
 			}
-			_, err := c.componentTemplate.ApplyObject(resource, false)
-			if err != nil {
-				if err2 := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, "Component failed to deploy"); err2 != nil {
-					return err2
-				}
-				return err
-			}
+			return err
 		}
 	}
 	if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingSucceedReason, "Component deployed succesfully"); err != nil {
@@ -234,5 +216,10 @@ func (c *ComponentHandler) ReconcileDeployedObjects() error {
 	if c.applySet == nil {
 		return nil
 	}
+	manager, err := module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, map[string]interface{}{})
+	if err != nil {
+		return err
+	}
+	c.componentTemplate = manager
 	return c.applyResources()
 }
