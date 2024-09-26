@@ -96,7 +96,7 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.Co
 	} else if err != nil {
 		return err
 	}
-	fmt.Println()
+
 	// If the component exists, update it
 	if err = a.updateComponent(&component, &existingComponent, specHashTarget); err != nil {
 		return err
