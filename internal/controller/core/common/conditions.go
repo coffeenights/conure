@@ -1,7 +1,10 @@
 package common
 
 import (
+	"context"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/util/retry"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
 )
 
@@ -32,4 +35,20 @@ func SetCondition(conditions []metav1.Condition, conditionType string, status me
 		conditions = append(conditions, condition)
 	}
 	return conditions
+}
+
+// ApplyStatus updates the status of the object with the latest generation to prevent.
+func ApplyStatus(ctx context.Context, object client.Object, restClient client.Client) error {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		newObject := object.DeepCopyObject().(client.Object)
+		if err := restClient.Get(ctx, client.ObjectKey{Namespace: object.GetNamespace(), Name: object.GetName()}, newObject); err != nil {
+			return err
+		}
+		object.SetResourceVersion(newObject.GetResourceVersion())
+		return restClient.Status().Update(ctx, object)
+	})
+	if err != nil {
+		return err
+	}
+	return nil
 }

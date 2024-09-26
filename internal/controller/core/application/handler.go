@@ -50,11 +50,10 @@ func (a *ApplicationHandler) ReconcileComponents() error {
 	}
 	a.Application.Status.ReadyComponents = readyComponents
 	a.Application.Status.TotalComponents = len(a.Application.Spec.Components)
-	return a.Reconciler.Status().Update(a.Ctx, a.Application)
+	return common.ApplyStatus(a.Ctx, a.Application, a.Reconciler.Client)
 }
 
 func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.ComponentTemplate) error {
-	a.Logger.Info("Reconciling component", "component", componentTemp.Name)
 	var (
 		wflr              conurev1alpha1.WorkflowRun
 		component         conurev1alpha1.Component
@@ -145,7 +144,6 @@ func (a *ApplicationHandler) updateWorkflowRunConditions(wflr *conurev1alpha1.Wo
 	index, exists := common.ContainsCondition(wflr.Status.Conditions, conurev1alpha1.ConditionTypeRunningAction.String())
 	if exists {
 		if wflr.Status.Conditions[index].Status == metav1.ConditionTrue {
-			a.Logger.Info("Workflow is running, skipping the component", "component", existingComponent.Name)
 			if err := a.setConditionWorkflow(existingComponent, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowRunningReason, fmt.Sprintf("Workflow %s is running", wflr.Name)); err != nil {
 				return err
 			}
@@ -181,9 +179,6 @@ func (a *ApplicationHandler) createComponent(component *conurev1alpha1.Component
 		return err
 	}
 	if err := a.setComponentWorkflow(component); err != nil {
-		return err
-	}
-	if err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: component.Name}, component); err != nil {
 		return err
 	}
 	if err := a.setConditionWorkflow(component, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow was triggered"); err != nil {
@@ -305,17 +300,9 @@ func (a *ApplicationHandler) runComponentWorkflow(component *conurev1alpha1.Comp
 	return &workflowRun, nil
 }
 
-func (a *ApplicationHandler) isComponentReady(component *conurev1alpha1.Component) bool {
-	index, exists := common.ContainsCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String())
-	if !exists {
-		return false
-	}
-	return component.Status.Conditions[index].Status == metav1.ConditionTrue && component.Status.Conditions[index].Reason == conurev1alpha1.ComponentReadyRunningReason.String()
-}
-
 func (a *ApplicationHandler) setConditionWorkflow(component *conurev1alpha1.Component, status metav1.ConditionStatus, reason conurev1alpha1.ComponentConditionReason, message string) error {
 	component.Status.Conditions = common.SetCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeWorkflow.String(), status, reason.String(), message)
-	return a.Reconciler.Status().Update(a.Ctx, component)
+	return common.ApplyStatus(a.Ctx, component, a.Reconciler.Client)
 }
 
 func (a *ApplicationHandler) getConditionWorkflow(component *conurev1alpha1.Component) metav1.Condition {
@@ -340,22 +327,22 @@ func (a *ApplicationHandler) setConditionReady(component *conurev1alpha1.Compone
 		status = metav1.ConditionTrue
 	}
 	component.Status.Conditions = common.SetCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String(), status, reason.String(), message)
-	return a.Reconciler.Status().Update(a.Ctx, component)
+	return common.ApplyStatus(a.Ctx, component, a.Reconciler.Client)
 }
 
 func (a *ApplicationHandler) setRenderingComponentStatus(componentName string) error {
 	message := fmt.Sprintf("Component %s is being rendered", componentName)
 	a.Application.Status.Conditions = common.SetCondition(a.Application.Status.Conditions, conurev1alpha1.ApplicationConditionTypeStatus.String(), metav1.ConditionTrue, conurev1alpha1.ApplicationStatusReasonRendering.String(), message)
-	return a.Reconciler.Status().Update(a.Ctx, a.Application)
+	return common.ApplyStatus(a.Ctx, a.Application, a.Reconciler.Client)
 }
 
 func (a *ApplicationHandler) setRenderingComponentFailedStatus(componentName string) error {
 	message := fmt.Sprintf("Component %s failed to render", componentName)
 	a.Application.Status.Conditions = common.SetCondition(a.Application.Status.Conditions, conurev1alpha1.ApplicationConditionTypeStatus.String(), metav1.ConditionFalse, conurev1alpha1.ApplicationStatusReasonRenderingFailed.String(), message)
-	return a.Reconciler.Status().Update(a.Ctx, a.Application)
+	return common.ApplyStatus(a.Ctx, a.Application, a.Reconciler.Client)
 }
 
 func (a *ApplicationHandler) setDeployedStatus() error {
 	a.Application.Status.Conditions = common.SetCondition(a.Application.Status.Conditions, conurev1alpha1.ApplicationConditionTypeStatus.String(), metav1.ConditionTrue, conurev1alpha1.ApplicationStatusReasonDeployed.String(), "Components have been rendered and deployed")
-	return a.Reconciler.Status().Update(a.Ctx, a.Application)
+	return common.ApplyStatus(a.Ctx, a.Application, a.Reconciler.Client)
 }

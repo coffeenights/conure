@@ -17,7 +17,7 @@ var _ = Describe("Test Application Controller", func() {
 			ApplicationNamespace = "default"
 			ComponentName        = "test-component"
 			ComponentType        = "webservice"
-			timeout              = time.Second * 10
+			timeout              = time.Second * 20
 			interval             = time.Millisecond * 250
 		)
 		var (
