@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"github.com/coffeenights/conure/internal/controller/core"
+	"go.uber.org/zap/zapcore"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -71,6 +72,7 @@ func main() {
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	opts := zap.Options{
 		Development: true,
+		Level:       zapcore.Level(-5),
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
