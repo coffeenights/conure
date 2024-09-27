@@ -137,6 +137,10 @@ func (c *ComponentHandler) setConditionReady(reason conurev1alpha1.ComponentCond
 	if reason == conurev1alpha1.ComponentReadyRunningReason {
 		status = metav1.ConditionTrue
 	}
+	currentCondition := c.GetConditionReady()
+	if currentCondition != nil && currentCondition.Status == status && currentCondition.Reason == string(reason) && currentCondition.Message == message {
+		return nil
+	}
 	c.Component.Status.Conditions = common.SetCondition(c.Component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String(), status, reason.String(), message)
 	return common.ApplyStatus(c.Ctx, c.Component, c.Reconciler.Client)
 }
@@ -179,9 +183,6 @@ func (c *ComponentHandler) applyResources() error {
 			}
 			return err
 		}
-	}
-	if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingSucceedReason, "Component deployed succesfully"); err != nil {
-		return err
 	}
 	// Clear the apply set
 	c.applySet = nil
