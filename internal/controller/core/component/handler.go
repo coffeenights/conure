@@ -28,7 +28,6 @@ type ComponentHandler struct {
 	Logger            logr.Logger
 	componentTemplate *module.Manager
 	applySet          []*unstructured.Unstructured
-	appliedSet        []*unstructured.Unstructured
 }
 
 var orderMap = map[string]int{
