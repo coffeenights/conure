@@ -29,7 +29,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	var wflr conurev1alpha1.WorkflowRun
 	if err := r.Get(ctx, req.NamespacedName, &wflr); err != nil {
-		logger.Info("WorkflowRun resource not found.")
+		logger.V(1).Info("WorkflowRun resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	var app conurev1alpha1.Application
@@ -38,7 +38,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		Name:      wflr.Spec.ApplicationName,
 	}
 	if err := r.Get(ctx, nsn, &app); err != nil {
-		logger.Info("Application resource not found.")
+		logger.V(1).Info("Application resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	var wflw conurev1alpha1.Workflow
@@ -47,7 +47,7 @@ func (r *WorkflowReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		Name:      wflr.Spec.WorkflowName,
 	}
 	if err := r.Get(ctx, nsn, &wflw); err != nil {
-		logger.Info("Workflow resource not found.")
+		logger.V(1).Info("Workflow resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	if r.isFinished(&wflr) {

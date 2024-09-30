@@ -24,7 +24,7 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	logger := log.FromContext(ctx)
 	var application conurev1alpha1.Application
 	if err := r.Get(ctx, req.NamespacedName, &application); err != nil {
-		logger.Info("Application resource not found.")
+		logger.V(1).Info("Application resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 

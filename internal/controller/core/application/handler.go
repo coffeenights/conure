@@ -108,7 +108,7 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.Co
 		wflrName := existingComponent.ObjectMeta.Labels[conurev1alpha1.WorkflowRunNamelabel]
 		err = a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: wflrName}, &wflr)
 		if apierrors.IsNotFound(err) {
-			a.Logger.Info("Workflow run not found", "component", component.Name)
+			a.Logger.V(1).Info("Workflow run not found", "component", component.Name)
 		} else if err != nil {
 			return err
 		} else {
@@ -148,7 +148,7 @@ func (a *ApplicationHandler) updateWorkflowRunConditions(wflr *conurev1alpha1.Wo
 				return err
 			}
 		} else {
-			a.Logger.Info("Workflow failed", "component", existingComponent.Name)
+			a.Logger.V(1).Info("Workflow failed", "component", existingComponent.Name)
 			if err := a.setConditionWorkflow(existingComponent, metav1.ConditionFalse, conurev1alpha1.ComponentWorkFlowFailedReason, fmt.Sprintf("Workflow %s failed", wflr.Name)); err != nil {
 				return err
 			}
@@ -157,7 +157,7 @@ func (a *ApplicationHandler) updateWorkflowRunConditions(wflr *conurev1alpha1.Wo
 	index, exists = common.ContainsCondition(wflr.Status.Conditions, conurev1alpha1.ConditionTypeFinished.String())
 	if exists {
 		if wflr.Status.Conditions[index].Status == metav1.ConditionTrue {
-			a.Logger.Info("Workflow finished", "component", existingComponent.Name)
+			a.Logger.V(1).Info("Workflow finished", "component", existingComponent.Name)
 			if err := a.setConditionWorkflow(existingComponent, metav1.ConditionTrue, conurev1alpha1.ComponentWorkFlowSucceedReason, fmt.Sprintf("Workflow %s finished", wflr.Name)); err != nil {
 				return err
 			}
@@ -165,7 +165,7 @@ func (a *ApplicationHandler) updateWorkflowRunConditions(wflr *conurev1alpha1.Wo
 				return err
 			}
 		} else {
-			a.Logger.Info("Workflow failed", "component", existingComponent.Name)
+			a.Logger.V(1).Info("Workflow failed", "component", existingComponent.Name)
 			if err := a.setConditionWorkflow(existingComponent, metav1.ConditionFalse, conurev1alpha1.ComponentWorkFlowFailedReason, fmt.Sprintf("Workflow %s failed", wflr.Name)); err != nil {
 				return err
 			}
@@ -186,7 +186,7 @@ func (a *ApplicationHandler) createComponent(component *conurev1alpha1.Component
 	}
 	wflr, err := a.runComponentWorkflow(component)
 	if apierrors.IsNotFound(err) {
-		a.Logger.Info("Workflow not found", "component", component.Name)
+		a.Logger.V(1).Info("Workflow not found", "component", component.Name)
 		return a.Reconciler.Update(a.Ctx, component)
 	} else if err != nil {
 		if err2 := a.setConditionWorkflow(component, metav1.ConditionFalse, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow failed to trigger"); err2 != nil {
@@ -204,7 +204,7 @@ func (a *ApplicationHandler) updateComponent(component *conurev1alpha1.Component
 	// Check differences between the existing component and the new component
 	specHashActual := common.GetHashForSpec(existingComponent.Spec)
 	if specHashActual != targetHash {
-		a.Logger.Info("Updating component", "component", component.Name)
+		a.Logger.V(1).Info("Updating component", "component", component.Name)
 		// Run workflow if the source has changed
 		if !reflect.DeepEqual(existingComponent.Spec.Values.Source, component.Spec.Values.Source) {
 			if err := a.setRenderingComponentStatus(component.Name); err != nil {

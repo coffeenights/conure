@@ -26,7 +26,7 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	logger := log.FromContext(ctx)
 	var component conurev1alpha1.Component
 	if err := r.Get(ctx, req.NamespacedName, &component); err != nil {
-		logger.Info("Component resource not found.")
+		logger.V(1).Info("Component resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 

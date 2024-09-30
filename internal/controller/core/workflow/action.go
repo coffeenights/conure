@@ -57,13 +57,13 @@ func (a *ActionsHandler) RunActions() error {
 
 func (a *ActionsHandler) RunAction(action *coreconureiov1alpha1.Action) error {
 	logger := log.FromContext(a.Ctx)
-	logger.Info("Retrieving action definition", "action", action.Type)
+	logger.V(1).Info("Retrieving action definition", "action", action.Type)
 	var actionDefinition coreconureiov1alpha1.ActionDefinition
 	err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: ConureSystemNamespace, Name: action.Type}, &actionDefinition)
 	if err != nil {
 		return err
 	}
-	logger.Info("Running action", "action", action.Name)
+	logger.V(1).Info("Running action", "action", action.Name)
 	values := timoni.Values{}
 	if err = values.ExtractFromRawExtension(action.Values); err != nil {
 		return err
