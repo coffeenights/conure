@@ -1,8 +1,6 @@
 module github.com/coffeenights/conure
 
-go 1.22.0
-
-toolchain go1.22.4
+go 1.22.7
 
 require (
 	github.com/gin-contrib/cors v1.5.0
@@ -229,4 +227,4 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/stefanprodan/timoni v0.22.0 => github.com/coffeenights/timoni v0.22.1-0.20240926061352-26cc8eb619c4
+replace github.com/stefanprodan/timoni v0.22.0 => github.com/coffeenights/timoni v0.22.1-0.20240930064514-248dbc96c525
