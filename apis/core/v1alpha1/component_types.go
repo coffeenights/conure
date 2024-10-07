@@ -8,6 +8,7 @@ import (
 const ComponentKind = "Component"
 const (
 	WorkflowRunNamelabel = "conure.io/workflow-run-name"
+	ApplySetsAnnotation  = "conure.io/apply-sets"
 )
 
 type ComponentConditionType string
@@ -28,6 +29,18 @@ const (
 	ComponentWorkflowRunningReason   ComponentConditionReason = "WorkflowRunning"
 	ComponentWorkFlowFailedReason    ComponentConditionReason = "WorkflowFailed"
 	ComponentWorkFlowSucceedReason   ComponentConditionReason = "WorkflowSucceed"
+)
+
+const (
+	ComponentConditionTypeReady          ComponentConditionType   = "Ready"
+	ComponentReadyPendingReason          ComponentConditionReason = "Pending"
+	ComponentReadyRenderingReason        ComponentConditionReason = "Rendering"
+	ComponentReadyRenderingFailedReason  ComponentConditionReason = "RenderingFailed"
+	ComponentReadyRenderingSucceedReason ComponentConditionReason = "RenderingSucceed"
+	ComponentReadyDeployingReason        ComponentConditionReason = "Deploying"
+	ComponentReadyDeployingFailedReason  ComponentConditionReason = "DeployingFailed"
+	ComponentReadyDeployingSucceedReason ComponentConditionReason = "DeployingSucceed"
+	ComponentReadyRunningReason          ComponentConditionReason = "Running"
 )
 
 type ComponentSpec struct {

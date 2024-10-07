@@ -4,15 +4,42 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type ApplicationConditionType string
+
+func (t ApplicationConditionType) String() string {
+	return string(t)
+}
+
+type ApplicationConditionReason string
+
+func (t ApplicationConditionReason) String() string {
+	return string(t)
+}
+
+const (
+	ApplicationConditionTypeStatus         ApplicationConditionType   = "Status"
+	ApplicationStatusReasonRendering       ApplicationConditionReason = "RenderingComponent"
+	ApplicationStatusReasonRenderingFailed ApplicationConditionReason = "RenderingComponentFailed"
+	ApplicationStatusReasonDeployed        ApplicationConditionReason = "Deployed"
+)
+
 // ApplicationSpec defines the desired state of Application
 type ApplicationSpec struct {
 	Components []ComponentTemplate `json:"components"`
 }
 
+type ApplicationComponentStatus struct {
+	ComponentName string                   `json:"componentName"`
+	ComponentType string                   `json:"componentType"`
+	Reason        ComponentConditionReason `json:"reason"`
+}
+
 // ApplicationStatus defines the observed state of Application
 type ApplicationStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	Conditions      []metav1.Condition           `json:"conditions,omitempty"`
+	Components      []ApplicationComponentStatus `json:"components,omitempty"`
+	ReadyComponents int                          `json:"readyComponents,omitempty"`
+	TotalComponents int                          `json:"totalComponents,omitempty"`
 }
 
 //+kubebuilder:object:root=true

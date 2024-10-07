@@ -4,6 +4,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+const (
+	WorkflowActionNamelabel = "conure.io/workflow-action-name"
+)
+
 // ActionDefinitionSpec defines the desired state of ActionDefinition
 type ActionDefinitionSpec struct {
 	OCIRepository string `json:"ociRepository"`

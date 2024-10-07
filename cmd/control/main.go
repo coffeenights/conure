@@ -20,6 +20,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"github.com/coffeenights/conure/internal/controller/core"
+	"go.uber.org/zap/zapcore"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -58,6 +59,8 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var enableDevelopment bool
+	var logLevel int
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -69,11 +72,14 @@ func main() {
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.BoolVar(&enableDevelopment, "development", false, "Enable development mode")
+	flag.IntVar(&logLevel, "log-level", 0, "Log level: 0 - info, 1 - debug, 5 - Reconciler debug")
+	flag.Parse()
 	opts := zap.Options{
-		Development: true,
+		Development: enableDevelopment,
+		Level:       zapcore.Level(-logLevel),
 	}
 	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 

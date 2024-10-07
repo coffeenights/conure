@@ -2,12 +2,11 @@ package application
 
 import (
 	"context"
+	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 )
 
 // ApplicationReconciler reconciles an Application object
@@ -24,7 +23,7 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 	logger := log.FromContext(ctx)
 	var application conurev1alpha1.Application
 	if err := r.Get(ctx, req.NamespacedName, &application); err != nil {
-		logger.Info("Application resource not found.")
+		logger.V(1).Info("Application resource not found.")
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
