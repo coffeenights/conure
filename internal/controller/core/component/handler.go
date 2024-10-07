@@ -12,6 +12,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
 	"io"
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -216,10 +217,32 @@ func (c *ComponentHandler) ReconcileDeployedObjects() error {
 	if c.applySet == nil {
 		return nil
 	}
+	c.updateStatus()
+
+	// Apply the resources
 	manager, err := module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, map[string]interface{}{})
 	if err != nil {
 		return err
 	}
 	c.componentTemplate = manager
 	return c.applyResources()
+}
+
+func (c *ComponentHandler) updateStatus() error {
+	// Update the status with the current objects
+	for _, obj := range c.applySet {
+		if obj.GetKind() == "Deployment" {
+			deployment := &appsv1.Deployment{}
+			if err := c.Reconciler.Get(c.Ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, deployment); err != nil {
+
+			}
+			if deployment.Status.ReadyReplicas == deployment.Status.Replicas {
+				if err := c.setConditionReady(conurev1alpha1.ComponentReadyRunningReason, "Component is running"); err != nil {
+					c.Logger.Error(err, "Failed to set condition ready")
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }
