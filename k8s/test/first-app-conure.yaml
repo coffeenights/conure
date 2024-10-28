@@ -18,7 +18,7 @@ spec:
           dapr.io/app-id: "api-server"
       spec:
         type: webservice
-        ociRepository: oci://dev.conure.local:5000/components/webservice
+        ociRepository: oci://dev.conure.local:30050/components/webservice
         ociTag: latest
         values:
           resources:
@@ -27,17 +27,12 @@ spec:
             memory: "256Mi"
           source:
             sourceType: git
-            gitRepository: https://github.com/coffeenights/conure.git
+            gitRepository: https://github.com/mredvard/fastapi_demo.git
             gitBranch: main
-            # ociRepository: oci://dev.conure.local:5000/components/webservice
             tag: latest
             buildTool: dockerfile
-            dockerfilePath: cmd/api-server/Dockerfile
-            command:
-              - python
-              - manage.py
-              - runserver
-              - 0.0.0.0:9091
+            dockerfilePath: Dockerfile
+            command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "9091"]
             workingDir: "/app"
             imagePullSecretsName: regcred
           network:
