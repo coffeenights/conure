@@ -44,10 +44,11 @@ const (
 )
 
 type ComponentSpec struct {
-	ComponentType string `json:"type"`
-	OCIRepository string `json:"ociRepository"`
-	OCITag        string `json:"ociTag"`
-	Values        Values `json:"values"`
+	ComponentType string     `json:"type"`
+	OCIRepository string     `json:"ociRepository"`
+	OCITag        string     `json:"ociTag"`
+	Values        Values     `json:"values"`
+	Variables     []Variable `json:"variables"`
 }
 
 type ComponentStatus struct {
@@ -150,4 +151,9 @@ type Storage struct {
 	Size      string `json:"size"`
 	Name      string `json:"name"`
 	MountPath string `json:"mountPath"`
+}
+
+type Variable struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
 }
