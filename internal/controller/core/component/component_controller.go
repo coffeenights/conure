@@ -3,7 +3,6 @@ package component
 import (
 	"context"
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
-	"github.com/coffeenights/conure/internal/controller/core/common"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,12 +35,8 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, err
 	}
 
-	// Reconcile component if it is pending deployment, meaning, workflow just finished succesfully
-	index, exists := common.ContainsCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String())
-	if exists && component.Status.Conditions[index].Reason == conurev1alpha1.ComponentReadyPendingReason.String() {
-		if err := componentHandler.RenderComponent(); err != nil {
-			return ctrl.Result{}, err
-		}
+	if err := componentHandler.RenderComponent(); err != nil {
+		return ctrl.Result{}, err
 	}
 	return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 }
