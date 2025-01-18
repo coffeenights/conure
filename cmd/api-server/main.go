@@ -50,17 +50,29 @@ func createSecretKey() {
 	log.Println("Secret key created")
 }
 
+func resetSuperUserPassword(email string) {
+	conf := config.LoadConfig(apiConfig.Config{})
+	log.Println("Connecting to MongoDB")
+	mongo, err := database.ConnectToMongoDB(conf.MongoDBURI, conf.MongoDBName)
+	if err != nil {
+		log.Panic(err)
+	}
+	log.Println("Connected to MongoDB")
+	auth.ResetSuperuserPassword(mongo, email)
+}
+
 func main() {
 	var (
-		runserverCmd       = flag.NewFlagSet("runserver", flag.ExitOnError)
-		createsuperuserCmd = flag.NewFlagSet("createsuperuser", flag.ExitOnError)
-		subcommand         string
+		runserverCmd              = flag.NewFlagSet("runserver", flag.ExitOnError)
+		createsuperuserCmd        = flag.NewFlagSet("createsuperuser", flag.ExitOnError)
+		resetSuperUserPasswordCmd = flag.NewFlagSet("resetsuperuserpassword", flag.ExitOnError)
+		subcommand                string
 	)
 
 	addressServer := runserverCmd.String("address", "localhost", "The HTTP server bind address.")
 	portServer := runserverCmd.Int("port", 8080, "The HTTP server port")
-
 	emailSuperuser := createsuperuserCmd.String("email", "", "The email of the superuser")
+	emailSuperuserReset := resetSuperUserPasswordCmd.String("email", "", "The email of the superuser")
 
 	flag.Usage = func() {
 		fmt.Printf("Usage: \n")
@@ -68,6 +80,7 @@ func main() {
 		fmt.Printf("  Commands available:\n")
 		fmt.Printf("\trunserver        Run the HTTP server\n")
 		fmt.Printf("\tcreatesuperuser  Create the super user for your account\n")
+		fmt.Printf("\tresetsuperuserpassword  Reset the super user password\n")
 		fmt.Printf("\tcreatesecretkey  Create the secret key for your account\n")
 	}
 	if len(os.Args) >= 2 {
@@ -94,6 +107,17 @@ func main() {
 		createSuperUser(*emailSuperuser)
 	case "createsecretkey":
 		createSecretKey()
+	case "resetsuperuserpassword":
+		err := resetSuperUserPasswordCmd.Parse(os.Args[2:])
+		if err != nil {
+			log.Fatal(err)
+		}
+		if *emailSuperuserReset == "" {
+			fmt.Println("Error: Missing -email flag")
+			resetSuperUserPasswordCmd.Usage()
+			os.Exit(1)
+		}
+		resetSuperUserPassword(*emailSuperuserReset)
 	default:
 		flag.Usage()
 	}
