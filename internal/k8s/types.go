@@ -10,4 +10,5 @@ const (
 	NamespaceLabel        = "conure.io/namespace"
 	ComponentIDLabel      = "conure.io/component-id"
 	ComponentNameLabel    = "conure.io/component-name"
+	ComponentDescription  = "conure.io/description"
 )

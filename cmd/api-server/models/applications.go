@@ -419,6 +419,38 @@ func (c *Component) Update(db *database.MongoDB) error {
 	return err
 }
 
+type ComponentDefinition struct {
+	Model         `bson:",inline"`
+	Name          string `json:"name" bson:"name"`
+	Description   string `json:"description" bson:"description"`
+	OCIRepository string `json:"oci_repository" bson:"ociRepository"`
+	OCITag        string `json:"oci_tag" bson:"ociTag"`
+}
+
+func (c *ComponentDefinition) GetCollectionName() string {
+	return ComponentCollection
+}
+
+func (c *ComponentDefinition) Create(db *database.MongoDB) error {
+	err := Create(context.Background(), db, c)
+	return err
+}
+
+func (c *ComponentDefinition) Delete(db *database.MongoDB) error {
+	err := Delete(context.Background(), db, c)
+	return err
+}
+
+func (c *ComponentDefinition) GetByID(db *database.MongoDB, ID string) error {
+	err := GetByID(context.Background(), db, ID, c)
+	return err
+}
+
+func (c *ComponentDefinition) Update(db *database.MongoDB) error {
+	err := Update(context.Background(), db, c)
+	return err
+}
+
 type ApplicationRevision struct {
 	RevisionNumber int       `json:"revision_number" bson:"revisionNumber"`
 	CreatedAt      time.Time `json:"created_at" bson:"createdAt"`

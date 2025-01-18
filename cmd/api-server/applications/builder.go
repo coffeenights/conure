@@ -2,10 +2,12 @@ package applications
 
 import (
 	"fmt"
+	//core_v1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"k8s.io/apimachinery/pkg/api/resource"
+	//v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"strings"
 )
 
@@ -89,8 +91,59 @@ func buildStorageTrait(component *models.Component) map[string]interface{} {
 }
 
 func BuildApplicationManifest(application *models.Application, environment *models.Environment, db *database.MongoDB) (map[string]interface{}, error) {
+	//object := core_v1alpha1.Application{
+	//	TypeMeta: v1.TypeMeta{},
+	//	ObjectMeta: v1.ObjectMeta{
+	//		Name:      application.Name,
+	//		Namespace: environment.GetNamespace(),
+	//		Labels: map[string]string{
+	//			k8sUtils.ApplicationIDLabel:  application.ID.Hex(),
+	//			k8sUtils.OrganizationIDLabel: application.OrganizationID.Hex(),
+	//			k8sUtils.EnvironmentLabel:    environment.Name,
+	//			k8sUtils.CreatedByLabel:      "conure",
+	//			k8sUtils.NamespaceLabel:      environment.GetNamespace(),
+	//		},
+	//		Annotations: map[string]string{
+	//			k8sUtils.ComponentDescription: application.Description,
+	//		},
+	//	},
+	//	Spec: core_v1alpha1.ApplicationSpec{
+	//		Components: []core_v1alpha1.ComponentTemplate{},
+	//	},
+	//}
+	//var componentsTemplates []core_v1alpha1.ComponentTemplate
+	//components, err := application.ListComponents(db)
+	//if err != nil {
+	//	return core_v1alpha1.Application{}, err
+	//}
+	//for _, component := range components {
+	//	componentMetadata := core_v1alpha1.ComponentTemplateMetadata{
+	//		Name: component.Name,
+	//	}
+	//	componentSpec := core_v1alpha1.ComponentSpec{
+	//		ComponentType: component.Type,
+	//		OCIRepository: component.,
+	//		OCITag:        "",
+	//		Values:        core_v1alpha1.Values{
+	//			Resources: core_v1alpha1.Resources{
+	//				Replicas: 0,
+	//				CPU:      "",
+	//				Memory:   "",
+	//			},
+	//			Network:   core_v1alpha1.Network{
+	//				Exposed: false,
+	//				Type:    "",
+	//				Ports:   nil,
+	//			},
+	//			Source:    core_v1alpha1.Source{},
+	//			Storage:   nil,
+	//			Advanced:  nil,
+	//		},
+	//	}
+	//}
+
 	object := map[string]interface{}{
-		"apiVersion": "core.oam.dev/v1beta1",
+		"apiVersion": "core.conure.io/v1alpha1",
 		"kind":       "Application",
 		"metadata": map[string]interface{}{
 			"name": application.Name,
