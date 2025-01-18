@@ -116,6 +116,7 @@ func (c *ComponentHandler) renderComponent() error {
 	compressedData := buf.Bytes()
 	setsBase64 := base64.StdEncoding.EncodeToString(compressedData)
 	// Create a patch with the new annotations
+	// TODO: Annotations may not be present
 	c.Component.Annotations[conurev1alpha1.ApplySetsAnnotation] = setsBase64
 	patch := map[string]interface{}{
 		"metadata": map[string]interface{}{
@@ -217,7 +218,7 @@ func (c *ComponentHandler) ReconcileDeployedObjects() error {
 	if c.applySet == nil {
 		return nil
 	}
-	c.updateStatus()
+	// c.updateStatus()
 
 	// Apply the resources
 	manager, err := module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, map[string]interface{}{})

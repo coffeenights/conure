@@ -3,7 +3,6 @@ package controller
 import (
 	"github.com/coffeenights/conure/internal/controller/core/application"
 	"github.com/coffeenights/conure/internal/controller/core/component"
-	"github.com/coffeenights/conure/internal/controller/core/workflow"
 	ctrl "sigs.k8s.io/controller-runtime"
 )
 
@@ -11,7 +10,6 @@ func Setup(mgr ctrl.Manager) error {
 	// Define a slice of setup functions
 	setupFunctions := []func(ctrl.Manager) error{
 		application.Setup,
-		workflow.Setup,
 		component.Setup,
 	}
 	// Iterate over each setup function
