@@ -85,7 +85,7 @@ func Update(ctx context.Context, db *database.MongoDB, model ModelInterface) err
 	collection := db.Client.Database(db.DBName).Collection(model.GetCollectionName())
 	filter := bson.M{"_id": model.GetID()}
 	update := bson.D{
-		{"$set", model},
+		{Key: "$set", Value: model},
 	}
 	model.SetUpdatedAt(time.Now())
 	updateResult, err := collection.UpdateOne(ctx, filter, update)
@@ -98,7 +98,7 @@ func Update(ctx context.Context, db *database.MongoDB, model ModelInterface) err
 
 func Delete(ctx context.Context, db *database.MongoDB, model ModelInterface) error {
 	collection := db.Client.Database(db.DBName).Collection(model.GetCollectionName())
-	filter := bson.D{{"_id", model.GetID()}}
+	filter := bson.D{{Key: "_id", Value: model.GetID()}}
 	deleteResult, err := collection.DeleteOne(ctx, filter)
 	if err != nil {
 		return err
@@ -109,10 +109,10 @@ func Delete(ctx context.Context, db *database.MongoDB, model ModelInterface) err
 
 func SoftDelete(ctx context.Context, db *database.MongoDB, model ModelInterface) error {
 	collection := db.Client.Database(db.DBName).Collection(model.GetCollectionName())
-	filter := bson.D{{"_id", model.GetID()}}
+	filter := bson.D{{Key: "_id", Value: model.GetID()}}
 	update := bson.D{
-		{"$set", bson.D{
-			{"deletedAt", time.Now()},
+		{Key: "$set", Value: bson.D{
+			{Key: "deletedAt", Value: time.Now()},
 		}},
 	}
 	updateResult, err := collection.UpdateOne(ctx, filter, update)
