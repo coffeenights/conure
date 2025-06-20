@@ -107,7 +107,10 @@ func (o *Organization) Update(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
 	filter := bson.M{"_id": o.ID, "status": bson.M{"$ne": OrgDeleted}}
 	update := bson.D{
-		{"$set", o},
+		{
+			Key:   "$set",
+			Value: o,
+		},
 	}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
 	if err != nil {
@@ -119,7 +122,12 @@ func (o *Organization) Update(mongo *database.MongoDB) error {
 
 func (o *Organization) Delete(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
-	filter := bson.D{{"_id", o.ID}}
+	filter := bson.D{
+		{
+			Key:   "_id",
+			Value: o.ID,
+		},
+	}
 	deleteResult, err := collection.DeleteOne(context.Background(), filter)
 	if err != nil {
 		return err
@@ -130,12 +138,20 @@ func (o *Organization) Delete(mongo *database.MongoDB) error {
 
 func (o *Organization) SoftDelete(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(OrganizationCollection)
-	filter := bson.D{{"_id", o.ID}}
+	filter := bson.D{
+		{
+			Key:   "_id",
+			Value: o.ID,
+		},
+	}
 	update := bson.D{
-		{"$set", bson.D{
-			{"status", OrgDeleted},
-			{"deletedAt", time.Now()},
-		}},
+		{
+			Key: "$set",
+			Value: bson.D{
+				{Key: "status", Value: OrgDeleted},
+				{Key: "deletedAt", Value: time.Now()},
+			},
+		},
 	}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
 	if err != nil {
@@ -217,9 +233,15 @@ func ApplicationList(db *database.MongoDB, organizationID string) ([]*Applicatio
 func (a *Application) GetEnvironmentByName(db *database.MongoDB, environmentName string) (*Environment, error) {
 	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
 	pipeline := mongo.Pipeline{
-		{{"$match", bson.D{{"_id", a.ID}}}},
-		{{"$unwind", "$environments"}},
-		{{"$match", bson.D{{"environments.name", environmentName}}}},
+		{
+			{Key: "$match", Value: bson.D{{Key: "_id", Value: a.ID}}},
+		},
+		{
+			{Key: "$unwind", Value: "$environments"},
+		},
+		{
+			{Key: "$match", Value: bson.D{{Key: "environments.name", Value: environmentName}}},
+		},
 	}
 	cursor, err := collection.Aggregate(context.Background(), pipeline)
 	if err != nil {
@@ -273,7 +295,7 @@ func (a *Application) Update(db *database.MongoDB) error {
 	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
 	filter := bson.M{"_id": a.ID}
 	update := bson.D{
-		{"$set", a},
+		{Key: "$set", Value: a},
 	}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update)
 	if err != nil {
@@ -285,7 +307,7 @@ func (a *Application) Update(db *database.MongoDB) error {
 
 func (a *Application) Delete(db *database.MongoDB) error {
 	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
-	filter := bson.D{{"_id", a.ID}}
+	filter := bson.D{{Key: "_id", Value: a.ID}}
 	deleteResult, err := collection.DeleteOne(context.Background(), filter)
 	if err != nil {
 		return err
@@ -296,10 +318,10 @@ func (a *Application) Delete(db *database.MongoDB) error {
 
 func (a *Application) SoftDelete(db *database.MongoDB) error {
 	collection := db.Client.Database(db.DBName).Collection(ApplicationCollection)
-	filter := bson.D{{"_id", a.ID}}
+	filter := bson.D{{Key: "_id", Value: a.ID}}
 	update := bson.D{
-		{"$set", bson.D{
-			{"deletedAt", time.Now()},
+		{Key: "$set", Value: bson.D{
+			{Key: "deletedAt", Value: time.Now()},
 		}},
 	}
 	updateResult, err := collection.UpdateOne(context.Background(), filter, update)

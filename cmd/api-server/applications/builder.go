@@ -141,3 +141,42 @@ func BuildApplicationManifest(application *models.Application, environment *mode
 	object["spec"].(map[string]interface{})["components"] = componentsManifest
 	return object, nil
 }
+
+//func BuildApplicationManifestNew(application *models.Application, environment *models.Environment, db *database.MongoDB) (conurev1alpha1.Application, error) {
+//	applicationObject := conurev1alpha1.Application{
+//		Spec: conurev1alpha1.ApplicationSpec{
+//			Components: []conurev1alpha1.ComponentTemplate{},
+//		},
+//	}
+//	// Add components
+//	components, err := application.ListComponents(db)
+//	if err != nil {
+//		return conurev1alpha1.Application{}, err
+//
+//	}
+//
+//	for _, component := range components {
+//		componentTemplate := conurev1alpha1.ComponentTemplate{
+//			ComponentTemplateMetadata: conurev1alpha1.ComponentTemplateMetadata{
+//				Name:        "",
+//				Labels:      nil,
+//				Annotations: nil,
+//			},
+//			Spec: conurev1alpha1.ComponentSpec{
+//				ComponentType: "",
+//				OCIRepository: "",
+//				OCITag:        "",
+//				Values: conurev1alpha1.Values{
+//					Resources: conurev1alpha1.Resources{},
+//					Network:   conurev1alpha1.Network{},
+//					Source:    conurev1alpha1.Source{},
+//					Storage:   nil,
+//					Advanced:  nil,
+//				},
+//				Variables: nil,
+//			},
+//		}
+//	}
+//
+//	return applicationObject, nil
+//}

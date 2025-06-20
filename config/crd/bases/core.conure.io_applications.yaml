@@ -163,11 +163,24 @@ spec:
                           - source
                           - storage
                           type: object
+                        variables:
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              value:
+                                type: string
+                            required:
+                            - name
+                            - value
+                            type: object
+                          type: array
                       required:
                       - ociRepository
                       - ociTag
                       - type
                       - values
+                      - variables
                       type: object
                   required:
                   - metadata
