@@ -93,7 +93,7 @@ func (v *Variable) Delete(mongo *database.MongoDB) error {
 func (v *Variable) ListByOrg(mongo *database.MongoDB, organizationID primitive.ObjectID) ([]Variable, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
 	findOptions := options.Find()
-	findOptions.SetSort(bson.D{{"name", 1}})
+	findOptions.SetSort(bson.D{{Key: "name", Value: 1}})
 	cursor, err := collection.Find(context.Background(), primitive.M{"organizationId": organizationID, "type": OrganizationType}, findOptions)
 	if err != nil {
 		return nil, err
@@ -109,7 +109,7 @@ func (v *Variable) ListByOrg(mongo *database.MongoDB, organizationID primitive.O
 func (v *Variable) ListByEnv(mongo *database.MongoDB, organizationID, applicationID primitive.ObjectID, environmentID string) ([]Variable, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
 	findOptions := options.Find()
-	findOptions.SetSort(bson.D{{"name", 1}})
+	findOptions.SetSort(bson.D{{Key: "name", Value: 1}})
 	cursor, err := collection.Find(context.Background(), primitive.M{
 		"organizationId": organizationID, "type": EnvironmentType, "applicationId": applicationID,
 		"environmentId": environmentID}, findOptions)
@@ -127,7 +127,7 @@ func (v *Variable) ListByEnv(mongo *database.MongoDB, organizationID, applicatio
 func (v *Variable) ListByComp(mongo *database.MongoDB, organizationID, applicationID primitive.ObjectID, environmentID string, componentID primitive.ObjectID) ([]Variable, error) {
 	collection := mongo.Client.Database(mongo.DBName).Collection(VariableCollection)
 	findOptions := options.Find()
-	findOptions.SetSort(bson.D{{"name", 1}})
+	findOptions.SetSort(bson.D{{Key: "name", Value: 1}})
 	cursor, err := collection.Find(context.Background(), primitive.M{
 		"organizationId": organizationID, "type": ComponentType, "applicationId": applicationID,
 		"environmentId": environmentID, "componentId": componentID}, findOptions)
