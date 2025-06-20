@@ -28,16 +28,15 @@ func GenerateRouter() *gin.Engine {
 	switch conf.AESStorageStrategy {
 	case "k8s":
 		keyStorage = variables.NewK8sSecretKey("conure-system")
-		_, err := keyStorage.Load()
+		_, err = keyStorage.Load()
 		if err != nil {
-			err = keyStorage.Generate()
-			if err != nil {
+			if err2 := keyStorage.Generate(); err2 != nil {
 				log.Panic(err)
 			}
 		}
 	case "local":
 		keyStorage = variables.NewLocalSecretKey("secret.key")
-		_, err := keyStorage.Load()
+		_, err = keyStorage.Load()
 		if err != nil {
 			err = keyStorage.Generate()
 			if err != nil {
