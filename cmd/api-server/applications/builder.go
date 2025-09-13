@@ -2,11 +2,12 @@ package applications
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"k8s.io/apimachinery/pkg/api/resource"
-	"strings"
 )
 
 var serviceType = map[string]string{
