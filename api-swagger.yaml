@@ -1,0 +1,1558 @@
+openapi: 3.0.3
+info:
+  title: Conure API
+  description: |
+    Conure is a Kubernetes-native application platform that provides:
+    - Organization and application management
+    - Component-based application deployment
+    - Environment management
+    - Variable and secret management
+    - Container registry integrations
+  version: 1.0.0
+  contact:
+    name: Conure API Support
+    url: https://github.com/coffeenights/conure
+
+servers:
+  - url: http://localhost:8080
+    description: Development server
+
+security:
+  - bearerAuth: []
+  - cookieAuth: []
+
+paths:
+  # Authentication endpoints
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: User login
+      description: Authenticate user with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: auth=jwt_token; Path=/; HttpOnly; SameSite=Lax
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: JWT authentication token
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user profile
+      description: Get the authenticated user's profile information
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /auth/change-password:
+    patch:
+      tags: [Authentication]
+      summary: Change password
+      description: Change the authenticated user's password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Password changed successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # Organization endpoints
+  /organizations:
+    get:
+      tags: [Organizations]
+      summary: List organizations
+      description: List all organizations accessible to the authenticated user
+      responses:
+        '200':
+          description: List of organizations
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrganizationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    post:
+      tags: [Organizations]
+      summary: Create organization
+      description: Create a new organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /organizations/{organizationID}:
+    get:
+      tags: [Organizations]
+      summary: Get organization details
+      description: Get details of a specific organization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+      responses:
+        '200':
+          description: Organization details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Application endpoints
+  /organizations/{organizationID}/a:
+    get:
+      tags: [Applications]
+      summary: List applications
+      description: List all applications in an organization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+      responses:
+        '200':
+          description: List of applications
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [Applications]
+      summary: Create application
+      description: Create a new application in an organization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApplicationRequest'
+      responses:
+        '201':
+          description: Application created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /organizations/{organizationID}/a/{applicationID}/e:
+    post:
+      tags: [Environments]
+      summary: Create environment
+      description: Create a new environment for an application
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateEnvironmentRequest'
+      responses:
+        '201':
+          description: Environment created
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}:
+    get:
+      tags: [Applications]
+      summary: Get application details for environment
+      description: Get application details for a specific environment
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+      responses:
+        '200':
+          description: Application details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Applications]
+      summary: Deploy application
+      description: Deploy application to an environment
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+      responses:
+        '200':
+          description: Application deployed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Application deployed"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Environments]
+      summary: Delete environment
+      description: Delete an environment and all its resources
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+      responses:
+        '200':
+          description: Environment deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/status:
+    get:
+      tags: [Applications]
+      summary: Get application status
+      description: Get the current status of an application in an environment
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+      responses:
+        '200':
+          description: Application status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Component endpoints
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c:
+    get:
+      tags: [Components]
+      summary: List components
+      description: List all components in an application environment
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+      responses:
+        '200':
+          description: List of components
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    post:
+      tags: [Components]
+      summary: Create component
+      description: Create a new component in an application environment
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateComponentRequest'
+      responses:
+        '201':
+          description: Component created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Component'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}:
+    get:
+      tags: [Components]
+      summary: Get component details
+      description: Get details of a specific component
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '200':
+          description: Component details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Component'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    put:
+      tags: [Components]
+      summary: Update component
+      description: Update an existing component
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateComponentRequest'
+      responses:
+        '200':
+          description: Component updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Component'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    delete:
+      tags: [Components]
+      summary: Delete component
+      description: Delete a component and all its resources
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '204':
+          description: Component deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/status:
+    get:
+      tags: [Components]
+      summary: Get component status
+      description: Get the current status of a component
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '200':
+          description: Component status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentStatusResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/status/health:
+    get:
+      tags: [Components]
+      summary: Get component health
+      description: Get the health status of a component
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '200':
+          description: Component health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentStatusHealth'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/status/logs:
+    get:
+      tags: [Components]
+      summary: Stream component logs
+      description: Stream real-time logs from component pods
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+        - name: pods
+          in: query
+          required: true
+          description: Comma-separated list of pod names to stream logs from
+          schema:
+            type: string
+            example: "pod-1,pod-2,pod-3"
+      responses:
+        '200':
+          description: Log stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: Server-sent events stream of log entries
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/status/pods:
+    get:
+      tags: [Components]
+      summary: Get component pods
+      description: Get all pods belonging to a component
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '200':
+          description: Component pods
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentPodsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Variable endpoints
+  /variables/{organizationID}:
+    get:
+      tags: [Variables]
+      summary: List organization variables
+      description: List all variables defined at organization level
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+      responses:
+        '200':
+          description: List of variables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Variable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Variables]
+      summary: Create organization variable
+      description: Create a new variable at organization level
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVariableRequest'
+      responses:
+        '201':
+          description: Variable created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Variable'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /variables/{organizationID}/{variableID}:
+    delete:
+      tags: [Variables]
+      summary: Delete variable
+      description: Delete a variable
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/VariableID'
+      responses:
+        '204':
+          description: Variable deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /variables/{organizationID}/{applicationID}/e/{environmentID}:
+    get:
+      tags: [Variables]
+      summary: List environment variables
+      description: List all variables defined at environment level
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/EnvironmentID'
+      responses:
+        '200':
+          description: List of variables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Variable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Variables]
+      summary: Create environment variable
+      description: Create a new variable at environment level
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/EnvironmentID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVariableRequest'
+      responses:
+        '201':
+          description: Variable created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Variable'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /variables/{organizationID}/{applicationID}/e/{environmentID}/c/{componentID}:
+    get:
+      tags: [Variables]
+      summary: List component variables
+      description: List all variables defined at component level
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/EnvironmentID'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '200':
+          description: List of variables
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Variable'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Variables]
+      summary: Create component variable
+      description: Create a new variable at component level
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/EnvironmentID'
+        - $ref: '#/components/parameters/ComponentID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVariableRequest'
+      responses:
+        '201':
+          description: Variable created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Variable'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  # Integration endpoints
+  /settings/{organizationID}/i:
+    get:
+      tags: [Integrations]
+      summary: List integrations
+      description: List all integrations for an organization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+      responses:
+        '200':
+          description: List of integrations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Integration'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+    post:
+      tags: [Integrations]
+      summary: Create integration
+      description: Create a new integration for an organization
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIntegrationRequest'
+      responses:
+        '201':
+          description: Integration created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Integration'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /settings/{organizationID}/i/{integrationID}:
+    delete:
+      tags: [Integrations]
+      summary: Delete integration
+      description: Delete an integration
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/IntegrationID'
+      responses:
+        '204':
+          description: Integration deleted
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: auth
+
+  parameters:
+    OrganizationID:
+      name: organizationID
+      in: path
+      required: true
+      description: Organization ID
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: "507f1f77bcf86cd799439011"
+
+    ApplicationID:
+      name: applicationID
+      in: path
+      required: true
+      description: Application ID
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: "507f1f77bcf86cd799439012"
+
+    ComponentID:
+      name: componentID
+      in: path
+      required: true
+      description: Component ID
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: "507f1f77bcf86cd799439013"
+
+    Environment:
+      name: environment
+      in: path
+      required: true
+      description: Environment name
+      schema:
+        type: string
+        pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+        example: "production"
+
+    EnvironmentID:
+      name: environmentID
+      in: path
+      required: true
+      description: Environment name/ID
+      schema:
+        type: string
+        pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+        example: "staging"
+
+    VariableID:
+      name: variableID
+      in: path
+      required: true
+      description: Variable ID
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: "507f1f77bcf86cd799439014"
+
+    IntegrationID:
+      name: integrationID
+      in: path
+      required: true
+      description: Integration ID
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: "507f1f77bcf86cd799439015"
+
+  schemas:
+    # Authentication schemas
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: "admin@example.com"
+        password:
+          type: string
+          format: password
+          example: "password123"
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - old_password
+        - password
+        - password2
+      properties:
+        old_password:
+          type: string
+          format: password
+          description: Current password
+        password:
+          type: string
+          format: password
+          description: New password
+        password2:
+          type: string
+          format: password
+          description: Confirm new password
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439010"
+        email:
+          type: string
+          format: email
+          example: "admin@example.com"
+        is_active:
+          type: boolean
+          example: true
+        last_login_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        client:
+          type: string
+          example: "web"
+
+    # Organization schemas
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439011"
+        status:
+          type: string
+          enum: [active, deleted, disabled]
+          example: "active"
+        account_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439010"
+        name:
+          type: string
+          example: "My Organization"
+        created_at:
+          type: string
+          format: date-time
+
+    CreateOrganizationRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: "My Organization"
+
+    OrganizationListResponse:
+      type: object
+      properties:
+        organizations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Organization'
+
+    # Application schemas
+    Application:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439012"
+        organization_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439011"
+        name:
+          type: string
+          example: "My Application"
+        description:
+          type: string
+          example: "Application description"
+        created_by:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439010"
+        account_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439010"
+        created_at:
+          type: string
+          format: date-time
+        environments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Environment'
+
+    CreateApplicationRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: "My Application"
+        description:
+          type: string
+          example: "Application description"
+
+    ApplicationListResponse:
+      type: object
+      properties:
+        organization:
+          $ref: '#/components/schemas/Organization'
+        applications:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/Application'
+              - type: object
+                properties:
+                  total_components:
+                    type: integer
+                    example: 3
+
+    ApplicationStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - starting
+            - rendering
+            - generatingPolicy
+            - runningWorkflow
+            - workflowSuspending
+            - workflowTerminated
+            - workflowFailed
+            - running
+            - unhealthy
+            - deleting
+          example: "running"
+
+    # Environment schemas
+    Environment:
+      type: object
+      properties:
+        id:
+          type: string
+          example: "production"
+        name:
+          type: string
+          example: "production"
+        created_at:
+          type: string
+          format: date-time
+
+    CreateEnvironmentRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+          example: "production"
+
+    # Component schemas
+    Component:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439013"
+        name:
+          type: string
+          example: "web-service"
+        type:
+          type: string
+          example: "webservice"
+        description:
+          type: string
+          example: "Web service component"
+        application_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439012"
+        settings:
+          $ref: '#/components/schemas/ComponentSettings'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateComponentRequest:
+      type: object
+      required:
+        - name
+        - type
+      properties:
+        name:
+          type: string
+          example: "web-service"
+        type:
+          type: string
+          example: "webservice"
+        description:
+          type: string
+          example: "Web service component"
+        settings:
+          $ref: '#/components/schemas/ComponentSettings'
+
+    ComponentSettings:
+      type: object
+      properties:
+        resources_settings:
+          $ref: '#/components/schemas/ResourcesSettings'
+        source_settings:
+          $ref: '#/components/schemas/SourceSettings'
+        network_settings:
+          $ref: '#/components/schemas/NetworkSettings'
+        storage_settings:
+          type: array
+          items:
+            $ref: '#/components/schemas/StorageSettings'
+
+    ResourcesSettings:
+      type: object
+      properties:
+        replicas:
+          type: integer
+          minimum: 1
+          example: 3
+        cpu:
+          type: number
+          format: float
+          minimum: 0.1
+          example: 1.0
+        memory:
+          type: integer
+          minimum: 128
+          example: 1024
+          description: Memory in MB
+
+    SourceSettings:
+      type: object
+      properties:
+        repository:
+          type: string
+          example: "ghcr.io/myorg/myapp:latest"
+        command:
+          type: string
+          example: "./start.sh"
+
+    NetworkSettings:
+      type: object
+      properties:
+        exposed:
+          type: boolean
+          example: true
+        type:
+          type: string
+          enum: [public, private]
+          example: "public"
+        ports:
+          type: array
+          items:
+            $ref: '#/components/schemas/Port'
+
+    Port:
+      type: object
+      properties:
+        host_port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          example: 8080
+        target_port:
+          type: integer
+          minimum: 1
+          maximum: 65535
+          example: 3000
+        protocol:
+          type: string
+          enum: [tcp, udp]
+          default: tcp
+          example: "tcp"
+
+    StorageSettings:
+      type: object
+      properties:
+        size:
+          type: number
+          format: float
+          minimum: 0.1
+          example: 10.0
+          description: Storage size in GB
+        name:
+          type: string
+          example: "data-volume"
+        mount_path:
+          type: string
+          example: "/app/data"
+
+    ComponentListResponse:
+      type: object
+      properties:
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/Component'
+
+    ComponentStatusResponse:
+      type: object
+      properties:
+        component:
+          $ref: '#/components/schemas/Component'
+        properties:
+          $ref: '#/components/schemas/ComponentProperties'
+
+    ComponentProperties:
+      type: object
+      properties:
+        network:
+          $ref: '#/components/schemas/NetworkProperties'
+        resources:
+          $ref: '#/components/schemas/ResourcesProperties'
+        storage:
+          $ref: '#/components/schemas/StorageProperties'
+        source:
+          $ref: '#/components/schemas/SourceProperties'
+        health:
+          $ref: '#/components/schemas/ComponentStatusHealth'
+
+    NetworkProperties:
+      type: object
+      properties:
+        external_url:
+          type: string
+          example: "https://my-app.example.com"
+
+    ResourcesProperties:
+      type: object
+      properties:
+        updated_replicas:
+          type: integer
+          example: 3
+        ready_replicas:
+          type: integer
+          example: 3
+        available_replicas:
+          type: integer
+          example: 3
+        condition_available:
+          type: string
+          example: "True"
+        condition_progressing:
+          type: string
+          example: "True"
+        created:
+          type: string
+          format: date-time
+        updated:
+          type: string
+          format: date-time
+
+    StorageProperties:
+      type: object
+      properties:
+        volumes:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              size:
+                type: string
+              status:
+                type: string
+
+    SourceProperties:
+      type: object
+      properties:
+        image:
+          type: string
+          example: "ghcr.io/myorg/myapp:latest"
+        tag:
+          type: string
+          example: "latest"
+
+    ComponentStatusHealth:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy, unknown]
+          example: "healthy"
+        checks:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              status:
+                type: string
+              message:
+                type: string
+
+    ComponentPodsResponse:
+      type: object
+      properties:
+        pods:
+          type: array
+          items:
+            $ref: '#/components/schemas/Pod'
+
+    Pod:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "web-service-7d9c8f5b6-xyz12"
+        status:
+          type: string
+          example: "Running"
+        ready:
+          type: boolean
+          example: true
+        restart_count:
+          type: integer
+          example: 0
+        created_at:
+          type: string
+          format: date-time
+
+    # Variable schemas
+    Variable:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439014"
+        name:
+          type: string
+          pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
+          example: "DATABASE_URL"
+        value:
+          type: string
+          example: "postgres://user:pass@localhost:5432/db"
+        type:
+          type: string
+          enum: [organization, environment, component]
+          example: "environment"
+        organization_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439011"
+        application_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          nullable: true
+          example: "507f1f77bcf86cd799439012"
+        environment_id:
+          type: string
+          nullable: true
+          example: "production"
+        component_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          nullable: true
+          example: "507f1f77bcf86cd799439013"
+        is_encrypted:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateVariableRequest:
+      type: object
+      required:
+        - name
+        - value
+      properties:
+        name:
+          type: string
+          pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
+          example: "DATABASE_URL"
+        value:
+          type: string
+          example: "postgres://user:pass@localhost:5432/db"
+        is_encrypted:
+          type: boolean
+          default: false
+          example: true
+
+    # Integration schemas
+    Integration:
+      type: object
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439015"
+        organization_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          example: "507f1f77bcf86cd799439011"
+        integration_type:
+          type: string
+          example: "docker_registry"
+        name:
+          type: string
+          example: "Docker Hub Registry"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateIntegrationRequest:
+      type: object
+      required:
+        - name
+        - integration_type
+        - integration_value
+      properties:
+        name:
+          type: string
+          example: "Docker Hub Registry"
+        integration_type:
+          type: string
+          enum: [docker_registry]
+          example: "docker_registry"
+        integration_value:
+          oneOf:
+            - $ref: '#/components/schemas/DockerRegistryIntegration'
+
+    DockerRegistryIntegration:
+      type: object
+      required:
+        - registry_url
+        - username
+        - password
+      properties:
+        registry_url:
+          type: string
+          format: uri
+          example: "https://index.docker.io/v1/"
+        username:
+          type: string
+          example: "myusername"
+        password:
+          type: string
+          format: password
+          example: "mypassword"
+
+    # Error schemas
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error message
+        code:
+          type: string
+          description: Error code
+        details:
+          type: object
+          description: Additional error details
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Invalid request format"
+            code: "INVALID_REQUEST"
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Authentication required"
+            code: "UNAUTHORIZED"
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Access denied"
+            code: "FORBIDDEN"
+
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Resource not found"
+            code: "NOT_FOUND"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "Internal server error"
+            code: "INTERNAL_ERROR"
+
+tags:
+  - name: Authentication
+    description: User authentication and session management
+  - name: Organizations
+    description: Organization management
+  - name: Applications
+    description: Application lifecycle management
+  - name: Environments
+    description: Environment management
+  - name: Components
+    description: Component management and monitoring
+  - name: Variables
+    description: Environment variables and secrets
+  - name: Integrations
+    description: External service integrations
