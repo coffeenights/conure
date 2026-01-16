@@ -49,3 +49,8 @@ spec:
             - size: 3Gi
               name: cache
               mountPath: "/mnt/storage2"
+        variables:
+          - name: ENV
+            value: development
+          - name: LOG_LEVEL
+            value: debug
