@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/coffeenights/conure/internal/k8s"
 	"log"
 	"time"
+
+	"github.com/coffeenights/conure/internal/k8s"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -21,6 +22,7 @@ type OrganizationStatus string
 const OrganizationCollection string = "organizations"
 const ApplicationCollection string = "applications"
 const ComponentCollection string = "components"
+const ComponentTypeSpecCollection string = "componenttypespecs"
 
 const (
 	OrgActive   OrganizationStatus = "active"
@@ -404,6 +406,76 @@ func (a *Application) DeleteEnvironmentByName(db *database.MongoDB, envName stri
 	}
 	if updateResult.ModifiedCount == 0 {
 		return conureerrors.ErrObjectNotFound
+	}
+	return nil
+}
+
+type ComponentTypeSpec struct {
+	Model          `bson:",inline"`
+	OrganizationID primitive.ObjectID `json:"organization_id" bson:"organizationID"`
+	Name           string             `json:"name" bson:"name"`
+	Description    string             `json:"description" bson:"description"`
+	Type           string             `json:"type" bson:"type"`
+	OCIRepository  string             `json:"oci_repository" bson:"ociRepository"`
+	OCITag         string             `json:"oci_tag" bson:"ociTag"`
+	IconURL        *string            `json:"icon_url" bson:"iconURL"`
+}
+
+func ComponentTypeSpecList(ctx context.Context, db *database.MongoDB, organizationID string) ([]*ComponentTypeSpec, error) {
+	oID, err := primitive.ObjectIDFromHex(organizationID)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := bson.M{"organizationID": oID}
+	specs, err := List[*ComponentTypeSpec](ctx, db, filter, &ComponentTypeSpec{})
+	if err != nil {
+		return nil, err
+	}
+	return specs, nil
+}
+
+func (c *ComponentTypeSpec) GetCollectionName() string {
+	return ComponentTypeSpecCollection
+}
+
+func (c *ComponentTypeSpec) Create(ctx context.Context, db *database.MongoDB) error {
+	err := Create(ctx, db, c)
+	return err
+}
+
+func (c *ComponentTypeSpec) Delete(ctx context.Context, db *database.MongoDB) error {
+	err := Delete(ctx, db, c)
+	return err
+}
+
+func (c *ComponentTypeSpec) GetByID(ctx context.Context, db *database.MongoDB, ID string) error {
+	err := GetByID(ctx, db, ID, c)
+	return err
+}
+
+func (c *ComponentTypeSpec) Update(ctx context.Context, db *database.MongoDB) error {
+	err := Update(ctx, db, c)
+	return err
+}
+
+func (c *ComponentTypeSpec) GetByType(ctx context.Context, db *database.MongoDB, organizationID string, specType string) error {
+	collection := db.Client.Database(db.DBName).Collection(ComponentTypeSpecCollection)
+	oID, err := primitive.ObjectIDFromHex(organizationID)
+	if err != nil {
+		return err
+	}
+
+	filter := bson.M{
+		"organizationID": oID,
+		"type":           specType,
+	}
+
+	err = collection.FindOne(ctx, filter).Decode(c)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return conureerrors.ErrObjectNotFound
+	} else if err != nil {
+		return err
 	}
 	return nil
 }

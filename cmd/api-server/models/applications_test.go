@@ -1,6 +1,7 @@
 package models
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -565,4 +566,443 @@ func TestComponent_Create_Duplicate(t *testing.T) {
 		t.Errorf("Got %v, want %v", err, conureerrors.ErrObjectAlreadyExists)
 	}
 	_ = comp.Delete(client)
+}
+
+func TestComponentTypeSpec_Create(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := primitive.NewObjectID()
+	iconURL := "https://example.com/icon.png"
+	spec := &ComponentTypeSpec{
+		OrganizationID: orgID,
+		Name:           "Test WebService",
+		Description:    "A test web service component type",
+		Type:           "webservice",
+		OCIRepository:  "nginx",
+		OCITag:         "latest",
+		IconURL:        &iconURL,
+	}
+
+	err = spec.Create(context.Background(), client)
+	if err != nil {
+		t.Errorf("Failed to create component type spec: %v", err)
+	}
+
+	// Verify the spec was created
+	var got ComponentTypeSpec
+	err = got.GetByID(context.Background(), client, spec.ID.Hex())
+	if err != nil {
+		t.Errorf("Failed to get component type spec: %v", err)
+	}
+
+	if got.Name != spec.Name {
+		t.Errorf("Got %v, want %v", got.Name, spec.Name)
+	}
+
+	// Cleanup
+	err = spec.Delete(context.Background(), client)
+	if err != nil {
+		t.Errorf("Failed to delete component type spec: %v", err)
+	}
+}
+
+func TestComponentTypeSpec_GetByID(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := primitive.NewObjectID()
+	iconURL := "https://example.com/postgres.png"
+	spec := &ComponentTypeSpec{
+		OrganizationID: orgID,
+		Name:           "Test Database",
+		Description:    "A test database component type",
+		Type:           "database",
+		OCIRepository:  "postgres",
+		OCITag:         "13",
+		IconURL:        &iconURL,
+	}
+
+	err = spec.Create(context.Background(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer spec.Delete(context.Background(), client)
+
+	var got ComponentTypeSpec
+	err = got.GetByID(context.Background(), client, spec.ID.Hex())
+	if err != nil {
+		t.Errorf("Failed to get component type spec: %v", err)
+	}
+
+	if got.OrganizationID != spec.OrganizationID {
+		t.Errorf("Got %v, want %v", got.OrganizationID, spec.OrganizationID)
+	}
+	if got.Name != spec.Name {
+		t.Errorf("Got %v, want %v", got.Name, spec.Name)
+	}
+	if got.Type != spec.Type {
+		t.Errorf("Got %v, want %v", got.Type, spec.Type)
+	}
+	if got.OCIRepository != spec.OCIRepository {
+		t.Errorf("Got %v, want %v", got.OCIRepository, spec.OCIRepository)
+	}
+}
+
+func TestComponentTypeSpec_GetByID_NotFound(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var spec ComponentTypeSpec
+	err = spec.GetByID(context.Background(), client, primitive.NewObjectID().Hex())
+	if err == nil {
+		t.Errorf("Got nil, want error")
+	}
+	if !errors.Is(err, conureerrors.ErrObjectNotFound) {
+		t.Errorf("Got %v, want %v", err, conureerrors.ErrObjectNotFound)
+	}
+}
+
+func TestComponentTypeSpec_Update(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := primitive.NewObjectID()
+	iconURL := "https://example.com/alpine.png"
+	spec := &ComponentTypeSpec{
+		OrganizationID: orgID,
+		Name:           "Test Service",
+		Description:    "A test service component type",
+		Type:           "service",
+		OCIRepository:  "alpine",
+		OCITag:         "3.14",
+		IconURL:        &iconURL,
+	}
+
+	err = spec.Create(context.Background(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer spec.Delete(context.Background(), client)
+
+	// Update the spec
+	spec.Name = "Updated Test Service"
+	spec.Description = "An updated test service component type"
+	spec.OCITag = "3.15"
+
+	err = spec.Update(context.Background(), client)
+	if err != nil {
+		t.Errorf("Failed to update component type spec: %v", err)
+	}
+
+	// Verify the update
+	var got ComponentTypeSpec
+	err = got.GetByID(context.Background(), client, spec.ID.Hex())
+	if err != nil {
+		t.Errorf("Failed to get updated component type spec: %v", err)
+	}
+
+	if got.Name != "Updated Test Service" {
+		t.Errorf("Got %v, want %v", got.Name, "Updated Test Service")
+	}
+	if got.Description != "An updated test service component type" {
+		t.Errorf("Got %v, want %v", got.Description, "An updated test service component type")
+	}
+	if got.OCITag != "3.15" {
+		t.Errorf("Got %v, want %v", got.OCITag, "3.15")
+	}
+}
+
+func TestComponentTypeSpec_Delete(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := primitive.NewObjectID()
+	iconURL := "https://example.com/busybox.png"
+	spec := &ComponentTypeSpec{
+		OrganizationID: orgID,
+		Name:           "Test Delete",
+		Description:    "A test component type for deletion",
+		Type:           "worker",
+		OCIRepository:  "busybox",
+		OCITag:         "latest",
+		IconURL:        &iconURL,
+	}
+
+	err = spec.Create(context.Background(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Delete the spec
+	err = spec.Delete(context.Background(), client)
+	if err != nil {
+		t.Errorf("Failed to delete component type spec: %v", err)
+	}
+
+	// Verify it's deleted
+	var got ComponentTypeSpec
+	err = got.GetByID(context.Background(), client, spec.ID.Hex())
+	if err == nil {
+		t.Errorf("Got component type spec, want error")
+	}
+	if !errors.Is(err, conureerrors.ErrObjectNotFound) {
+		t.Errorf("Got %v, want %v", err, conureerrors.ErrObjectNotFound)
+	}
+}
+
+func TestComponentTypeSpecList(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := primitive.NewObjectID()
+
+	// Create multiple component type specs
+	iconURL1 := "https://example.com/nginx.png"
+	spec1 := &ComponentTypeSpec{
+		OrganizationID: orgID,
+		Name:           "Web Service",
+		Description:    "A web service component",
+		Type:           "webservice",
+		OCIRepository:  "nginx",
+		OCITag:         "latest",
+		IconURL:        &iconURL1,
+	}
+
+	iconURL2 := "https://example.com/mysql.png"
+	spec2 := &ComponentTypeSpec{
+		OrganizationID: orgID,
+		Name:           "Database",
+		Description:    "A database component",
+		Type:           "database",
+		OCIRepository:  "mysql",
+		OCITag:         "8.0",
+		IconURL:        &iconURL2,
+	}
+
+	// Create specs in different organization to test filtering
+	otherOrgID := primitive.NewObjectID()
+	iconURL3 := "https://example.com/redis.png"
+	spec3 := &ComponentTypeSpec{
+		OrganizationID: otherOrgID,
+		Name:           "Other Org Service",
+		Description:    "A service in different org",
+		Type:           "service",
+		OCIRepository:  "redis",
+		OCITag:         "6.0",
+		IconURL:        &iconURL3,
+	}
+
+	err = spec1.Create(context.Background(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer spec1.Delete(context.Background(), client)
+
+	err = spec2.Create(context.Background(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer spec2.Delete(context.Background(), client)
+
+	err = spec3.Create(context.Background(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer spec3.Delete(context.Background(), client)
+
+	// Test listing specs for the first organization
+	specs, err := ComponentTypeSpecList(context.Background(), client, orgID.Hex())
+	if err != nil {
+		t.Errorf("Failed to list component type specs: %v", err)
+	}
+
+	if len(specs) != 2 {
+		t.Errorf("Got %d specs, want 2", len(specs))
+	}
+
+	// Verify the specs belong to the correct organization
+	for _, spec := range specs {
+		if spec.OrganizationID != orgID {
+			t.Errorf("Got organizationID %v, want %v", spec.OrganizationID, orgID)
+		}
+	}
+}
+
+func TestComponentTypeSpecList_EmptyOrganization(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test listing specs for an organization with no specs
+	emptyOrgID := primitive.NewObjectID()
+	specs, err := ComponentTypeSpecList(context.Background(), client, emptyOrgID.Hex())
+	if err != nil {
+		t.Errorf("Failed to list component type specs: %v", err)
+	}
+
+	if len(specs) != 0 {
+		t.Errorf("Got %d specs, want 0", len(specs))
+	}
+}
+
+func TestComponentTypeSpecList_InvalidOrganizationID(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test with invalid organization ID
+	_, err = ComponentTypeSpecList(context.Background(), client, "invalid-id")
+	if err == nil {
+		t.Errorf("Got nil, want error for invalid organization ID")
+	}
+}
+
+func TestComponentTypeSpecGetByType(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := primitive.NewObjectID()
+
+	// Create component type specs of different types
+	iconURL1 := "https://example.com/webservice.png"
+	spec1 := &ComponentTypeSpec{
+		OrganizationID: orgID,
+		Name:           "Nginx Web Service",
+		Description:    "A nginx web service",
+		Type:           "webservice",
+		OCIRepository:  "nginx",
+		OCITag:         "latest",
+		IconURL:        &iconURL1,
+	}
+
+	iconURL2 := "https://example.com/database.png"
+	spec2 := &ComponentTypeSpec{
+		OrganizationID: orgID,
+		Name:           "MySQL Database",
+		Description:    "A MySQL database",
+		Type:           "database",
+		OCIRepository:  "mysql",
+		OCITag:         "8.0",
+		IconURL:        &iconURL2,
+	}
+
+	// Create specs in different organization to test filtering
+	otherOrgID := primitive.NewObjectID()
+	iconURL3 := "https://example.com/other-webservice.png"
+	spec3 := &ComponentTypeSpec{
+		OrganizationID: otherOrgID,
+		Name:           "Other Org Web Service",
+		Description:    "A web service in different org",
+		Type:           "webservice",
+		OCIRepository:  "nginx",
+		OCITag:         "alpine",
+		IconURL:        &iconURL3,
+	}
+
+	// Create all specs
+	err = spec1.Create(context.Background(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = spec1.Delete(context.Background(), client)
+	}()
+
+	err = spec2.Create(context.Background(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = spec2.Delete(context.Background(), client)
+	}()
+
+	err = spec3.Create(context.Background(), client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = spec3.Delete(context.Background(), client)
+	}()
+
+	// Test getting webservice spec for the first organization
+	var webserviceSpec ComponentTypeSpec
+	err = webserviceSpec.GetByType(context.Background(), client, orgID.Hex(), "webservice")
+	if err != nil {
+		t.Errorf("Failed to get webservice component type spec: %v", err)
+	}
+
+	// Verify returned spec is webservice type and belongs to correct organization
+	if webserviceSpec.Type != "webservice" {
+		t.Errorf("Got type %v, want webservice", webserviceSpec.Type)
+	}
+	if webserviceSpec.OrganizationID != orgID {
+		t.Errorf("Got organizationID %v, want %v", webserviceSpec.OrganizationID, orgID)
+	}
+	if webserviceSpec.Name != "Nginx Web Service" {
+		t.Errorf("Got name %v, want 'Nginx Web Service'", webserviceSpec.Name)
+	}
+
+	// Test getting database spec for the first organization
+	var databaseSpec ComponentTypeSpec
+	err = databaseSpec.GetByType(context.Background(), client, orgID.Hex(), "database")
+	if err != nil {
+		t.Errorf("Failed to get database component type spec: %v", err)
+	}
+
+	if databaseSpec.Type != "database" {
+		t.Errorf("Got type %v, want database", databaseSpec.Type)
+	}
+	if databaseSpec.Name != "MySQL Database" {
+		t.Errorf("Got name %v, want 'MySQL Database'", databaseSpec.Name)
+	}
+}
+
+func TestComponentTypeSpecGetByType_NotFound(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	orgID := primitive.NewObjectID()
+
+	// Test getting spec for a type that doesn't exist
+	var spec ComponentTypeSpec
+	err = spec.GetByType(context.Background(), client, orgID.Hex(), "nonexistent")
+	if err == nil {
+		t.Errorf("Got nil, want error for nonexistent type")
+	}
+	if !errors.Is(err, conureerrors.ErrObjectNotFound) {
+		t.Errorf("Got %v, want %v", err, conureerrors.ErrObjectNotFound)
+	}
+}
+
+func TestComponentTypeSpecGetByType_InvalidOrganizationID(t *testing.T) {
+	client, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Test with invalid organization ID
+	var spec ComponentTypeSpec
+	err = spec.GetByType(context.Background(), client, "invalid-id", "webservice")
+	if err == nil {
+		t.Errorf("Got nil, want error for invalid organization ID")
+	}
 }

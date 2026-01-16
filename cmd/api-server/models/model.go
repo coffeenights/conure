@@ -3,13 +3,14 @@ package models
 import (
 	"context"
 	"errors"
+	"log"
+	"time"
+
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
-	"log"
-	"time"
 )
 
 type Model struct {
@@ -121,4 +122,30 @@ func SoftDelete(ctx context.Context, db *database.MongoDB, model ModelInterface)
 	}
 	log.Printf("Matched %v documents and deleted %v documents.\n", updateResult.MatchedCount, updateResult.ModifiedCount)
 	return nil
+}
+
+func List[T ModelInterface](ctx context.Context, db *database.MongoDB, filter bson.M, model T) ([]T, error) {
+	collection := db.Client.Database(db.DBName).Collection(model.GetCollectionName())
+
+	if filter == nil {
+		filter = bson.M{}
+	}
+	filter["deletedAt"] = bson.M{"$exists": false}
+
+	cursor, err := collection.Find(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(ctx)
+
+	var results []T
+	for cursor.Next(ctx) {
+		var item T
+		if err := cursor.Decode(&item); err != nil {
+			return nil, err
+		}
+		results = append(results, item)
+	}
+
+	return results, cursor.Err()
 }
