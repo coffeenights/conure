@@ -12,18 +12,21 @@ import (
 	"cuelang.org/go/mod/modconfig"
 	"cuelang.org/go/mod/modfile"
 	"cuelang.org/go/mod/module"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
 // Renderer handles CUE module rendering from OCI registries.
 type Renderer struct {
-	ctx *cue.Context
-	reg modconfig.Registry
+	ctx      *cue.Context
+	reg      modconfig.Registry
+	registry string
 }
 
-// NewRenderer creates a new CUE renderer.
-func NewRenderer() *Renderer {
+// NewRenderer creates a new CUE renderer with the given OCI registry (e.g. "ghcr.io").
+func NewRenderer(registry string) *Renderer {
 	return &Renderer{
-		ctx: cuecontext.New(),
+		ctx:      cuecontext.New(),
+		registry: registry,
 	}
 }
 
@@ -32,7 +35,9 @@ func (r *Renderer) initRegistry() error {
 	if r.reg != nil {
 		return nil
 	}
-	reg, err := modconfig.NewRegistry(nil)
+	reg, err := modconfig.NewRegistry(&modconfig.Config{
+		CUERegistry: r.registry,
+	})
 	if err != nil {
 		return fmt.Errorf("failed to create registry: %w", err)
 	}
@@ -43,7 +48,7 @@ func (r *Renderer) initRegistry() error {
 // LoadRemotePackage pulls a CUE package from an OCI registry, resolves its
 // transitive dependencies, and returns the built CUE value unified with the
 // provided values map.
-func (r *Renderer) LoadRemotePackage(ctx context.Context, modulePath, version, pkg string, values map[string]any) (cue.Value, error) {
+func (r *Renderer) LoadRemotePackage(ctx context.Context, modulePath, version, pkg string, values any) (cue.Value, error) {
 	if err := r.initRegistry(); err != nil {
 		return cue.Value{}, err
 	}
@@ -95,6 +100,28 @@ func (r *Renderer) LoadRemotePackage(ctx context.Context, modulePath, version, p
 	}
 
 	return value, nil
+}
+
+func (r *Renderer) GetApplySets(value cue.Value) ([]unstructured.Unstructured, error) {
+	output := value.LookupPath(cue.ParsePath("output"))
+	if err := output.Err(); err != nil {
+		return nil, fmt.Errorf("failed to lookup output field: %w", err)
+	}
+
+	iter, err := output.List()
+	if err != nil {
+		return nil, fmt.Errorf("output is not a list: %w", err)
+	}
+
+	var sets []unstructured.Unstructured
+	for iter.Next() {
+		var obj map[string]interface{}
+		if err := iter.Value().Decode(&obj); err != nil {
+			return nil, fmt.Errorf("failed to decode output element: %w", err)
+		}
+		sets = append(sets, unstructured.Unstructured{Object: obj})
+	}
+	return sets, nil
 }
 
 // generateModuleFile resolves transitive dependencies for a remote module

@@ -2,8 +2,6 @@ package cue
 
 import (
 	"testing"
-
-	cuego "cuelang.org/go/cue"
 )
 
 func TestRenderer_LoadRemotePackage(t *testing.T) {
@@ -11,7 +9,7 @@ func TestRenderer_LoadRemotePackage(t *testing.T) {
 		t.Skip("skipping integration test that requires network access")
 	}
 
-	r := NewRenderer()
+	r := NewRenderer("ghcr.io")
 
 	vals := map[string]any{
 		"values": map[string]any{
@@ -21,20 +19,26 @@ func TestRenderer_LoadRemotePackage(t *testing.T) {
 
 	val, err := r.LoadRemotePackage(
 		t.Context(),
-		"ghcr.io/coffeenights/conure-templates/service-flat",
-		"v0.0.2",
-		"service",
+		"ghcr.io/coffeenights/conure-templates/service",
+		"v0.0.3",
+		"main",
 		vals,
 	)
 	if err != nil {
 		t.Fatalf("LoadRemotePackage failed: %v", err)
 	}
 
-	// Look up the deployment field
-	deployment := val.LookupPath(cuego.ParsePath("deployment"))
-	if err := deployment.Err(); err != nil {
-		t.Fatalf("Failed to lookup deployment: %v", err)
+	// Get the apply sets from the output field
+	sets, err := r.GetApplySets(val)
+	if err != nil {
+		t.Fatalf("Failed to get apply sets: %v", err)
 	}
 
-	t.Logf("deployment: %v", deployment)
+	if len(sets) == 0 {
+		t.Fatal("Expected at least one object in output")
+	}
+
+	for i, obj := range sets {
+		t.Logf("output[%d]: kind=%s name=%s", i, obj.GetKind(), obj.GetName())
+	}
 }

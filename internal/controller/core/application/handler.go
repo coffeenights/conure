@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
@@ -99,9 +98,9 @@ func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.Co
 	}
 
 	// If the component exists, update it
-	if err = a.updateComponent(&component, &existingComponent, specHashTarget); err != nil {
-		return err
-	}
+	//if err = a.updateComponent(&component, &existingComponent, specHashTarget); err != nil {
+	//	return err
+	//}
 
 	// Find workflow runs associated with the component if the status is running
 	condition := a.getConditionWorkflow(&existingComponent)
@@ -201,41 +200,41 @@ func (a *ApplicationHandler) createComponent(component *conurev1alpha1.Component
 	return a.Reconciler.Update(a.Ctx, component)
 }
 
-func (a *ApplicationHandler) updateComponent(component *conurev1alpha1.Component, existingComponent *conurev1alpha1.Component, targetHash string) error {
-	// Check differences between the existing component and the new component
-	specHashActual := common.GetHashForSpec(existingComponent.Spec)
-	if specHashActual != targetHash {
-		a.Logger.V(1).Info("Updating component", "component", component.Name)
-		// Run workflow if the source has changed
-		if !reflect.DeepEqual(existingComponent.Spec.Values.Source, component.Spec.Values.Source) {
-			if err := a.setRenderingComponentStatus(component.Name); err != nil {
-				return err
-			}
-			if err := a.setConditionWorkflow(existingComponent, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow was triggered"); err != nil {
-				return err
-			}
-			wflr, err := a.runComponentWorkflow(component)
-			if err != nil {
-				if err2 := a.setConditionWorkflow(existingComponent, metav1.ConditionFalse, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow failed to trigger"); err2 != nil {
-					return err2
-				}
-				if err3 := a.setRenderingComponentFailedStatus(component.Name); err3 != nil {
-					return err3
-				}
-				return err
-			}
-			labels := existingComponent.GetLabels()
-			labels[conurev1alpha1.WorkflowRunNamelabel] = wflr.Name
-			existingComponent.SetLabels(labels)
-		}
-		existingComponent.Spec = *component.Spec.DeepCopy()
-		if err := a.Reconciler.Update(a.Ctx, existingComponent); err != nil {
-			a.Logger.Error(err, "Unable to update the component for application", "component", component.Name)
-			return err
-		}
-	}
-	return nil
-}
+//func (a *ApplicationHandler) updateComponent(component *conurev1alpha1.Component, existingComponent *conurev1alpha1.Component, targetHash string) error {
+//	// Check differences between the existing component and the new component
+//	specHashActual := common.GetHashForSpec(existingComponent.Spec)
+//	if specHashActual != targetHash {
+//		a.Logger.V(1).Info("Updating component", "component", component.Name)
+//		// Run workflow if the source has changed
+//		if !reflect.DeepEqual(existingComponent.Spec.Values.Source, component.Spec.Values.Source) {
+//			if err := a.setRenderingComponentStatus(component.Name); err != nil {
+//				return err
+//			}
+//			if err := a.setConditionWorkflow(existingComponent, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow was triggered"); err != nil {
+//				return err
+//			}
+//			wflr, err := a.runComponentWorkflow(component)
+//			if err != nil {
+//				if err2 := a.setConditionWorkflow(existingComponent, metav1.ConditionFalse, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow failed to trigger"); err2 != nil {
+//					return err2
+//				}
+//				if err3 := a.setRenderingComponentFailedStatus(component.Name); err3 != nil {
+//					return err3
+//				}
+//				return err
+//			}
+//			labels := existingComponent.GetLabels()
+//			labels[conurev1alpha1.WorkflowRunNamelabel] = wflr.Name
+//			existingComponent.SetLabels(labels)
+//		}
+//		existingComponent.Spec = *component.Spec.DeepCopy()
+//		if err := a.Reconciler.Update(a.Ctx, existingComponent); err != nil {
+//			a.Logger.Error(err, "Unable to update the component for application", "component", component.Name)
+//			return err
+//		}
+//	}
+//	return nil
+//}
 
 func (a *ApplicationHandler) setComponentWorkflow(component *conurev1alpha1.Component) error {
 	// Transform the values to a map
@@ -250,7 +249,7 @@ func (a *ApplicationHandler) setComponentWorkflow(component *conurev1alpha1.Comp
 	if err = d.Decode(&values); err != nil {
 		return err
 	}
-	componentTemplate, err := module.NewManager(a.Ctx, component.Name, component.Spec.OCIRepository, component.Spec.OCITag, a.Application.Namespace, "", true, values.Get())
+	componentTemplate, err := module.NewManager(a.Ctx, component.Name, "", "", a.Application.Namespace, "", true, values.Get())
 	if err != nil {
 		return err
 	}

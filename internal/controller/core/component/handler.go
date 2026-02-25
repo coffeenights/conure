@@ -6,20 +6,22 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
+	"sort"
+	"strings"
+
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/controller/core/common"
-	"github.com/coffeenights/conure/internal/timoni"
+	"github.com/coffeenights/conure/pkg/cue"
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
-	"io"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sort"
-	"strings"
 )
 
 type ComponentHandler struct {
@@ -73,7 +75,20 @@ func (c *ComponentHandler) renderComponent() error {
 	if err != nil {
 		return err
 	}
-	values := timoni.Values{}
+
+	renderer := cue.NewRenderer("ghcr.io")
+	values, err := renderer.LoadRemotePackage(
+		c.Ctx,
+		"ghcr.io/coffeenights/conure-templates/service-flat",
+		"v0.0.2",
+		"service",
+		c.Component.Spec.Values,
+	)
+	if err != nil {
+		return err
+	}
+	fmt.Println("Rendered values:", values)
+
 	d := json.NewDecoder(strings.NewReader(string(valuesJSON)))
 
 	// Turn numbers into strings, otherwise the decoder will take ints and turn them into floats
@@ -81,7 +96,7 @@ func (c *ComponentHandler) renderComponent() error {
 	if err = d.Decode(&values); err != nil {
 		return err
 	}
-	c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, values.Get())
+	//c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, values.Get())
 	if err != nil {
 		return err
 	}
@@ -221,7 +236,7 @@ func (c *ComponentHandler) ReconcileDeployedObjects() error {
 	// c.updateStatus()
 
 	// Apply the resources
-	manager, err := module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, map[string]interface{}{})
+	manager, err := module.NewManager(c.Ctx, c.Component.Name, "", "", c.Component.Namespace, "", true, map[string]interface{}{})
 	if err != nil {
 		return err
 	}
