@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -27,15 +28,15 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	handler, err := NewApplicationHandler(ctx, &application, r)
+	_, err := NewApplicationHandler(ctx, &application, r)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
-	err = handler.ReconcileComponents()
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	//err = handler.ReconcileComponents()
+	//if err != nil {
+	//	return ctrl.Result{}, err
+	//}
 	return ctrl.Result{}, nil
 }
 
@@ -43,8 +44,8 @@ func (r *ApplicationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 func (r *ApplicationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&conurev1alpha1.Application{}).
-		Owns(&conurev1alpha1.Component{}).
-		Owns(&conurev1alpha1.WorkflowRun{}).
+		//Owns(&conurev1alpha1.Component{}).
+		//Owns(&conurev1alpha1.WorkflowRun{}).
 		Complete(r)
 }
 

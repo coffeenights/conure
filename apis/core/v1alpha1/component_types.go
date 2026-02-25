@@ -44,11 +44,9 @@ const (
 )
 
 type ComponentSpec struct {
-	ComponentType string     `json:"type"`
-	OCIRepository string     `json:"ociRepository"`
-	OCITag        string     `json:"ociTag"`
-	Values        Values     `json:"values"`
-	Variables     []Variable `json:"variables"`
+	ComponentType string                `json:"type"`
+	Values        *runtime.RawExtension `json:"values"`
+	Variables     []Variable            `json:"variables"`
 }
 
 type ComponentStatus struct {
@@ -87,10 +85,6 @@ type ComponentList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Component `json:"items"`
-}
-
-func init() {
-	SchemeBuilder.Register(&Component{}, &ComponentList{})
 }
 
 type Values struct {
@@ -156,4 +150,35 @@ type Storage struct {
 type Variable struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
+}
+
+//+kubebuilder:object:root=true
+//+kubebuilder:resource:scope=Cluster
+//+genclient
+
+// ComponentDefinition is the Schema for the componentdefinitions API
+type ComponentDefinition struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec ComponentDefinitionSpec `json:"spec,omitempty"`
+}
+
+type ComponentDefinitionSpec struct {
+	ComponentType string `json:"type"`
+	Description   string `json:"description,omitempty"`
+	OCIRepository string `json:"ociRepository,omitempty"`
+	OCITag        string `json:"ociTag,omitempty"`
+}
+
+//+kubebuilder:object:root=true
+
+type ComponentDefinitionList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []ComponentDefinition `json:"items"`
+}
+
+func init() {
+	SchemeBuilder.Register(&Component{}, &ComponentList{}, &ComponentDefinition{}, &ComponentDefinitionList{})
 }
