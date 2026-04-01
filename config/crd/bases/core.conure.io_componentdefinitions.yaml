@@ -37,6 +37,8 @@ spec:
             properties:
               description:
                 type: string
+              ociRegistry:
+                type: string
               ociRepository:
                 type: string
               ociTag:
@@ -44,6 +46,9 @@ spec:
               type:
                 type: string
             required:
+            - description
+            - ociRepository
+            - ociTag
             - type
             type: object
         type: object

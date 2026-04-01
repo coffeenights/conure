@@ -166,9 +166,10 @@ type ComponentDefinition struct {
 
 type ComponentDefinitionSpec struct {
 	ComponentType string `json:"type"`
-	Description   string `json:"description,omitempty"`
-	OCIRepository string `json:"ociRepository,omitempty"`
-	OCITag        string `json:"ociTag,omitempty"`
+	Description   string `json:"description"`
+	OCIRepository string `json:"ociRepository"`
+	OCITag        string `json:"ociTag"`
+	OCIRegistry   string `json:"ociRegistry,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -30,7 +30,7 @@ type ComponentHandler struct {
 	Ctx               context.Context
 	Logger            logr.Logger
 	componentTemplate *module.Manager
-	applySet          []*unstructured.Unstructured
+	applySet          []unstructured.Unstructured
 }
 
 var orderMap = map[string]int{
@@ -70,50 +70,57 @@ func NewComponentHandler(ctx context.Context, component *conurev1alpha1.Componen
 }
 
 func (c *ComponentHandler) renderComponent() error {
-	// Transform the values to a map
-	valuesJSON, err := json.Marshal(c.Component.Spec.Values)
-	if err != nil {
-		return err
+	// Look up the ComponentDefinition by the component's type
+	compDefList := &conurev1alpha1.ComponentDefinitionList{}
+	if err := c.Reconciler.List(c.Ctx, compDefList); err != nil {
+		return fmt.Errorf("failed to list component definitions: %w", err)
 	}
 
-	renderer := cue.NewRenderer("ghcr.io")
+	var compDef *conurev1alpha1.ComponentDefinition
+	for i := range compDefList.Items {
+		if compDefList.Items[i].Spec.ComponentType == c.Component.Spec.ComponentType {
+			compDef = &compDefList.Items[i]
+			break
+		}
+	}
+	if compDef == nil {
+		return fmt.Errorf("component definition not found for type %q", c.Component.Spec.ComponentType)
+	}
+
+	registry := compDef.Spec.OCIRegistry
+	if registry == "" {
+		// Extract registry host from the OCI repository path (e.g. "ghcr.io/org/repo" -> "ghcr.io")
+		parts := strings.SplitN(compDef.Spec.OCIRepository, "/", 2)
+		if len(parts) < 2 {
+			return fmt.Errorf("invalid OCI repository path %q", compDef.Spec.OCIRepository)
+		}
+		registry = parts[0]
+	}
+	renderer := cue.NewRenderer(registry)
 	values, err := renderer.LoadRemotePackage(
 		c.Ctx,
-		"ghcr.io/coffeenights/conure-templates/service-flat",
-		"v0.0.2",
-		"service",
+		compDef.Spec.OCIRepository,
+		compDef.Spec.OCITag,
+		"main",
 		c.Component.Spec.Values,
 	)
 	if err != nil {
 		return err
 	}
-	fmt.Println("Rendered values:", values)
 
-	d := json.NewDecoder(strings.NewReader(string(valuesJSON)))
-
-	// Turn numbers into strings, otherwise the decoder will take ints and turn them into floats
-	d.UseNumber()
-	if err = d.Decode(&values); err != nil {
-		return err
-	}
-	//c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, values.Get())
-	if err != nil {
-		return err
-	}
-	sets, err := c.componentTemplate.GetApplySets()
+	sets, err := renderer.GetApplySets(values)
 	if err != nil {
 		return err
 	}
 
 	// Add the spec hashes to every object and add them to the apply set
-	for _, set := range sets {
-		for _, o := range set.Objects {
-			hash := common.GetHashForSpec(o.Object["spec"].(map[string]interface{}))
-			labels := common.SetHashToLabels(o.GetLabels(), hash)
-			o.SetLabels(labels)
-			c.applySet = append(c.applySet, o)
-		}
+	for _, o := range sets {
+		hash := common.GetHashForSpec(o.Object["spec"].(map[string]interface{}))
+		labels := common.SetHashToLabels(o.GetLabels(), hash)
+		o.SetLabels(labels)
 	}
+	c.applySet = sets
+
 	// Compress, encode and add the sets to the component annotations
 	setsJSON, err := c.componentTemplate.MarshalApplySets(sets)
 	if err != nil {
