@@ -13,7 +13,7 @@ import (
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/controller/core/common"
-	"github.com/coffeenights/conure/pkg/cue"
+	"github.com/coffeenights/conure/internal/timoni"
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
 	appsv1 "k8s.io/api/apps/v1"
@@ -30,7 +30,7 @@ type ComponentHandler struct {
 	Ctx               context.Context
 	Logger            logr.Logger
 	componentTemplate *module.Manager
-	applySet          []unstructured.Unstructured
+	applySet          []*unstructured.Unstructured
 }
 
 var orderMap = map[string]int{
@@ -87,40 +87,37 @@ func (c *ComponentHandler) renderComponent() error {
 		return fmt.Errorf("component definition not found for type %q", c.Component.Spec.ComponentType)
 	}
 
-	registry := compDef.Spec.OCIRegistry
-	if registry == "" {
-		// Extract registry host from the OCI repository path (e.g. "ghcr.io/org/repo" -> "ghcr.io")
-		parts := strings.SplitN(compDef.Spec.OCIRepository, "/", 2)
-		if len(parts) < 2 {
-			return fmt.Errorf("invalid OCI repository path %q", compDef.Spec.OCIRepository)
-		}
-		registry = parts[0]
-	}
-	renderer := cue.NewRenderer(registry)
-	values, err := renderer.LoadRemotePackage(
-		c.Ctx,
-		compDef.Spec.OCIRepository,
-		compDef.Spec.OCITag,
-		"main",
-		c.Component.Spec.Values,
-	)
+	// Transform the values to a map
+	valuesJSON, err := json.Marshal(c.Component.Spec.Values)
 	if err != nil {
 		return err
 	}
+	values := timoni.Values{}
+	d := json.NewDecoder(strings.NewReader(string(valuesJSON)))
 
-	sets, err := renderer.GetApplySets(values)
+	// Turn numbers into strings, otherwise the decoder will take ints and turn them into floats
+	d.UseNumber()
+	if err = d.Decode(&values); err != nil {
+		return err
+	}
+	c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, "oci://"+compDef.Spec.OCIRepository, compDef.Spec.OCITag, c.Component.Namespace, "", true, values.Get())
+	if err != nil {
+		return err
+	}
+	sets, err := c.componentTemplate.GetApplySets()
 	if err != nil {
 		return err
 	}
 
 	// Add the spec hashes to every object and add them to the apply set
-	for _, o := range sets {
-		hash := common.GetHashForSpec(o.Object["spec"].(map[string]interface{}))
-		labels := common.SetHashToLabels(o.GetLabels(), hash)
-		o.SetLabels(labels)
+	for _, set := range sets {
+		for _, o := range set.Objects {
+			hash := common.GetHashForSpec(o.Object["spec"].(map[string]interface{}))
+			labels := common.SetHashToLabels(o.GetLabels(), hash)
+			o.SetLabels(labels)
+			c.applySet = append(c.applySet, o)
+		}
 	}
-	c.applySet = sets
-
 	// Compress, encode and add the sets to the component annotations
 	setsJSON, err := c.componentTemplate.MarshalApplySets(sets)
 	if err != nil {

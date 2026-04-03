@@ -36,7 +36,9 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	if err := componentHandler.RenderComponent(); err != nil {
-		return ctrl.Result{}, err
+		// Condition is already set on the component — don't requeue on render/config errors
+		logger.Error(err, "Failed to render component")
+		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 }
