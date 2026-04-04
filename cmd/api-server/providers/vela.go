@@ -5,18 +5,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"log"
+
+	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/apis/vela"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/mitchellh/mapstructure"
-	"io"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"log"
 )
 
 const (
@@ -468,63 +468,10 @@ func (p *ProviderDispatcherVela) createNamespace(clientset *k8sUtils.GenericClie
 	return nil
 }
 
-func (p *ProviderDispatcherVela) DeployApplication(manifest map[string]interface{}) error {
-	var statusError *k8sErrors.StatusError
-
-	clientset, err := k8sUtils.GetClientset()
-	if err != nil {
-		log.Printf("Error getting clientset: %v\n", err)
-		return err
-	}
-	// Create namespace if necessary
-	err = p.createNamespace(clientset)
-	if errors.As(err, &statusError) {
-		if statusError.ErrStatus.Code == 409 {
-			log.Printf("Namespace already exists, reusing it\n")
-		} else {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-
-	deploymentRes := schema.GroupVersionResource{Group: "core.oam.dev", Version: "v1beta1", Resource: "applications"}
-	deployment := &unstructured.Unstructured{
-		Object: manifest,
-	}
-	result, err := clientset.Dynamic.Resource(deploymentRes).Namespace(p.Namespace).Create(context.Background(), deployment, metav1.CreateOptions{})
-	if err != nil {
-		if errors.As(err, &statusError) {
-			if statusError.ErrStatus.Code == 409 {
-				log.Printf("Application already exists\n")
-				return conureerrors.ErrApplicationExists
-			}
-		}
-		return err
-	}
-	log.Printf("Created deployment %q.\n", result.GetName())
-	return nil
+func (p *ProviderDispatcherVela) DeployApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component) error {
+	return conureerrors.ErrProviderNotSupported
 }
 
-func (p *ProviderDispatcherVela) UpdateApplication(manifest map[string]interface{}) error {
-	clientset, err := k8sUtils.GetClientset()
-	if err != nil {
-		log.Printf("Error getting clientset: %v\n", err)
-		return err
-	}
-	deploymentRes := schema.GroupVersionResource{Group: "core.oam.dev", Version: "v1beta1", Resource: "applications"}
-	resource, err := clientset.Dynamic.Resource(deploymentRes).Namespace(p.Namespace).Get(context.Background(), p.ApplicationName, metav1.GetOptions{})
-	if err != nil {
-		return err
-	}
-	deployment := &unstructured.Unstructured{
-		Object: manifest,
-	}
-	deployment.SetResourceVersion(resource.GetResourceVersion())
-	result, err := clientset.Dynamic.Resource(deploymentRes).Namespace(p.Namespace).Update(context.Background(), deployment, metav1.UpdateOptions{})
-	if err != nil {
-		return err
-	}
-	log.Printf("Updated deployment %q.\n", result.GetName())
-	return nil
+func (p *ProviderDispatcherVela) UpdateApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component) error {
+	return conureerrors.ErrProviderNotSupported
 }
