@@ -2,6 +2,8 @@ package applications
 
 import (
 	"context"
+
+	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/models"
@@ -12,7 +14,8 @@ import (
 type ProviderType string
 
 const (
-	Vela ProviderType = "vela"
+	Vela   ProviderType = "vela"
+	Conure ProviderType = "conure"
 )
 
 type ProviderStatus interface {
@@ -42,8 +45,8 @@ func NewProviderStatus(application *models.Application, environment *models.Envi
 }
 
 type ProviderDispatcher interface {
-	DeployApplication(manifest map[string]interface{}) error
-	UpdateApplication(manifest map[string]interface{}) error
+	DeployApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component) error
+	UpdateApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component) error
 }
 
 func NewProviderDispatcher(application *models.Application, environment *models.Environment) (ProviderDispatcher, error) {
@@ -51,6 +54,14 @@ func NewProviderDispatcher(application *models.Application, environment *models.
 	providerType := ProviderType(appConfig.ProviderSource)
 
 	switch providerType {
+	case Conure:
+		return &providers.ProviderDispatcherConure{
+			OrganizationID:  application.OrganizationID.Hex(),
+			ApplicationID:   application.ID.Hex(),
+			ApplicationName: application.Name,
+			Namespace:       environment.GetNamespace(),
+			Environment:     environment.Name,
+		}, nil
 	case Vela:
 		return &providers.ProviderDispatcherVela{
 			OrganizationID:  application.OrganizationID.Hex(),

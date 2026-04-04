@@ -1,207 +1,138 @@
 package applications
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
-	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
-var serviceType = map[string]string{
-	"public":  "LoadBalancer",
-	"private": "ClusterIP",
-}
-
-func buildExposeTrait(component *models.Component) map[string]interface{} {
-	if component.Settings.NetworkSettings.Exposed == false {
-		return map[string]interface{}{}
-	}
-	trait := map[string]interface{}{
-		"type":       "expose",
-		"properties": map[string]interface{}{},
-	}
-	// Set the service type
-	exposeType := string(component.Settings.NetworkSettings.Type)
-	trait["properties"].(map[string]interface{})["type"] = serviceType[exposeType]
-
-	type Port map[string]interface{}
-	var ports []Port
-	// Set the ports
-	for _, settingsPort := range component.Settings.NetworkSettings.Ports {
-		traitPort := Port{
-			"port":     settingsPort.HostPort,
-			"protocol": strings.ToUpper(string(settingsPort.Protocol)),
-		}
-		ports = append(ports, traitPort)
-	}
-	trait["properties"].(map[string]interface{})["ports"] = ports
-	return trait
-}
-
-func buildScalerTrait(component *models.Component) map[string]interface{} {
-	trait := map[string]interface{}{
-		"type":       "scaler",
-		"properties": map[string]interface{}{},
-	}
-	trait["properties"].(map[string]interface{})["replicas"] = component.Settings.ResourcesSettings.Replicas
-	return trait
-}
-
-func buildComponentProperties(component *models.Component) map[string]interface{} {
-	properties := map[string]interface{}{
-		"image":           component.Settings.SourceSettings.Repository,
-		"workdir":         "/app",
-		"imagePullPolicy": "Always",
-		"cpu":             fmt.Sprint(component.Settings.ResourcesSettings.CPU),
-		"memory":          fmt.Sprintf("%dMi", component.Settings.ResourcesSettings.Memory),
-		"cmd":             strings.Fields(component.Settings.SourceSettings.Command),
-	}
-	return properties
-}
-
-func buildStorageTrait(component *models.Component) map[string]interface{} {
-	trait := map[string]interface{}{
-		"type": "storage",
-		"properties": map[string]interface{}{
-			"pvc": []map[string]interface{}{},
+func BuildApplicationManifest(application *models.Application, environment *models.Environment, db *database.MongoDB) (*conurev1alpha1.Application, []conurev1alpha1.Component, error) {
+	app := conurev1alpha1.Application{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: conurev1alpha1.GroupVersion.String(),
+			Kind:       "Application",
 		},
-	}
-	type MountPath map[string]interface{}
-	var paths []MountPath
-
-	for _, storage := range component.Settings.StorageSettings {
-		diskSize := resource.NewQuantity(int64(storage.Size*1000*1000*1000), resource.DecimalSI)
-		path := MountPath{
-			"mountPath": storage.MountPath,
-			"name":      storage.Name,
-			"resources": map[string]interface{}{
-				"requests": map[string]interface{}{
-					"storage": fmt.Sprintf("%s", diskSize),
-				},
-			},
-		}
-		paths = append(paths, path)
-	}
-	trait["properties"].(map[string]interface{})["pvc"] = paths
-	return trait
-}
-
-func BuildApplicationManifest(application *models.Application, environment *models.Environment, db *database.MongoDB) (map[string]interface{}, error) {
-	object := map[string]interface{}{
-		"apiVersion": "core.oam.dev/v1beta1",
-		"kind":       "Application",
-		"metadata": map[string]interface{}{
-			"name": application.Name,
-			"labels": map[string]interface{}{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      application.Name,
+			Namespace: environment.GetNamespace(),
+			Labels: map[string]string{
 				k8sUtils.ApplicationIDLabel:  application.ID.Hex(),
 				k8sUtils.OrganizationIDLabel: application.OrganizationID.Hex(),
 				k8sUtils.EnvironmentLabel:    environment.Name,
 				k8sUtils.CreatedByLabel:      "conure",
-				k8sUtils.NamespaceLabel:      environment.GetNamespace(),
 			},
-			"annotations": map[string]interface{}{
+			Annotations: map[string]string{
 				"conure.io/description": application.Description,
 			},
-			"namespace": environment.GetNamespace(),
 		},
-		"spec": map[string]interface{}{},
 	}
-	// Add components
-	var componentsManifest []map[string]interface{}
-	components, err := application.ListComponents(db)
+
+	dbComponents, err := application.ListComponents(db)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	for _, component := range components {
-		componentManifest := map[string]interface{}{
-			"name": component.Name,
-			"type": component.Type,
+
+	var components []conurev1alpha1.Component
+	for _, comp := range dbComponents {
+		component, err := buildComponentManifest(application, environment, &comp, db)
+		if err != nil {
+			return nil, nil, err
 		}
-		// Add traits
-		var traits []map[string]interface{}
-		exposeTrait := buildExposeTrait(&component)
-		if len(exposeTrait) > 0 {
-			traits = append(traits, exposeTrait)
-		}
-		scalerTrait := buildScalerTrait(&component)
-		traits = append(traits, scalerTrait)
-
-		storageTrait := buildStorageTrait(&component)
-		traits = append(traits, storageTrait)
-
-		componentManifest["traits"] = traits
-
-		// Add properties
-		componentManifest["properties"] = buildComponentProperties(&component)
-
-		componentsManifest = append(componentsManifest, componentManifest)
+		components = append(components, *component)
 	}
-	object["spec"].(map[string]interface{})["components"] = componentsManifest
-	return object, nil
+
+	return &app, components, nil
 }
 
-//func BuildApplicationManifest(application *models.Application, environment *models.Environment, db *database.MongoDB) (conurev1alpha1.Application, error) {
-//	applicationObject := conurev1alpha1.Application{
-//		Spec: conurev1alpha1.ApplicationSpec{
-//			Components: []conurev1alpha1.ComponentTemplate{},
-//		},
-//	}
-//	// Add components
-//	components, err := application.ListComponents(db)
-//	if err != nil {
-//		return conurev1alpha1.Application{}, err
-//	}
-//
-//	for _, component := range components {
-//		var spec models.ComponentTypeSpec
-//		err = spec.GetByType(context.Background(), db, application.OrganizationID.Hex(), component.Type)
-//		if err != nil {
-//			return conurev1alpha1.Application{}, err
-//		}
-//		componentTemplate := conurev1alpha1.ComponentTemplate{
-//			ComponentTemplateMetadata: conurev1alpha1.ComponentTemplateMetadata{
-//				Name:        component.Name,
-//				Labels:      nil,
-//				Annotations: nil,
-//			},
-//			Spec: conurev1alpha1.ComponentSpec{
-//				ComponentType: component.Type,
-//				OCIRepository: spec.OCIRepository,
-//				OCITag:        spec.OCITag,
-//				Values: conurev1alpha1.Values{
-//					Resources: conurev1alpha1.Resources{
-//						Replicas: 0,
-//						CPU:      "",
-//						Memory:   "",
-//					},
-//					Network:   conurev1alpha1.Network{
-//						Exposed: false,
-//						Type:    "",
-//						Ports:   nil,
-//					},
-//					Source:    conurev1alpha1.Source{
-//						SourceType:           component.Settings.SourceSettings.,
-//						GitRepository:        "",
-//						GitBranch:            "",
-//						BuildTool:            "",
-//						DockerfilePath:       "",
-//						NixpackPath:          "",
-//						OCIRepository:        "",
-//						Tag:                  "",
-//						Command:              nil,
-//						WorkingDir:           "",
-//						ImagePullSecretsName: "",
-//					},
-//					Storage:   nil,
-//					Advanced:  nil,
-//				},
-//				Variables: nil,
-//			},
-//		}
-//	}
-//
-//	return applicationObject, nil
-//}
+func buildComponentManifest(application *models.Application, environment *models.Environment, component *models.Component, db *database.MongoDB) (*conurev1alpha1.Component, error) {
+	values := conurev1alpha1.Values{
+		Resources: conurev1alpha1.Resources{
+			Replicas: component.Settings.ResourcesSettings.Replicas,
+			CPU:      component.Settings.ResourcesSettings.CPU,
+			Memory:   component.Settings.ResourcesSettings.Memory,
+		},
+		Network: conurev1alpha1.Network{
+			Exposed: component.Settings.NetworkSettings.Exposed,
+			Type:    conurev1alpha1.AccessType(component.Settings.NetworkSettings.Type),
+			Ports:   buildPorts(component.Settings.NetworkSettings.Ports),
+		},
+		Source: conurev1alpha1.Source{
+			SourceType:    "oci",
+			OCIRepository: component.Settings.SourceSettings.Repository,
+			Command:       strings.Fields(component.Settings.SourceSettings.Command),
+		},
+		Storage: buildStorage(component.Settings.StorageSettings),
+	}
+
+	valuesJSON, err := json.Marshal(values)
+	if err != nil {
+		return nil, fmt.Errorf("marshaling component values: %w", err)
+	}
+
+	dbVars, err := new(models.Variable).ListByComp(db, application.OrganizationID, application.ID, environment.ID, component.ID)
+	if err != nil {
+		return nil, fmt.Errorf("listing component variables: %w", err)
+	}
+	variables := make([]conurev1alpha1.Variable, len(dbVars))
+	for i, v := range dbVars {
+		variables[i] = conurev1alpha1.Variable{
+			Name:  v.Name,
+			Value: v.Value,
+		}
+	}
+
+	return &conurev1alpha1.Component{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: conurev1alpha1.GroupVersion.String(),
+			Kind:       conurev1alpha1.ComponentKind,
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      component.Name,
+			Namespace: environment.GetNamespace(),
+			Labels: map[string]string{
+				k8sUtils.ApplicationIDLabel:  application.ID.Hex(),
+				k8sUtils.OrganizationIDLabel: application.OrganizationID.Hex(),
+				k8sUtils.EnvironmentLabel:    environment.Name,
+				k8sUtils.ComponentIDLabel:    component.ID.Hex(),
+				k8sUtils.ComponentNameLabel:  component.Name,
+				k8sUtils.CreatedByLabel:      "conure",
+			},
+		},
+		Spec: conurev1alpha1.ComponentSpec{
+			ComponentType: component.Type,
+			Values:        &runtime.RawExtension{Raw: valuesJSON},
+			Variables:     variables,
+		},
+	}, nil
+}
+
+func buildPorts(ports []models.PortSettings) []conurev1alpha1.Port {
+	result := make([]conurev1alpha1.Port, len(ports))
+	for i, p := range ports {
+		result[i] = conurev1alpha1.Port{
+			HostPort:   p.HostPort,
+			TargetPort: p.TargetPort,
+			Protocol:   conurev1alpha1.Protocol(p.Protocol),
+		}
+	}
+	return result
+}
+
+func buildStorage(storages []models.StorageSettings) []conurev1alpha1.Storage {
+	result := make([]conurev1alpha1.Storage, len(storages))
+	for i, s := range storages {
+		result[i] = conurev1alpha1.Storage{
+			Size:      fmt.Sprintf("%.1fGi", s.Size),
+			Name:      s.Name,
+			MountPath: s.MountPath,
+		}
+	}
+	return result
+}

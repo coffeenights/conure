@@ -1,0 +1,9 @@
+apiVersion: core.conure.io/v1alpha1
+kind: ComponentDefinition
+metadata:
+  name: webservice
+spec:
+  type: webservice
+  description: "A web service component that deploys a container with network exposure"
+  ociRepository: "ghcr.io/coffeenights/conure-templates/components/webservice"
+  ociTag: "latest"

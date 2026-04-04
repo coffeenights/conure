@@ -6,20 +6,22 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
+	"sort"
+	"strings"
+
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/controller/core/common"
 	"github.com/coffeenights/conure/internal/timoni"
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
-	"io"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sort"
-	"strings"
 )
 
 type ComponentHandler struct {
@@ -68,6 +70,23 @@ func NewComponentHandler(ctx context.Context, component *conurev1alpha1.Componen
 }
 
 func (c *ComponentHandler) renderComponent() error {
+	// Look up the ComponentDefinition by the component's type
+	compDefList := &conurev1alpha1.ComponentDefinitionList{}
+	if err := c.Reconciler.List(c.Ctx, compDefList); err != nil {
+		return fmt.Errorf("failed to list component definitions: %w", err)
+	}
+
+	var compDef *conurev1alpha1.ComponentDefinition
+	for i := range compDefList.Items {
+		if compDefList.Items[i].Spec.ComponentType == c.Component.Spec.ComponentType {
+			compDef = &compDefList.Items[i]
+			break
+		}
+	}
+	if compDef == nil {
+		return fmt.Errorf("component definition not found for type %q", c.Component.Spec.ComponentType)
+	}
+
 	// Transform the values to a map
 	valuesJSON, err := json.Marshal(c.Component.Spec.Values)
 	if err != nil {
@@ -81,7 +100,7 @@ func (c *ComponentHandler) renderComponent() error {
 	if err = d.Decode(&values); err != nil {
 		return err
 	}
-	c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, values.Get())
+	c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, "oci://"+compDef.Spec.OCIRepository, compDef.Spec.OCITag, c.Component.Namespace, "", true, values.Get())
 	if err != nil {
 		return err
 	}
@@ -221,7 +240,7 @@ func (c *ComponentHandler) ReconcileDeployedObjects() error {
 	// c.updateStatus()
 
 	// Apply the resources
-	manager, err := module.NewManager(c.Ctx, c.Component.Name, c.Component.Spec.OCIRepository, c.Component.Spec.OCITag, c.Component.Namespace, "", true, map[string]interface{}{})
+	manager, err := module.NewManager(c.Ctx, c.Component.Name, "", "", c.Component.Namespace, "", true, map[string]interface{}{})
 	if err != nil {
 		return err
 	}

@@ -4,20 +4,21 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.20.1
-  name: actiondefinitions.core.conure.io
+  name: componentdefinitions.core.conure.io
 spec:
   group: core.conure.io
   names:
-    kind: ActionDefinition
-    listKind: ActionDefinitionList
-    plural: actiondefinitions
-    singular: actiondefinition
-  scope: Namespaced
+    kind: ComponentDefinition
+    listKind: ComponentDefinitionList
+    plural: componentdefinitions
+    singular: componentdefinition
+  scope: Cluster
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ActionDefinition is the Schema for the actionDefinition API
+        description: ComponentDefinition is the Schema for the componentdefinitions
+          API
         properties:
           apiVersion:
             description: |-
@@ -37,24 +38,23 @@ spec:
           metadata:
             type: object
           spec:
-            description: ActionDefinitionSpec defines the desired state of ActionDefinition
             properties:
-              configDocs:
+              description:
+                type: string
+              ociRegistry:
                 type: string
               ociRepository:
                 type: string
               ociTag:
                 type: string
+              type:
+                type: string
             required:
-            - configDocs
+            - description
             - ociRepository
             - ociTag
-            type: object
-          status:
-            description: ActionDefinitionStatus defines the observed state of ActionDefinition
+            - type
             type: object
         type: object
     served: true
     storage: true
-    subresources:
-      status: {}

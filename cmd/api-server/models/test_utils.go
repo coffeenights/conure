@@ -25,8 +25,8 @@ func ComponentTemplate(appID primitive.ObjectID, name string) *Component {
 		Settings: ComponentSettings{
 			ResourcesSettings: ResourcesSettings{
 				Replicas: 1,
-				CPU:      0.5,
-				Memory:   200,
+				CPU:      "500m",
+				Memory:   "200Mi",
 			},
 			SourceSettings: SourceSettings{
 				Repository: "coffeenights/django:latest",

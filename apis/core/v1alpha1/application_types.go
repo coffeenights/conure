@@ -25,21 +25,20 @@ const (
 
 // ApplicationSpec defines the desired state of Application
 type ApplicationSpec struct {
-	Components []ComponentTemplate `json:"components"`
 }
 
-type ApplicationComponentStatus struct {
-	ComponentName string                   `json:"componentName"`
-	ComponentType string                   `json:"componentType"`
-	Reason        ComponentConditionReason `json:"reason"`
-}
+//type ApplicationComponentStatus struct {
+//	ComponentName string                   `json:"componentName"`
+//	ComponentType string                   `json:"componentType"`
+//	Reason        ComponentConditionReason `json:"reason"`
+//}
 
 // ApplicationStatus defines the observed state of Application
 type ApplicationStatus struct {
-	Conditions      []metav1.Condition           `json:"conditions,omitempty"`
-	Components      []ApplicationComponentStatus `json:"components,omitempty"`
-	ReadyComponents int                          `json:"readyComponents,omitempty"`
-	TotalComponents int                          `json:"totalComponents,omitempty"`
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	//Components      []ApplicationComponentStatus `json:"components,omitempty"`
+	//ReadyComponents int                          `json:"readyComponents,omitempty"`
+	//TotalComponents int                          `json:"totalComponents,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -51,7 +50,7 @@ type Application struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ApplicationSpec   `json:"spec,omitempty"`
+	//Spec   ApplicationSpec   `json:"spec,omitempty"`
 	Status ApplicationStatus `json:"status,omitempty"`
 }
 

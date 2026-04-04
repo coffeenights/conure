@@ -7,6 +7,7 @@ resources:
 - bases/core.conure.io_workflows.yaml
 - bases/core.conure.io_workflowruns.yaml
 - bases/core.conure.io_components.yaml
+- bases/core.conure.io_componentdefinitions.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:

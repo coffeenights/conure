@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"strings"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
@@ -36,110 +35,110 @@ func NewApplicationHandler(ctx context.Context, application *conurev1alpha1.Appl
 	return &handler, nil
 }
 
-func (a *ApplicationHandler) ReconcileComponents() error {
-	for _, component := range a.Application.Spec.Components {
-		err := a.ReconcileComponent(&component)
-		if err != nil {
-			return err
-		}
-	}
-	readyComponents := 0
-	for _, component := range a.Application.Status.Components {
-		if component.Reason == conurev1alpha1.ComponentReadyRunningReason {
-			readyComponents++
-		}
-	}
-	a.Application.Status.ReadyComponents = readyComponents
-	a.Application.Status.TotalComponents = len(a.Application.Spec.Components)
-	return common.ApplyStatus(a.Ctx, a.Application, a.Reconciler.Client)
-}
+//func (a *ApplicationHandler) ReconcileComponents() error {
+//	for _, component := range a.Application.Spec.Components {
+//		err := a.ReconcileComponent(&component)
+//		if err != nil {
+//			return err
+//		}
+//	}
+//	readyComponents := 0
+//	for _, component := range a.Application.Status.Components {
+//		if component.Reason == conurev1alpha1.ComponentReadyRunningReason {
+//			readyComponents++
+//		}
+//	}
+//	a.Application.Status.ReadyComponents = readyComponents
+//	a.Application.Status.TotalComponents = len(a.Application.Spec.Components)
+//	return common.ApplyStatus(a.Ctx, a.Application, a.Reconciler.Client)
+//}
 
-func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.ComponentTemplate) error {
-	var (
-		wflr              conurev1alpha1.WorkflowRun
-		component         conurev1alpha1.Component
-		existingComponent conurev1alpha1.Component
-	)
-	// Build the component object
-	component.ObjectMeta = metav1.ObjectMeta{
-		Name:        componentTemp.Name,
-		Annotations: componentTemp.Annotations,
-		Namespace:   a.Application.Namespace,
-	}
-	component.Spec = componentTemp.Spec
-	component.TypeMeta = metav1.TypeMeta{
-		Kind:       conurev1alpha1.ComponentKind,
-		APIVersion: a.Application.APIVersion,
-	}
-	specHashTarget := common.GetHashForSpec(&component.Spec)
-	component.Labels = common.SetHashToLabels(componentTemp.Labels, specHashTarget)
-	if err := ctrl.SetControllerReference(a.Application, &component, a.Reconciler.Scheme); err != nil {
-		return err
-	}
-
-	// Find an existing component
-	err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: component.Name}, &existingComponent)
-
-	// If the component does not exist, create it and run its workflow
-	if apierrors.IsNotFound(err) {
-		a.Logger.Info("Creating component", "component", component.Name)
-		if err = a.setRenderingComponentStatus(component.Name); err != nil {
-			return err
-		}
-		if err = a.createComponent(&component); err != nil {
-			if err2 := a.setRenderingComponentFailedStatus(component.Name); err2 != nil {
-				return err2
-			}
-			return err
-		} else {
-			return nil
-		}
-	} else if err != nil {
-		return err
-	}
-
-	// If the component exists, update it
-	if err = a.updateComponent(&component, &existingComponent, specHashTarget); err != nil {
-		return err
-	}
-
-	// Find workflow runs associated with the component if the status is running
-	condition := a.getConditionWorkflow(&existingComponent)
-	if condition.Reason == conurev1alpha1.ComponentWorkflowRunningReason.String() || condition.Reason == conurev1alpha1.ComponentWorkflowTriggeredReason.String() {
-		wflrName := existingComponent.ObjectMeta.Labels[conurev1alpha1.WorkflowRunNamelabel]
-		err = a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: wflrName}, &wflr)
-		if apierrors.IsNotFound(err) {
-			a.Logger.V(1).Info("Workflow run not found", "component", component.Name)
-		} else if err != nil {
-			return err
-		} else {
-			if err = a.updateWorkflowRunConditions(&wflr, &existingComponent); err != nil {
-				return err
-			}
-		}
-	}
-	// Update the component's status in the application
-	conditionReady := a.getConditionReady(&existingComponent)
-	var reason conurev1alpha1.ComponentConditionReason
-	if conditionReady.Reason == "" {
-		reason = conurev1alpha1.ComponentReadyPendingReason
-	} else {
-		reason = conurev1alpha1.ComponentConditionReason(conditionReady.Reason)
-	}
-	componentStatus := conurev1alpha1.ApplicationComponentStatus{
-		ComponentName: existingComponent.Name,
-		ComponentType: existingComponent.Spec.ComponentType,
-		Reason:        reason,
-	}
-	for i, comp := range a.Application.Status.Components {
-		if comp.ComponentName == existingComponent.Name {
-			a.Application.Status.Components[i] = componentStatus
-			return nil
-		}
-	}
-	a.Application.Status.Components = append(a.Application.Status.Components, componentStatus)
-	return nil
-}
+//func (a *ApplicationHandler) ReconcileComponent(componentTemp *conurev1alpha1.ComponentTemplate) error {
+//	var (
+//		wflr              conurev1alpha1.WorkflowRun
+//		component         conurev1alpha1.Component
+//		existingComponent conurev1alpha1.Component
+//	)
+//	// Build the component object
+//	component.ObjectMeta = metav1.ObjectMeta{
+//		Name:        componentTemp.Name,
+//		Annotations: componentTemp.Annotations,
+//		Namespace:   a.Application.Namespace,
+//	}
+//	component.Spec = componentTemp.Spec
+//	component.TypeMeta = metav1.TypeMeta{
+//		Kind:       conurev1alpha1.ComponentKind,
+//		APIVersion: a.Application.APIVersion,
+//	}
+//	specHashTarget := common.GetHashForSpec(&component.Spec)
+//	component.Labels = common.SetHashToLabels(componentTemp.Labels, specHashTarget)
+//	if err := ctrl.SetControllerReference(a.Application, &component, a.Reconciler.Scheme); err != nil {
+//		return err
+//	}
+//
+//	// Find an existing component
+//	err := a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: component.Name}, &existingComponent)
+//
+//	// If the component does not exist, create it and run its workflow
+//	if apierrors.IsNotFound(err) {
+//		a.Logger.Info("Creating component", "component", component.Name)
+//		if err = a.setRenderingComponentStatus(component.Name); err != nil {
+//			return err
+//		}
+//		if err = a.createComponent(&component); err != nil {
+//			if err2 := a.setRenderingComponentFailedStatus(component.Name); err2 != nil {
+//				return err2
+//			}
+//			return err
+//		} else {
+//			return nil
+//		}
+//	} else if err != nil {
+//		return err
+//	}
+//
+//	// If the component exists, update it
+//	//if err = a.updateComponent(&component, &existingComponent, specHashTarget); err != nil {
+//	//	return err
+//	//}
+//
+//	// Find workflow runs associated with the component if the status is running
+//	condition := a.getConditionWorkflow(&existingComponent)
+//	if condition.Reason == conurev1alpha1.ComponentWorkflowRunningReason.String() || condition.Reason == conurev1alpha1.ComponentWorkflowTriggeredReason.String() {
+//		wflrName := existingComponent.ObjectMeta.Labels[conurev1alpha1.WorkflowRunNamelabel]
+//		err = a.Reconciler.Get(a.Ctx, client.ObjectKey{Namespace: a.Application.Namespace, Name: wflrName}, &wflr)
+//		if apierrors.IsNotFound(err) {
+//			a.Logger.V(1).Info("Workflow run not found", "component", component.Name)
+//		} else if err != nil {
+//			return err
+//		} else {
+//			if err = a.updateWorkflowRunConditions(&wflr, &existingComponent); err != nil {
+//				return err
+//			}
+//		}
+//	}
+//	// Update the component's status in the application
+//	conditionReady := a.getConditionReady(&existingComponent)
+//	var reason conurev1alpha1.ComponentConditionReason
+//	if conditionReady.Reason == "" {
+//		reason = conurev1alpha1.ComponentReadyPendingReason
+//	} else {
+//		reason = conurev1alpha1.ComponentConditionReason(conditionReady.Reason)
+//	}
+//	componentStatus := conurev1alpha1.ApplicationComponentStatus{
+//		ComponentName: existingComponent.Name,
+//		ComponentType: existingComponent.Spec.ComponentType,
+//		Reason:        reason,
+//	}
+//	for i, comp := range a.Application.Status.Components {
+//		if comp.ComponentName == existingComponent.Name {
+//			a.Application.Status.Components[i] = componentStatus
+//			return nil
+//		}
+//	}
+//	a.Application.Status.Components = append(a.Application.Status.Components, componentStatus)
+//	return nil
+//}
 
 func (a *ApplicationHandler) updateWorkflowRunConditions(wflr *conurev1alpha1.WorkflowRun, existingComponent *conurev1alpha1.Component) error {
 	index, exists := common.ContainsCondition(wflr.Status.Conditions, conurev1alpha1.ConditionTypeRunningAction.String())
@@ -201,41 +200,41 @@ func (a *ApplicationHandler) createComponent(component *conurev1alpha1.Component
 	return a.Reconciler.Update(a.Ctx, component)
 }
 
-func (a *ApplicationHandler) updateComponent(component *conurev1alpha1.Component, existingComponent *conurev1alpha1.Component, targetHash string) error {
-	// Check differences between the existing component and the new component
-	specHashActual := common.GetHashForSpec(existingComponent.Spec)
-	if specHashActual != targetHash {
-		a.Logger.V(1).Info("Updating component", "component", component.Name)
-		// Run workflow if the source has changed
-		if !reflect.DeepEqual(existingComponent.Spec.Values.Source, component.Spec.Values.Source) {
-			if err := a.setRenderingComponentStatus(component.Name); err != nil {
-				return err
-			}
-			if err := a.setConditionWorkflow(existingComponent, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow was triggered"); err != nil {
-				return err
-			}
-			wflr, err := a.runComponentWorkflow(component)
-			if err != nil {
-				if err2 := a.setConditionWorkflow(existingComponent, metav1.ConditionFalse, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow failed to trigger"); err2 != nil {
-					return err2
-				}
-				if err3 := a.setRenderingComponentFailedStatus(component.Name); err3 != nil {
-					return err3
-				}
-				return err
-			}
-			labels := existingComponent.GetLabels()
-			labels[conurev1alpha1.WorkflowRunNamelabel] = wflr.Name
-			existingComponent.SetLabels(labels)
-		}
-		existingComponent.Spec = *component.Spec.DeepCopy()
-		if err := a.Reconciler.Update(a.Ctx, existingComponent); err != nil {
-			a.Logger.Error(err, "Unable to update the component for application", "component", component.Name)
-			return err
-		}
-	}
-	return nil
-}
+//func (a *ApplicationHandler) updateComponent(component *conurev1alpha1.Component, existingComponent *conurev1alpha1.Component, targetHash string) error {
+//	// Check differences between the existing component and the new component
+//	specHashActual := common.GetHashForSpec(existingComponent.Spec)
+//	if specHashActual != targetHash {
+//		a.Logger.V(1).Info("Updating component", "component", component.Name)
+//		// Run workflow if the source has changed
+//		if !reflect.DeepEqual(existingComponent.Spec.Values.Source, component.Spec.Values.Source) {
+//			if err := a.setRenderingComponentStatus(component.Name); err != nil {
+//				return err
+//			}
+//			if err := a.setConditionWorkflow(existingComponent, metav1.ConditionTrue, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow was triggered"); err != nil {
+//				return err
+//			}
+//			wflr, err := a.runComponentWorkflow(component)
+//			if err != nil {
+//				if err2 := a.setConditionWorkflow(existingComponent, metav1.ConditionFalse, conurev1alpha1.ComponentWorkflowTriggeredReason, "Workflow failed to trigger"); err2 != nil {
+//					return err2
+//				}
+//				if err3 := a.setRenderingComponentFailedStatus(component.Name); err3 != nil {
+//					return err3
+//				}
+//				return err
+//			}
+//			labels := existingComponent.GetLabels()
+//			labels[conurev1alpha1.WorkflowRunNamelabel] = wflr.Name
+//			existingComponent.SetLabels(labels)
+//		}
+//		existingComponent.Spec = *component.Spec.DeepCopy()
+//		if err := a.Reconciler.Update(a.Ctx, existingComponent); err != nil {
+//			a.Logger.Error(err, "Unable to update the component for application", "component", component.Name)
+//			return err
+//		}
+//	}
+//	return nil
+//}
 
 func (a *ApplicationHandler) setComponentWorkflow(component *conurev1alpha1.Component) error {
 	// Transform the values to a map
@@ -250,7 +249,7 @@ func (a *ApplicationHandler) setComponentWorkflow(component *conurev1alpha1.Comp
 	if err = d.Decode(&values); err != nil {
 		return err
 	}
-	componentTemplate, err := module.NewManager(a.Ctx, component.Name, component.Spec.OCIRepository, component.Spec.OCITag, a.Application.Namespace, "", true, values.Get())
+	componentTemplate, err := module.NewManager(a.Ctx, component.Name, "", "", a.Application.Namespace, "", true, values.Get())
 	if err != nil {
 		return err
 	}
