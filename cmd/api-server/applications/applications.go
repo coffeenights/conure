@@ -148,7 +148,7 @@ func (a *ApiHandler) DeployApplication(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 		return
 	}
-	manifest, err := BuildApplicationManifest(handler.Model, env, a.MongoDB)
+	app, components, err := BuildApplicationManifest(handler.Model, env, a.MongoDB)
 	if err != nil {
 		log.Printf("Error building application manifest: %v\n", err)
 		conureerrors.AbortWithError(c, err)
@@ -160,10 +160,10 @@ func (a *ApiHandler) DeployApplication(c *gin.Context) {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	err = provider.DeployApplication(manifest)
+	err = provider.DeployApplication(app, components)
 	if errors.Is(err, conureerrors.ErrApplicationExists) {
 		log.Println("Application exists, updating instead")
-		err = provider.UpdateApplication(manifest)
+		err = provider.UpdateApplication(app, components)
 		if err != nil {
 			conureerrors.AbortWithError(c, err)
 			return

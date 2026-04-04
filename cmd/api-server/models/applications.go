@@ -536,9 +536,9 @@ func (e *Environment) GetNamespace() string {
 }
 
 type ResourcesSettings struct {
-	Replicas int     `json:"replicas" bson:"replicas"`
-	CPU      float32 `json:"cpu" bson:"cpu"`
-	Memory   int     `json:"memory" bson:"memory"`
+	Replicas int    `json:"replicas" bson:"replicas"`
+	CPU      string `json:"cpu" bson:"cpu"`
+	Memory   string `json:"memory" bson:"memory"`
 }
 
 type AccessType string
