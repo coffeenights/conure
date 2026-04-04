@@ -64,6 +64,10 @@ test: manifests generate fmt envtest ## Run tests.
 build: manifests generate fmt vet ## Build manager binary.
 	go build -o bin/manager cmd/control/main.go
 
+.PHONY: build-cli
+build-cli: fmt vet ## Build CLI binary.
+	go build -o bin/conure ./cmd/cli/
+
 .PHONY: run
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/control/main.go
