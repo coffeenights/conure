@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
@@ -39,7 +40,34 @@ func (p *ProviderDispatcherConure) createNamespace(clientset *k8sUtils.GenericCl
 	return err
 }
 
-func (p *ProviderDispatcherConure) DeployApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component) error {
+func (p *ProviderDispatcherConure) syncComponentVariables(clientset *k8sUtils.GenericClientset, cv ComponentVariables) error {
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-variables", cv.ComponentName),
+			Namespace: p.Namespace,
+		},
+		Data: cv.Variables,
+	}
+	if err := k8sUtils.CreateOrUpdateConfigMap(clientset, p.Namespace, cm); err != nil {
+		return fmt.Errorf("syncing configmap for component %q: %w", cv.ComponentName, err)
+	}
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-secrets", cv.ComponentName),
+			Namespace: p.Namespace,
+		},
+		Type:       corev1.SecretTypeOpaque,
+		StringData: cv.Secrets,
+	}
+	if err := k8sUtils.CreateOrUpdateSecret(clientset, p.Namespace, secret); err != nil {
+		return fmt.Errorf("syncing secret for component %q: %w", cv.ComponentName, err)
+	}
+
+	return nil
+}
+
+func (p *ProviderDispatcherConure) DeployApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component, compVars []ComponentVariables) error {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
@@ -63,6 +91,9 @@ func (p *ProviderDispatcherConure) DeployApplication(app *conurev1alpha1.Applica
 	log.Printf("Created application %q\n", p.ApplicationName)
 
 	for i := range components {
+		if err = p.syncComponentVariables(clientset, compVars[i]); err != nil {
+			return err
+		}
 		_, err = coreClient.Components(p.Namespace).Create(context.Background(), &components[i], metav1.CreateOptions{})
 		if err != nil {
 			return err
@@ -73,7 +104,7 @@ func (p *ProviderDispatcherConure) DeployApplication(app *conurev1alpha1.Applica
 	return nil
 }
 
-func (p *ProviderDispatcherConure) UpdateApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component) error {
+func (p *ProviderDispatcherConure) UpdateApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component, compVars []ComponentVariables) error {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		log.Printf("Error getting clientset: %v\n", err)
@@ -95,6 +126,9 @@ func (p *ProviderDispatcherConure) UpdateApplication(app *conurev1alpha1.Applica
 
 	for i := range components {
 		comp := &components[i]
+		if err = p.syncComponentVariables(clientset, compVars[i]); err != nil {
+			return err
+		}
 		existingComp, err := coreClient.Components(p.Namespace).Get(context.Background(), comp.Name, metav1.GetOptions{})
 		if k8sErrors.IsNotFound(err) {
 			_, err = coreClient.Components(p.Namespace).Create(context.Background(), comp, metav1.CreateOptions{})
