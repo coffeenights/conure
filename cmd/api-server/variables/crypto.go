@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
-	"log"
 )
 
 type SecretKeyStorage interface {
@@ -16,54 +15,64 @@ type SecretKeyStorage interface {
 	Load() ([]byte, error)
 }
 
-func encrypt(stringToEncrypt string, keyString string) (encryptedString string) {
-	key, _ := hex.DecodeString(keyString)
+func encrypt(stringToEncrypt string, keyString string) (string, error) {
+	key, err := hex.DecodeString(keyString)
+	if err != nil {
+		return "", fmt.Errorf("invalid key: %w", err)
+	}
 	plaintext := []byte(stringToEncrypt)
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		log.Panic(err)
+		return "", fmt.Errorf("creating cipher: %w", err)
 	}
 
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		log.Panic(err)
+		return "", fmt.Errorf("creating GCM: %w", err)
 	}
 
 	nonce := make([]byte, aesGCM.NonceSize())
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		log.Panic(err)
+		return "", fmt.Errorf("generating nonce: %w", err)
 	}
 
 	ciphertext := aesGCM.Seal(nonce, nonce, plaintext, nil)
-	encryptedString = hex.EncodeToString(ciphertext)
-	return
+	return hex.EncodeToString(ciphertext), nil
 }
 
-func decrypt(encryptedString string, keyString string) (decryptedString string) {
-	key, _ := hex.DecodeString(keyString)
-	enc, _ := hex.DecodeString(encryptedString)
+func decrypt(encryptedString string, keyString string) (string, error) {
+	key, err := hex.DecodeString(keyString)
+	if err != nil {
+		return "", fmt.Errorf("invalid key: %w", err)
+	}
+	enc, err := hex.DecodeString(encryptedString)
+	if err != nil {
+		return "", fmt.Errorf("invalid ciphertext: %w", err)
+	}
 
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		log.Panic(err)
+		return "", fmt.Errorf("creating cipher: %w", err)
 	}
 
 	aesGCM, err := cipher.NewGCM(block)
 	if err != nil {
-		log.Panic(err)
+		return "", fmt.Errorf("creating GCM: %w", err)
 	}
 
 	nonceSize := aesGCM.NonceSize()
+	if len(enc) < nonceSize {
+		return "", fmt.Errorf("ciphertext too short")
+	}
 	nonce, ciphertext := enc[:nonceSize], enc[nonceSize:]
 
 	plaintext, err := aesGCM.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		log.Panic(err)
+		return "", fmt.Errorf("decrypting: %w", err)
 	}
 
-	decryptedString = string(plaintext)
-	return
+	return string(plaintext), nil
 }
 
 func GenerateAESKey(bitSize int) ([]byte, error) {

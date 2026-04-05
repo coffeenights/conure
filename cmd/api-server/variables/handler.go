@@ -2,6 +2,7 @@ package variables
 
 import (
 	"encoding/hex"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -45,7 +46,12 @@ func (h *Handler) ListOrganizationVariables(c *gin.Context) {
 	// Decrypt the values of the variables
 	for i, v := range variables {
 		if v.IsEncrypted {
-			variables[i].Value = DecryptValue(h.KeyStorage, v.Value)
+			decrypted, err := DecryptValue(h.KeyStorage, v.Value)
+			if err != nil {
+				conureerrors.AbortWithError(c, fmt.Errorf("decrypting variable %q: %w", v.Name, err))
+				return
+			}
+			variables[i].Value = decrypted
 		}
 	}
 
@@ -76,7 +82,12 @@ func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 	// Decrypt the values of the variables
 	for i, v := range variables {
 		if v.IsEncrypted {
-			variables[i].Value = DecryptValue(h.KeyStorage, v.Value)
+			decrypted, err := DecryptValue(h.KeyStorage, v.Value)
+			if err != nil {
+				conureerrors.AbortWithError(c, fmt.Errorf("decrypting variable %q: %w", v.Name, err))
+				return
+			}
+			variables[i].Value = decrypted
 		}
 	}
 
@@ -111,7 +122,12 @@ func (h *Handler) ListComponentVariables(c *gin.Context) {
 	// Decrypt the values of the variables
 	for i, v := range variables {
 		if v.IsEncrypted {
-			variables[i].Value = DecryptValue(h.KeyStorage, v.Value)
+			decrypted, err := DecryptValue(h.KeyStorage, v.Value)
+			if err != nil {
+				conureerrors.AbortWithError(c, fmt.Errorf("decrypting variable %q: %w", v.Name, err))
+				return
+			}
+			variables[i].Value = decrypted
 		}
 	}
 
@@ -178,7 +194,12 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	}
 
 	if variable.IsEncrypted {
-		variable.Value = EncryptValue(h.KeyStorage, variable.Value)
+		encrypted, err := EncryptValue(h.KeyStorage, variable.Value)
+		if err != nil {
+			conureerrors.AbortWithError(c, fmt.Errorf("encrypting variable: %w", err))
+			return
+		}
+		variable.Value = encrypted
 	}
 
 	// save the variable to the database
@@ -267,23 +288,18 @@ func checkVariable(h *Handler, variable models.Variable) error {
 	return nil
 }
 
-func EncryptValue(storage SecretKeyStorage, value string) string {
+func EncryptValue(storage SecretKeyStorage, value string) (string, error) {
 	key, err := storage.Load()
 	if err != nil {
-		log.Panic(err)
+		return "", fmt.Errorf("loading key: %w", err)
 	}
-
-	encryptedValue := encrypt(value, hex.EncodeToString(key))
-	return encryptedValue
+	return encrypt(value, hex.EncodeToString(key))
 }
 
-func DecryptValue(storage SecretKeyStorage, value string) string {
+func DecryptValue(storage SecretKeyStorage, value string) (string, error) {
 	key, err := storage.Load()
 	if err != nil {
-		log.Panic(err)
+		return "", fmt.Errorf("loading key: %w", err)
 	}
-
-	decryptedValue := decrypt(value, hex.EncodeToString(key))
-
-	return decryptedValue
+	return decrypt(value, hex.EncodeToString(key))
 }
