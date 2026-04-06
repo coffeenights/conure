@@ -1097,8 +1097,10 @@ components:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
           example: "507f1f77bcf86cd799439012"
-        settings:
-          $ref: '#/components/schemas/ComponentSettings'
+        values:
+          type: object
+          additionalProperties: true
+          description: Flexible key-value map for component configuration
         created_at:
           type: string
           format: date-time
@@ -1121,100 +1123,10 @@ components:
         description:
           type: string
           example: "Web service component"
-        settings:
-          $ref: '#/components/schemas/ComponentSettings'
-
-    ComponentSettings:
-      type: object
-      properties:
-        resources_settings:
-          $ref: '#/components/schemas/ResourcesSettings'
-        source_settings:
-          $ref: '#/components/schemas/SourceSettings'
-        network_settings:
-          $ref: '#/components/schemas/NetworkSettings'
-        storage_settings:
-          type: array
-          items:
-            $ref: '#/components/schemas/StorageSettings'
-
-    ResourcesSettings:
-      type: object
-      properties:
-        replicas:
-          type: integer
-          minimum: 1
-          example: 3
-        cpu:
-          type: number
-          format: float
-          minimum: 0.1
-          example: 1.0
-        memory:
-          type: integer
-          minimum: 128
-          example: 1024
-          description: Memory in MB
-
-    SourceSettings:
-      type: object
-      properties:
-        repository:
-          type: string
-          example: "ghcr.io/myorg/myapp:latest"
-        command:
-          type: string
-          example: "./start.sh"
-
-    NetworkSettings:
-      type: object
-      properties:
-        exposed:
-          type: boolean
-          example: true
-        type:
-          type: string
-          enum: [public, private]
-          example: "public"
-        ports:
-          type: array
-          items:
-            $ref: '#/components/schemas/Port'
-
-    Port:
-      type: object
-      properties:
-        host_port:
-          type: integer
-          minimum: 1
-          maximum: 65535
-          example: 8080
-        target_port:
-          type: integer
-          minimum: 1
-          maximum: 65535
-          example: 3000
-        protocol:
-          type: string
-          enum: [tcp, udp]
-          default: tcp
-          example: "tcp"
-
-    StorageSettings:
-      type: object
-      properties:
-        size:
-          type: number
-          format: float
-          minimum: 0.1
-          example: 10.0
-          description: Storage size in GB
-        name:
-          type: string
-          example: "data-volume"
-        mount_path:
-          type: string
-          example: "/app/data"
+        values:
+          type: object
+          additionalProperties: true
+          description: Flexible key-value map for component configuration
 
     ComponentListResponse:
       type: object

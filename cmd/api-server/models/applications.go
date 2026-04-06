@@ -482,11 +482,11 @@ func (c *ComponentTypeSpec) GetByType(ctx context.Context, db *database.MongoDB,
 
 type Component struct {
 	Model         `bson:",inline"`
-	Name          string             `json:"name" bson:"name"`
-	Type          string             `json:"type" bson:"type"`
-	Description   string             `json:"description" bson:"description"`
-	ApplicationID primitive.ObjectID `json:"application_id" bson:"applicationID"`
-	Settings      ComponentSettings  `json:"settings" bson:"settings"`
+	Name          string                 `json:"name" bson:"name"`
+	Type          string                 `json:"type" bson:"type"`
+	Description   string                 `json:"description" bson:"description"`
+	ApplicationID primitive.ObjectID     `json:"application_id" bson:"applicationID"`
+	Values        map[string]interface{} `json:"values" bson:"values"`
 }
 
 func (c *Component) GetCollectionName() string {
@@ -533,54 +533,4 @@ func NewEnvironment(name string) *Environment {
 
 func (e *Environment) GetNamespace() string {
 	return fmt.Sprintf("%s-%s", e.ID, e.Name)
-}
-
-type ResourcesSettings struct {
-	Replicas int    `json:"replicas" bson:"replicas"`
-	CPU      string `json:"cpu" bson:"cpu"`
-	Memory   string `json:"memory" bson:"memory"`
-}
-
-type AccessType string
-
-const (
-	Public  AccessType = "public"
-	Private AccessType = "private"
-)
-
-type Protocol string
-
-const (
-	TCP Protocol = "tcp"
-	UDP Protocol = "udp"
-)
-
-type PortSettings struct {
-	HostPort   int      `json:"host_port" bson:"hostPort"`
-	TargetPort int      `json:"target_port" bson:"targetPort"`
-	Protocol   Protocol `json:"protocol" bson:"protocol"`
-}
-
-type NetworkSettings struct {
-	Exposed bool           `json:"exposed" bson:"exposed"`
-	Type    AccessType     `json:"type" bson:"type"`
-	Ports   []PortSettings `json:"ports" bson:"ports"`
-}
-
-type SourceSettings struct {
-	Repository string `json:"repository" bson:"repository"`
-	Command    string `json:"command" bson:"command"`
-}
-
-type StorageSettings struct {
-	Size      float32 `json:"size" bson:"size"`
-	Name      string  `json:"name" bson:"name"`
-	MountPath string  `json:"mount_path" bson:"mountPath"`
-}
-
-type ComponentSettings struct {
-	ResourcesSettings ResourcesSettings `json:"resources_settings" bson:"resourcesSettings"`
-	SourceSettings    SourceSettings    `json:"source_settings" bson:"sourceSettings"`
-	NetworkSettings   NetworkSettings   `json:"network_settings" bson:"networkSettings"`
-	StorageSettings   []StorageSettings `json:"storage_settings" bson:"storageSettings"`
 }

@@ -9,7 +9,7 @@ spec:
       values:
         gitRepository: "https://github.com/coffeenights/conure.git"
         branch: "main"
-        imagePullSecretsName: "regcred"
+        imagePullSecrets: "regcred"
         message: "Building Conure!"
         ociRepository: "registry-service.conure-system.svc.cluster.local:5000/conure/backend"
         ociTag: "latest"

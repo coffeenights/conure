@@ -3,7 +3,6 @@ package applications
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/cmd/api-server/database"
@@ -56,26 +55,7 @@ func BuildApplicationManifest(application *models.Application, environment *mode
 }
 
 func buildComponentManifest(application *models.Application, environment *models.Environment, component *models.Component, db *database.MongoDB, keyStorage variables.SecretKeyStorage) (*conurev1alpha1.Component, providers.ComponentVariables, error) {
-	values := conurev1alpha1.Values{
-		Resources: conurev1alpha1.Resources{
-			Replicas: component.Settings.ResourcesSettings.Replicas,
-			CPU:      component.Settings.ResourcesSettings.CPU,
-			Memory:   component.Settings.ResourcesSettings.Memory,
-		},
-		Network: conurev1alpha1.Network{
-			Exposed: component.Settings.NetworkSettings.Exposed,
-			Type:    conurev1alpha1.AccessType(component.Settings.NetworkSettings.Type),
-			Ports:   buildPorts(component.Settings.NetworkSettings.Ports),
-		},
-		Source: conurev1alpha1.Source{
-			SourceType:    "oci",
-			OCIRepository: component.Settings.SourceSettings.Repository,
-			Command:       strings.Fields(component.Settings.SourceSettings.Command),
-		},
-		Storage: buildStorage(component.Settings.StorageSettings),
-	}
-
-	valuesJSON, err := json.Marshal(values)
+	valuesJSON, err := json.Marshal(component.Values)
 	if err != nil {
 		return nil, providers.ComponentVariables{}, fmt.Errorf("marshaling component values: %w", err)
 	}
@@ -120,22 +100,19 @@ func gatherVariables(db *database.MongoDB, application *models.Application, envi
 	}
 	merged := map[string]entry{}
 
-	levels := []struct {
-		fetch func() ([]models.Variable, error)
-	}{
-		{func() ([]models.Variable, error) {
-			return new(models.Variable).ListByOrg(db, application.OrganizationID)
-		}},
-		{func() ([]models.Variable, error) {
-			return new(models.Variable).ListByEnv(db, application.OrganizationID, application.ID, environment.ID)
-		}},
-		{func() ([]models.Variable, error) {
-			return new(models.Variable).ListByComp(db, application.OrganizationID, application.ID, environment.ID, component.ID)
-		}},
+	v := new(models.Variable)
+	fetchers := []func() ([]models.Variable, error){
+		func() ([]models.Variable, error) { return v.ListByOrg(db, application.OrganizationID) },
+		func() ([]models.Variable, error) {
+			return v.ListByEnv(db, application.OrganizationID, application.ID, environment.ID)
+		},
+		func() ([]models.Variable, error) {
+			return v.ListByComp(db, application.OrganizationID, application.ID, environment.ID, component.ID)
+		},
 	}
 
-	for _, level := range levels {
-		vars, err := level.fetch()
+	for _, fetch := range fetchers {
+		vars, err := fetch()
 		if err != nil {
 			return providers.ComponentVariables{}, fmt.Errorf("listing variables: %w", err)
 		}
@@ -160,28 +137,4 @@ func gatherVariables(db *database.MongoDB, application *models.Application, envi
 		}
 	}
 	return cv, nil
-}
-
-func buildPorts(ports []models.PortSettings) []conurev1alpha1.Port {
-	result := make([]conurev1alpha1.Port, len(ports))
-	for i, p := range ports {
-		result[i] = conurev1alpha1.Port{
-			HostPort:   p.HostPort,
-			TargetPort: p.TargetPort,
-			Protocol:   conurev1alpha1.Protocol(p.Protocol),
-		}
-	}
-	return result
-}
-
-func buildStorage(storages []models.StorageSettings) []conurev1alpha1.Storage {
-	result := make([]conurev1alpha1.Storage, len(storages))
-	for i, s := range storages {
-		result[i] = conurev1alpha1.Storage{
-			Size:      fmt.Sprintf("%.1fGi", s.Size),
-			Name:      s.Name,
-			MountPath: s.MountPath,
-		}
-	}
-	return result
 }

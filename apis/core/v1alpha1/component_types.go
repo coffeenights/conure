@@ -46,7 +46,6 @@ const (
 type ComponentSpec struct {
 	ComponentType string                `json:"type"`
 	Values        *runtime.RawExtension `json:"values"`
-	Variables     []Variable            `json:"variables"`
 }
 
 type ComponentStatus struct {
@@ -85,71 +84,6 @@ type ComponentList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Component `json:"items"`
-}
-
-type Values struct {
-	Resources Resources             `json:"resources"`
-	Network   Network               `json:"network"`
-	Source    Source                `json:"source"`
-	Storage   []Storage             `json:"storage"`
-	Advanced  *runtime.RawExtension `json:"advanced,omitempty"`
-}
-
-type Resources struct {
-	Replicas int    `json:"replicas"`
-	CPU      string `json:"cpu"`
-	Memory   string `json:"memory"`
-}
-
-type AccessType string
-
-const (
-	Public  AccessType = "public"
-	Private AccessType = "private"
-)
-
-type Protocol string
-
-const (
-	TCP Protocol = "tcp"
-	UDP Protocol = "udp"
-)
-
-type Port struct {
-	HostPort   int      `json:"hostPort"`
-	TargetPort int      `json:"targetPort"`
-	Protocol   Protocol `json:"protocol"`
-}
-
-type Network struct {
-	Exposed bool       `json:"exposed"`
-	Type    AccessType `json:"type"`
-	Ports   []Port     `json:"ports"`
-}
-
-type Source struct {
-	SourceType           string   `json:"sourceType"`
-	GitRepository        string   `json:"gitRepository,omitempty"`
-	GitBranch            string   `json:"gitBranch,omitempty"`
-	BuildTool            string   `json:"buildTool,omitempty"`
-	DockerfilePath       string   `json:"dockerfilePath,omitempty"`
-	NixpackPath          string   `json:"nixpackPath,omitempty"`
-	OCIRepository        string   `json:"ociRepository,omitempty"`
-	Tag                  string   `json:"tag,omitempty"`
-	Command              []string `json:"command"`
-	WorkingDir           string   `json:"workingDir"`
-	ImagePullSecretsName string   `json:"imagePullSecretsName"`
-}
-
-type Storage struct {
-	Size      string `json:"size"`
-	Name      string `json:"name"`
-	MountPath string `json:"mountPath"`
-}
-
-type Variable struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
 }
 
 //+kubebuilder:object:root=true

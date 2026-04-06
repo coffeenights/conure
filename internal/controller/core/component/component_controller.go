@@ -29,15 +29,16 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Reconcile deployed objects
 	componentHandler := NewComponentHandler(ctx, &component, r)
+
 	if err := componentHandler.ReconcileDeployedObjects(); err != nil {
-		return ctrl.Result{}, err
+		logger.Info("Failed to reconcile deployed objects", "error", err)
+		return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 	}
 
 	if err := componentHandler.RenderComponent(); err != nil {
-		// Condition is already set on the component — don't requeue on render/config errors
-		logger.Error(err, "Failed to render component")
+		logger.Info("Failed to render component", "error", err)
+		// Condition is set with the error message — don't requeue, wait for spec change
 		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{RequeueAfter: RequeueAfter}, nil

@@ -6,4 +6,4 @@ spec:
   type: webservice
   description: "A web service component that deploys a container with network exposure"
   ociRepository: "ghcr.io/coffeenights/conure-templates/components/webservice"
-  ociTag: "latest"
+  ociTag: "0.1.4"

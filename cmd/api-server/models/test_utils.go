@@ -22,32 +22,32 @@ func ComponentTemplate(appID primitive.ObjectID, name string) *Component {
 		ApplicationID: appID,
 		Name:          name,
 		Type:          "service",
-		Settings: ComponentSettings{
-			ResourcesSettings: ResourcesSettings{
-				Replicas: 1,
-				CPU:      "500m",
-				Memory:   "200Mi",
+		Values: map[string]interface{}{
+			"resources": map[string]interface{}{
+				"replicas": 1,
+				"cpu":      "500m",
+				"memory":   "200Mi",
 			},
-			SourceSettings: SourceSettings{
-				Repository: "coffeenights/django:latest",
-				Command:    "python manage.py runserver 0.0.0.0:8000",
+			"source": map[string]interface{}{
+				"ociRepository": "coffeenights/django:latest",
+				"command":       []string{"python", "manage.py", "runserver", "0.0.0.0:8000"},
 			},
-			NetworkSettings: NetworkSettings{
-				Exposed: true,
-				Type:    "public",
-				Ports: []PortSettings{
+			"network": map[string]interface{}{
+				"exposed": true,
+				"type":    "public",
+				"ports": []map[string]interface{}{
 					{
-						HostPort:   8000,
-						TargetPort: 8000,
-						Protocol:   "tcp",
+						"hostPort":   8000,
+						"targetPort": 8000,
+						"protocol":   "tcp",
 					},
 				},
 			},
-			StorageSettings: []StorageSettings{
+			"storage": []map[string]interface{}{
 				{
-					Size:      20,
-					Name:      "Volume1",
-					MountPath: "/tmp",
+					"size":      "20Gi",
+					"name":      "Volume1",
+					"mountPath": "/tmp",
 				},
 			},
 		},
