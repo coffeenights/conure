@@ -29,7 +29,7 @@ type ComponentHandler struct {
 	Reconciler        *ComponentReconciler
 	Ctx               context.Context
 	Logger            logr.Logger
-	componentTemplate *module.Manager
+	componentTemplate timoni.ModuleManager
 	applySet          []*unstructured.Unstructured
 }
 
