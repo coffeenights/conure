@@ -30,10 +30,15 @@ type mockModuleManager struct {
 	unmarshalErr error
 	applyObjErr  error
 	appliedObjs  []*unstructured.Unstructured
+	digest       string
 }
 
 func (m *mockModuleManager) GetApplySets() ([]module.ResourceSet, error) {
 	return m.applySets, m.applyErr
+}
+
+func (m *mockModuleManager) GetDigest() string {
+	return m.digest
 }
 
 func (m *mockModuleManager) MarshalApplySets(sets []module.ResourceSet) ([]byte, error) {

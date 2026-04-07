@@ -10,6 +10,7 @@ import (
 // enabling unit testing without OCI registry access.
 type ModuleManager interface {
 	GetApplySets() ([]module.ResourceSet, error)
+	GetDigest() string
 	MarshalApplySets(sets []module.ResourceSet) ([]byte, error)
 	UnmarshalApplySets(data []byte) ([]module.ResourceSet, error)
 	ApplyObject(resource *unstructured.Unstructured, force bool) (*ssa.ChangeSetEntry, error)

@@ -115,6 +115,14 @@ func (c *ComponentHandler) renderComponent() error {
 		return err
 	}
 
+	// Verify the OCI digest matches the expected value from the ComponentDefinition
+	if compDef.Spec.OCIDigest != "" {
+		resolvedDigest := c.componentTemplate.GetDigest()
+		if resolvedDigest != compDef.Spec.OCIDigest {
+			return fmt.Errorf("OCI digest mismatch for component type %q: expected %s, got %s", compDef.Spec.ComponentType, compDef.Spec.OCIDigest, resolvedDigest)
+		}
+	}
+
 	// Add the spec hashes to every object and add them to the apply set
 	for _, set := range sets {
 		for _, o := range set.Objects {
