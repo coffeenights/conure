@@ -7,3 +7,4 @@ spec:
   description: "A web service component that deploys a container with network exposure"
   ociRepository: "ghcr.io/coffeenights/conure-templates/components/webservice"
   ociTag: "0.1.4"
+  ociDigest: "sha256:e511c31140ea0fd62c3b3e1c69b544607d9be3ae66a3ebbef7004eaecef3c3a5"

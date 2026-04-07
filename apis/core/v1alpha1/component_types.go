@@ -7,8 +7,7 @@ import (
 
 const ComponentKind = "Component"
 const (
-	WorkflowRunNamelabel = "conure.io/workflow-run-name"
-	ApplySetsAnnotation  = "conure.io/apply-sets"
+	ApplySetsAnnotation = "conure.io/apply-sets"
 )
 
 type ComponentConditionType string
@@ -22,14 +21,6 @@ type ComponentConditionReason string
 func (t ComponentConditionReason) String() string {
 	return string(t)
 }
-
-const (
-	ComponentConditionTypeWorkflow   ComponentConditionType   = "Workflow"
-	ComponentWorkflowTriggeredReason ComponentConditionReason = "WorkflowTriggered"
-	ComponentWorkflowRunningReason   ComponentConditionReason = "WorkflowRunning"
-	ComponentWorkFlowFailedReason    ComponentConditionReason = "WorkflowFailed"
-	ComponentWorkFlowSucceedReason   ComponentConditionReason = "WorkflowSucceed"
-)
 
 const (
 	ComponentConditionTypeReady          ComponentConditionType   = "Ready"
@@ -103,6 +94,7 @@ type ComponentDefinitionSpec struct {
 	Description   string `json:"description"`
 	OCIRepository string `json:"ociRepository"`
 	OCITag        string `json:"ociTag"`
+	OCIDigest     string `json:"ociDigest"`
 	OCIRegistry   string `json:"ociRegistry,omitempty"`
 }
 
