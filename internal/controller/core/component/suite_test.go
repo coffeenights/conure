@@ -1,4 +1,4 @@
-package application
+package component
 
 import (
 	"context"
@@ -60,7 +60,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	if err = (&ApplicationReconciler{
+	if err = (&ComponentReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
 	}).SetupWithManager(k8sManager); err != nil {
