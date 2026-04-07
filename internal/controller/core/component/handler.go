@@ -20,7 +20,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -214,7 +216,22 @@ func (c *ComponentHandler) applyResources() error {
 	sort.SliceStable(c.applySet, func(i, j int) bool {
 		return orderMap[c.applySet[i].GetKind()] < orderMap[c.applySet[j].GetKind()]
 	})
+
+	gvk, err := apiutil.GVKForObject(c.Component, c.Reconciler.Scheme)
+	if err != nil {
+		return fmt.Errorf("failed to get GVK for component: %w", err)
+	}
+	ownerRef := metav1.OwnerReference{
+		APIVersion:         gvk.GroupVersion().String(),
+		Kind:               gvk.Kind,
+		Name:               c.Component.GetName(),
+		UID:                c.Component.GetUID(),
+		Controller:         ptr.To(true),
+		BlockOwnerDeletion: ptr.To(true),
+	}
+
 	for _, resource := range c.applySet {
+		resource.SetOwnerReferences([]metav1.OwnerReference{ownerRef})
 		_, err := c.componentTemplate.ApplyObject(resource, false)
 		if err != nil {
 			c.Logger.Error(err, "failed to apply resource", "kind", resource.GetKind(), "name", resource.GetName(), "namespace", resource.GetNamespace())
@@ -230,6 +247,15 @@ func (c *ComponentHandler) applyResources() error {
 }
 
 func (c *ComponentHandler) ReconcileDeployedObjects() error {
+	if c.componentTemplate == nil {
+		manager, err := module.NewManager(c.Ctx, c.Component.Name, "", "", c.Component.Namespace, "", true, map[string]interface{}{})
+		if err != nil {
+			c.Logger.Error(err, "failed to initialize template manager for reconciliation")
+			return err
+		}
+		c.componentTemplate = manager
+	}
+
 	annotations := c.Component.GetAnnotations()
 	if annotations[conurev1alpha1.ApplySetsAnnotation] != "" {
 		decoded, err := base64.StdEncoding.DecodeString(annotations[conurev1alpha1.ApplySetsAnnotation])
@@ -262,13 +288,6 @@ func (c *ComponentHandler) ReconcileDeployedObjects() error {
 		return nil
 	}
 
-	// Apply the resources
-	manager, err := module.NewManager(c.Ctx, c.Component.Name, "", "", c.Component.Namespace, "", true, map[string]interface{}{})
-	if err != nil {
-		c.Logger.Error(err, "failed to initialize template manager for reconciliation")
-		return err
-	}
-	c.componentTemplate = manager
 	return c.applyResources()
 }
 

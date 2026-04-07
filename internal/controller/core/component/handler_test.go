@@ -370,5 +370,58 @@ func TestReconcileDeployedObjects_DecodesAndApplies(t *testing.T) {
 	}
 }
 
+func TestApplyResources_SetsOwnerReferences(t *testing.T) {
+	ctx := context.Background()
+	comp := newTestComponent("web", "default", "webservice")
+	comp.UID = "test-uid-1234"
+	k8sClient := newFakeClient(comp)
+	handler := newTestHandler(ctx, k8sClient, comp)
+
+	mock := &mockModuleManager{}
+	handler.componentTemplate = mock
+
+	deployment := &unstructured.Unstructured{}
+	deployment.SetKind("Deployment")
+	deployment.SetName("web")
+
+	configMap := &unstructured.Unstructured{}
+	configMap.SetKind("ConfigMap")
+	configMap.SetName("web-config")
+
+	service := &unstructured.Unstructured{}
+	service.SetKind("Service")
+	service.SetName("web-svc")
+
+	handler.applySet = []*unstructured.Unstructured{deployment, configMap, service}
+
+	err := handler.applyResources()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	for _, obj := range mock.appliedObjs {
+		refs := obj.GetOwnerReferences()
+		if len(refs) != 1 {
+			t.Fatalf("expected 1 owner reference on %s, got %d", obj.GetKind(), len(refs))
+		}
+		ref := refs[0]
+		if ref.Kind != "Component" {
+			t.Fatalf("expected owner kind Component, got %s", ref.Kind)
+		}
+		if ref.Name != "web" {
+			t.Fatalf("expected owner name web, got %s", ref.Name)
+		}
+		if ref.UID != "test-uid-1234" {
+			t.Fatalf("expected owner UID test-uid-1234, got %s", ref.UID)
+		}
+		if ref.Controller == nil || !*ref.Controller {
+			t.Fatalf("expected Controller=true on owner reference for %s", obj.GetKind())
+		}
+		if ref.BlockOwnerDeletion == nil || !*ref.BlockOwnerDeletion {
+			t.Fatalf("expected BlockOwnerDeletion=true on owner reference for %s", obj.GetKind())
+		}
+	}
+}
+
 // Verify the interface is satisfied by the mock at compile time.
 var _ timoni.ModuleManager = (*mockModuleManager)(nil)
