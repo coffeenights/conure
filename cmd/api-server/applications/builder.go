@@ -3,6 +3,7 @@ package applications
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/cmd/api-server/database"
@@ -101,24 +102,43 @@ func gatherVariables(db *database.MongoDB, application *models.Application, envi
 	merged := map[string]entry{}
 
 	v := new(models.Variable)
-	fetchers := []func() ([]models.Variable, error){
-		func() ([]models.Variable, error) { return v.ListByOrg(db, application.OrganizationID) },
-		func() ([]models.Variable, error) {
-			return v.ListByEnv(db, application.OrganizationID, application.ID, environment.ID)
+	type scopedFetcher struct {
+		scope string
+		fetch func() ([]models.Variable, error)
+	}
+	fetchers := []scopedFetcher{
+		{
+			scope: "org",
+			fetch: func() ([]models.Variable, error) { return v.ListByOrg(db, application.OrganizationID) },
 		},
-		func() ([]models.Variable, error) {
-			return v.ListByComp(db, application.OrganizationID, application.ID, environment.ID, component.ID)
+		{
+			scope: "env",
+			fetch: func() ([]models.Variable, error) {
+				return v.ListByEnv(db, application.OrganizationID, application.ID, environment.Name)
+			},
+		},
+		{
+			scope: "component",
+			fetch: func() ([]models.Variable, error) {
+				return v.ListByComp(db, application.OrganizationID, application.ID, environment.Name, component.ID)
+			},
 		},
 	}
 
-	for _, fetch := range fetchers {
-		vars, err := fetch()
+	for _, sf := range fetchers {
+		vars, err := sf.fetch()
 		if err != nil {
-			return providers.ComponentVariables{}, fmt.Errorf("listing variables: %w", err)
+			return providers.ComponentVariables{}, fmt.Errorf("listing %s variables for component %q: %w", sf.scope, component.Name, err)
 		}
+		log.Printf("gatherVariables: %s scope returned %d variable(s) for component %q", sf.scope, len(vars), component.Name)
 		for _, v := range vars {
 			merged[v.Name] = entry{value: v.Value, isEncrypted: v.IsEncrypted}
 		}
+	}
+
+	if len(merged) == 0 {
+		log.Printf("gatherVariables: no variables found for component %q (org=%s app=%s env=%s component=%s)",
+			component.Name, application.OrganizationID.Hex(), application.ID.Hex(), environment.ID, component.ID.Hex())
 	}
 
 	cv := providers.ComponentVariables{
@@ -129,7 +149,7 @@ func gatherVariables(db *database.MongoDB, application *models.Application, envi
 		if e.isEncrypted {
 			decrypted, err := variables.DecryptValue(keyStorage, e.value)
 			if err != nil {
-				return providers.ComponentVariables{}, fmt.Errorf("decrypting variable %q: %w", name, err)
+				return providers.ComponentVariables{}, fmt.Errorf("decrypting variable %q for component %q: %w", name, component.Name, err)
 			}
 			cv.Secrets[name] = decrypted
 		} else {

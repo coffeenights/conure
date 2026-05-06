@@ -19,9 +19,10 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"os"
+
 	"github.com/coffeenights/conure/internal/controller/core"
 	"go.uber.org/zap/zapcore"
-	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
