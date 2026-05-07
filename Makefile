@@ -56,6 +56,7 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt envtest ## Run tests.
+	set -a; [ -f .env ] && . ./.env; set +a; \
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
 
 ##@ Build
