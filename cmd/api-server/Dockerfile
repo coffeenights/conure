@@ -1,10 +1,17 @@
 FROM golang:1.26.2-bookworm AS builder
+ARG TARGETOS
+ARG TARGETARCH
 
-COPY . /app
-WORKDIR /app/
+WORKDIR /workspace
+COPY go.mod go.mod
+COPY go.sum go.sum
+RUN go mod download
 
-RUN go build -v -o conure_api cmd/api-server/main.go
+COPY . .
 
-FROM alpine:3.19
-COPY --from=builder /app/conure_api /app/conure_api
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a -o conure_api cmd/api-server/main.go
+
+FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
+COPY --from=builder /workspace/conure_api /app/conure_api
+USER 65532:65532
