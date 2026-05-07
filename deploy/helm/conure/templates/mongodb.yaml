@@ -38,28 +38,29 @@ data:
       roles: [ { role: "readWrite", db: "${CONURE_DB_NAME}" } ]
     });
     EOF
-{{- if .Values.mongodb.persistence.enabled }}
 ---
+# Headless service required by the StatefulSet for stable per-pod DNS
+# (<pod>.<service>.<ns>.svc.cluster.local). Clients should not target this
+# directly — use the typed service below.
 apiVersion: v1
-kind: PersistentVolumeClaim
+kind: Service
 metadata:
-  name: {{ include "conure.mongodb.fullname" . }}
+  name: {{ include "conure.mongodb.fullname" . }}-headless
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "conure.mongodb.labels" . | nindent 4 }}
-  annotations:
-    helm.sh/resource-policy: keep
 spec:
-  accessModes:
-    - {{ .Values.mongodb.persistence.accessMode }}
-  resources:
-    requests:
-      storage: {{ .Values.mongodb.persistence.size | quote }}
-  {{- with .Values.mongodb.persistence.storageClass }}
-  storageClassName: {{ . | quote }}
-  {{- end }}
-{{- end }}
+  clusterIP: None
+  selector:
+    {{- include "conure.mongodb.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: mongodb
+      port: {{ .Values.mongodb.service.port }}
+      targetPort: mongodb
+      protocol: TCP
 ---
+# Client-facing service. The api-server connects to this name. Type is
+# configurable (ClusterIP / LoadBalancer / NodePort).
 apiVersion: v1
 kind: Service
 metadata:
@@ -67,8 +68,12 @@ metadata:
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "conure.mongodb.labels" . | nindent 4 }}
+  {{- with .Values.mongodb.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
-  type: ClusterIP
+  type: {{ .Values.mongodb.service.type }}
   selector:
     {{- include "conure.mongodb.selectorLabels" . | nindent 4 }}
   ports:
@@ -78,7 +83,7 @@ spec:
       protocol: TCP
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: {{ include "conure.mongodb.fullname" . }}
   namespace: {{ .Release.Namespace }}
@@ -86,8 +91,7 @@ metadata:
     {{- include "conure.mongodb.labels" . | nindent 4 }}
 spec:
   replicas: 1
-  strategy:
-    type: Recreate
+  serviceName: {{ include "conure.mongodb.fullname" . }}-headless
   selector:
     matchLabels:
       {{- include "conure.mongodb.selectorLabels" . | nindent 6 }}
@@ -146,11 +150,8 @@ spec:
           configMap:
             name: {{ include "conure.mongodb.fullname" . }}-init
             defaultMode: 0755
+        {{- if not .Values.mongodb.persistence.enabled }}
         - name: data
-        {{- if .Values.mongodb.persistence.enabled }}
-          persistentVolumeClaim:
-            claimName: {{ include "conure.mongodb.fullname" . }}
-        {{- else }}
           emptyDir: {}
         {{- end }}
       {{- with .Values.mongodb.nodeSelector }}
@@ -165,4 +166,64 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+  {{- if .Values.mongodb.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          {{- include "conure.mongodb.labels" . | nindent 10 }}
+      spec:
+        accessModes:
+          - {{ .Values.mongodb.persistence.accessMode }}
+        resources:
+          requests:
+            storage: {{ .Values.mongodb.persistence.size | quote }}
+        {{- with .Values.mongodb.persistence.storageClass }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+  {{- end }}
+{{- if .Values.mongodb.ingress.enabled }}
+---
+# MongoDB ingress. Standard Kubernetes Ingress is HTTP-only; exposing MongoDB
+# externally usually requires either:
+#   - a TCP-capable ingress controller (e.g. NGINX with a tcp-services
+#     ConfigMap, Traefik IngressRouteTCP) configured via annotations, or
+#   - setting mongodb.service.type=LoadBalancer (simpler, recommended).
+# This Ingress is rendered as-is for users whose controller supports L4/TCP
+# routing through the Ingress resource via annotations.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "conure.mongodb.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "conure.mongodb.labels" . | nindent 4 }}
+  {{- with .Values.mongodb.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.mongodb.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.mongodb.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.mongodb.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ include "conure.mongodb.fullname" $ }}
+                port:
+                  number: {{ $.Values.mongodb.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
 {{- end }}

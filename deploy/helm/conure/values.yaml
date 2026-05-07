@@ -178,7 +178,21 @@ mongodb:
     password: "change-me-mongo"
     database: conure
   service:
+    # ClusterIP (default), LoadBalancer, or NodePort. Use LoadBalancer for
+    # external access — that's the simplest path; standard Ingress is HTTP only.
+    type: ClusterIP
     port: 27017
+    annotations: {}
+  # Optional Ingress for MongoDB. Standard Ingress is HTTP-only — this is only
+  # useful with a TCP/L4-capable controller (NGINX tcp-services, Traefik
+  # IngressRouteTCP, etc.) configured via annotations. Prefer service.type:
+  # LoadBalancer for external access in most cases.
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts: []
+    tls: []
   persistence:
     enabled: true
     size: 8Gi
@@ -194,4 +208,38 @@ mongodb:
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []
+  # Pod affinity / anti-affinity / node affinity rules. Empty = no constraint.
+  # Common shapes:
+  #
+  # 1. Hard-pin to nodes with a label (pod won't schedule if no match):
+  # affinity:
+  #   nodeAffinity:
+  #     requiredDuringSchedulingIgnoredDuringExecution:
+  #       nodeSelectorTerms:
+  #         - matchExpressions:
+  #             - key: role
+  #               operator: In
+  #               values: [database]
+  #
+  # 2. Soft-prefer nodes with a label (falls back to any node):
+  # affinity:
+  #   nodeAffinity:
+  #     preferredDuringSchedulingIgnoredDuringExecution:
+  #       - weight: 100
+  #         preference:
+  #           matchExpressions:
+  #             - key: role
+  #               operator: In
+  #               values: [database]
+  #
+  # 3. Pin to a specific cloud node pool / availability zone (same shape as #1
+  #    with a different label key):
+  # affinity:
+  #   nodeAffinity:
+  #     requiredDuringSchedulingIgnoredDuringExecution:
+  #       nodeSelectorTerms:
+  #         - matchExpressions:
+  #             - key: cloud.google.com/gke-nodepool
+  #               operator: In
+  #               values: [db-pool]
   affinity: {}
