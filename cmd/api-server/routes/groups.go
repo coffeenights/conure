@@ -49,7 +49,11 @@ func GenerateRouter() *gin.Engine {
 	}
 
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery(), getCorsMiddleware())
+	router.Use(
+		gin.LoggerWithConfig(gin.LoggerConfig{SkipPaths: []string{"/healthz", "/readyz"}}),
+		gin.Recovery(),
+		getCorsMiddleware(),
+	)
 	appHandler := apps.NewApiHandler(conf, mongo, keyStorage)
 	settingsHandler := settings.NewApiHandler(conf, mongo, keyStorage)
 	authHandler := auth.NewAuthHandler(conf, mongo)
