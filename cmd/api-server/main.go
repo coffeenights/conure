@@ -33,10 +33,12 @@ func createSuperUser(email, password string) {
 	log.Println("Connecting to MongoDB")
 	mongo, err := database.ConnectToMongoDB(conf.MongoDBURI, conf.MongoDBName)
 	if err != nil {
-		log.Panic(err)
+		log.Fatalf("connect to MongoDB: %v", err)
 	}
 	log.Println("Connected to MongoDB")
-	auth.CreateSuperuser(mongo, email, password)
+	if err := auth.CreateSuperuser(mongo, email, password); err != nil {
+		log.Fatalf("createsuperuser: %v", err)
+	}
 }
 
 func createSecretKey() {
@@ -50,15 +52,17 @@ func createSecretKey() {
 	log.Println("Secret key created")
 }
 
-func resetSuperUserPassword(email string) {
+func resetSuperUserPassword(email, password string) {
 	conf := config.LoadConfig(apiConfig.Config{})
 	log.Println("Connecting to MongoDB")
 	mongo, err := database.ConnectToMongoDB(conf.MongoDBURI, conf.MongoDBName)
 	if err != nil {
-		log.Panic(err)
+		log.Fatalf("connect to MongoDB: %v", err)
 	}
 	log.Println("Connected to MongoDB")
-	auth.ResetSuperuserPassword(mongo, email)
+	if err := auth.ResetSuperuserPassword(mongo, email, password); err != nil {
+		log.Fatalf("resetsuperuserpassword: %v", err)
+	}
 }
 
 func main() {
@@ -74,6 +78,7 @@ func main() {
 	emailSuperuser := createsuperuserCmd.String("email", "", "The email of the superuser")
 	passwordSuperuser := createsuperuserCmd.String("password", "", "The password of the superuser (random if empty)")
 	emailSuperuserReset := resetSuperUserPasswordCmd.String("email", "", "The email of the superuser")
+	passwordSuperuserReset := resetSuperUserPasswordCmd.String("password", "", "The new password (random if empty)")
 
 	flag.Usage = func() {
 		fmt.Printf("Usage: \n")
@@ -118,7 +123,7 @@ func main() {
 			resetSuperUserPasswordCmd.Usage()
 			os.Exit(1)
 		}
-		resetSuperUserPassword(*emailSuperuserReset)
+		resetSuperUserPassword(*emailSuperuserReset, *passwordSuperuserReset)
 	default:
 		flag.Usage()
 	}

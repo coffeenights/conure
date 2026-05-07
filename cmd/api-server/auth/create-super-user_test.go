@@ -1,11 +1,11 @@
 package auth
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/models"
 	"testing"
 
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
 func TestCreateSuperuser(t *testing.T) {
@@ -18,27 +18,16 @@ func TestCreateSuperuser(t *testing.T) {
 	defer cleanUpDB(mongo)
 
 	tests := []struct {
-		name      string
-		wantError bool
+		name string
 	}{
-		{
-			name:      "TestCreateSuperuser_FirstCallCreates",
-			wantError: false,
-		},
-		{
-			name:      "TestCreateSuperuser_SecondCallIsIdempotent",
-			wantError: false,
-		},
+		{name: "FirstCallCreates"},
+		{name: "SecondCallIsIdempotent"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				if (r != nil) != tt.wantError {
-					t.Errorf("SequenceInt() recover = %v, wantPanic = %v", r, tt.wantError)
-				}
-			}()
-			CreateSuperuser(mongo, "test@conure.io", "")
+			if err := CreateSuperuser(mongo, "test@conure.io", ""); err != nil {
+				t.Errorf("CreateSuperuser() error = %v, want nil", err)
+			}
 		})
 	}
 }
@@ -54,36 +43,34 @@ func TestResetSuperuserPassword(t *testing.T) {
 
 	tests := []struct {
 		name      string
+		seedUser  bool
 		wantError bool
 	}{
-		{
-			name:      "TestResetSuperuserPassword",
-			wantError: true,
-		},
-		{
-			name:      "TestResetSuperuserPassword",
-			wantError: false,
-		},
+		{name: "MissingUserReturnsError", seedUser: false, wantError: true},
+		{name: "ExistingUserGetsNewPassword", seedUser: true, wantError: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer func() {
-				r := recover()
-				if (r != nil) != tt.wantError {
-					t.Errorf("SequenceInt() recover = %v, wantPanic = %v", r, tt.wantError)
+			before := &models.User{}
+			after := &models.User{}
+			if tt.seedUser {
+				if err := CreateSuperuser(mongo, "test@conure.io", ""); err != nil {
+					t.Fatalf("seed CreateSuperuser() error = %v", err)
 				}
-			}()
-			u := &models.User{}
-			u2 := &models.User{}
-			if !tt.wantError {
-				CreateSuperuser(mongo, "test@conure.io", "")
-				_ = u.GetByEmail(mongo, "test@conure.io")
+				if err := before.GetByEmail(mongo, "test@conure.io"); err != nil {
+					t.Fatalf("seed GetByEmail() error = %v", err)
+				}
 			}
-			ResetSuperuserPassword(mongo, "test@conure.io")
+			err := ResetSuperuserPassword(mongo, "test@conure.io", "")
+			if (err != nil) != tt.wantError {
+				t.Errorf("ResetSuperuserPassword() error = %v, wantError = %v", err, tt.wantError)
+			}
 			if !tt.wantError {
-				_ = u2.GetByEmail(mongo, "test@conure.io")
-				if u2.Password == u.Password {
-					t.Errorf("ResetSuperuserPassword() password = %v, want new password", u2.Password)
+				if err := after.GetByEmail(mongo, "test@conure.io"); err != nil {
+					t.Fatalf("post GetByEmail() error = %v", err)
+				}
+				if after.Password == before.Password {
+					t.Errorf("ResetSuperuserPassword() password unchanged, want new password")
 				}
 			}
 		})

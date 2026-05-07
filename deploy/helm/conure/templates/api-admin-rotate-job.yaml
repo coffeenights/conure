@@ -1,19 +1,17 @@
-{{- if and .Values.apiServer.enabled .Values.apiServer.adminUser.enabled -}}
+{{- if and .Values.apiServer.enabled .Values.apiServer.adminUser.enabled .Values.apiServer.adminUser.rotate -}}
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: {{ include "conure.api.fullname" . }}-create-admin
+  name: {{ include "conure.api.fullname" . }}-rotate-admin
   namespace: {{ .Release.Namespace }}
   labels:
     {{- include "conure.api.labels" . | nindent 4 }}
   annotations:
-    # Run only on `helm install`. CreateSuperuser is idempotent so the
-    # Job exits 0 if the admin already exists.
-    "helm.sh/hook": post-install
+    # Triggered by `helm upgrade --set apiServer.adminUser.rotate=true`.
+    # Runs `resetsuperuserpassword`; the new password is printed in the
+    # upgrade NOTES. Set rotate back to false on the next upgrade.
+    "helm.sh/hook": post-upgrade
     "helm.sh/hook-weight": "5"
-    # Delete on success so the password env var doesn't linger in the
-    # Job spec. before-hook-creation guards against a stale Job blocking
-    # a fresh install of the same release name.
     "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
 spec:
   backoffLimit: 3
@@ -30,13 +28,13 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: create-admin
+        - name: rotate-admin
           image: "{{ .Values.apiServer.image.repository }}:{{ .Values.apiServer.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.apiServer.image.pullPolicy }}
           command: ["/bin/sh", "-c"]
           args:
             - |
-              /app/conure_api createsuperuser \
+              /app/conure_api resetsuperuserpassword \
                 -email="$ADMIN_EMAIL" \
                 -password="$ADMIN_PASSWORD"
           envFrom:

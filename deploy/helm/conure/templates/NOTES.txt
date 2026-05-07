@@ -16,12 +16,33 @@ Verify the install:
 Port-forward the API:
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "conure.api.fullname" . }} 8080:{{ .Values.apiServer.service.port }}
 {{- if and .Values.apiServer.enabled .Values.apiServer.adminUser.enabled }}
+{{- if .Release.IsInstall }}
 
-Admin user:
+================================================================================
+Admin user (created by post-install hook):
+
   Email:    {{ .Values.apiServer.adminUser.email }}
-  Password: kubectl -n {{ .Release.Namespace }} get secret {{ include "conure.api.adminSecretName" . }} -o jsonpath='{.data.password}' | base64 -d
+  Password: {{ include "conure.api.adminPassword" . }}
 
-  The Secret is annotated helm.sh/resource-policy=keep so the password
-  survives upgrades and `helm uninstall`. Delete it manually if you need to
-  rotate via reinstall, or use `conure_api resetsuperuserpassword`.
+  This password is shown ONCE and is not stored anywhere except as a bcrypt
+  hash inside MongoDB. Capture it now. If lost, rotate with:
+
+    helm upgrade {{ .Release.Name }} <chart> \
+      -n {{ .Release.Namespace }} \
+      --reuse-values \
+      --set apiServer.adminUser.rotate=true
+================================================================================
+{{- else if and .Release.IsUpgrade .Values.apiServer.adminUser.rotate }}
+
+================================================================================
+Admin password rotated (post-upgrade hook):
+
+  Email:    {{ .Values.apiServer.adminUser.email }}
+  Password: {{ include "conure.api.adminPassword" . }}
+
+  Capture it now — the value is not stored anywhere else. Run another
+  `helm upgrade` without `--set apiServer.adminUser.rotate=true` (or set it
+  back to false in your values) to avoid rotating again on the next upgrade.
+================================================================================
+{{- end }}
 {{- end }}

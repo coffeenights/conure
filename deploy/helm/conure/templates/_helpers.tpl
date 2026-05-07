@@ -88,12 +88,31 @@ app.kubernetes.io/component: api-server
 app.kubernetes.io/component: api-server
 {{- end }}
 
-{{- define "conure.api.adminSecretName" -}}
-{{- if .Values.apiServer.adminUser.secretName -}}
-{{ .Values.apiServer.adminUser.secretName }}
-{{- else -}}
-{{ printf "%s-admin" (include "conure.api.fullname" .) }}
+{{/*
+Compute (and memoize) the admin password used by the create / rotate
+hook Jobs and surfaced via NOTES.txt. The value is cached on
+.Values.apiServer.adminUser._password so every `include` within a
+single render returns the same string — both the Job env and NOTES.txt
+must reference the same password.
+
+Precedence:
+  1. .Values.apiServer.adminUser.password (explicit override)
+  2. randAlphaNum 16 (auto-generated, single-render only)
+
+The password is intentionally NOT persisted to a Secret. Surface it via
+NOTES once; if it's lost, rotate via `helm upgrade --set
+apiServer.adminUser.rotate=true`.
+*/}}
+{{- define "conure.api.adminPassword" -}}
+{{- $admin := .Values.apiServer.adminUser -}}
+{{- if not (hasKey $admin "_password") -}}
+  {{- if $admin.password -}}
+    {{- $_ := set $admin "_password" $admin.password -}}
+  {{- else -}}
+    {{- $_ := set $admin "_password" (randAlphaNum 16) -}}
+  {{- end -}}
 {{- end -}}
+{{- $admin._password -}}
 {{- end }}
 
 {{- define "conure.api.secretName" -}}
