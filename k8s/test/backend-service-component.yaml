@@ -29,7 +29,7 @@ spec:
         - runserver
         - 0.0.0.0:9091
       workingDir: "/app"
-      imagePullSecretsName: regcred
+      imagePullSecrets: regcred
     network:
       type: public
       exposed: true

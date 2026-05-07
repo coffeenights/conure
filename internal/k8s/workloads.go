@@ -117,3 +117,25 @@ func CreateSecret(clientset *GenericClientset, namespace string, secret *corev1.
 func GetSecret(clientset *GenericClientset, namespace, name string) (*corev1.Secret, error) {
 	return clientset.K8s.CoreV1().Secrets(namespace).Get(context.Background(), name, metav1.GetOptions{})
 }
+
+func CreateOrUpdateSecret(clientset *GenericClientset, namespace string, secret *corev1.Secret) error {
+	existing, err := clientset.K8s.CoreV1().Secrets(namespace).Get(context.Background(), secret.Name, metav1.GetOptions{})
+	if err != nil {
+		_, err = clientset.K8s.CoreV1().Secrets(namespace).Create(context.Background(), secret, metav1.CreateOptions{})
+		return err
+	}
+	secret.ResourceVersion = existing.ResourceVersion
+	_, err = clientset.K8s.CoreV1().Secrets(namespace).Update(context.Background(), secret, metav1.UpdateOptions{})
+	return err
+}
+
+func CreateOrUpdateConfigMap(clientset *GenericClientset, namespace string, cm *corev1.ConfigMap) error {
+	existing, err := clientset.K8s.CoreV1().ConfigMaps(namespace).Get(context.Background(), cm.Name, metav1.GetOptions{})
+	if err != nil {
+		_, err = clientset.K8s.CoreV1().ConfigMaps(namespace).Create(context.Background(), cm, metav1.CreateOptions{})
+		return err
+	}
+	cm.ResourceVersion = existing.ResourceVersion
+	_, err = clientset.K8s.CoreV1().ConfigMaps(namespace).Update(context.Background(), cm, metav1.UpdateOptions{})
+	return err
+}

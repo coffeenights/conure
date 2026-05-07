@@ -70,50 +70,14 @@ type CreateEnvironmentRequest struct {
 
 // Component
 
-type ComponentSettings struct {
-	Resources ResourcesSettings `json:"resources_settings"`
-	Source    SourceSettings    `json:"source_settings"`
-	Network   NetworkSettings   `json:"network_settings"`
-	Storage   []StorageSettings `json:"storage_settings"`
-}
-
-type ResourcesSettings struct {
-	Replicas int    `json:"replicas"`
-	CPU      string `json:"cpu"`
-	Memory   string `json:"memory"`
-}
-
-type SourceSettings struct {
-	Repository string `json:"repository"`
-	Command    string `json:"command"`
-}
-
-type NetworkSettings struct {
-	Exposed bool           `json:"exposed"`
-	Type    string         `json:"type"`
-	Ports   []PortSettings `json:"ports"`
-}
-
-type PortSettings struct {
-	HostPort   int    `json:"host_port"`
-	TargetPort int    `json:"target_port"`
-	Protocol   string `json:"protocol"`
-}
-
-type StorageSettings struct {
-	Size      float32 `json:"size"`
-	Name      string  `json:"name"`
-	MountPath string  `json:"mount_path"`
-}
-
 type Component struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	Type          string            `json:"type"`
-	Description   string            `json:"description"`
-	ApplicationID string            `json:"application_id"`
-	Settings      ComponentSettings `json:"settings"`
-	CreatedAt     time.Time         `json:"created_at"`
+	ID            string                 `json:"id"`
+	Name          string                 `json:"name"`
+	Type          string                 `json:"type"`
+	Description   string                 `json:"description"`
+	ApplicationID string                 `json:"application_id"`
+	Values        map[string]interface{} `json:"values"`
+	CreatedAt     time.Time              `json:"created_at"`
 }
 
 type ComponentListResponse struct {
@@ -125,10 +89,10 @@ type ComponentResponse struct {
 }
 
 type CreateComponentRequest struct {
-	Name        string            `json:"name" binding:"required"`
-	Type        string            `json:"type" binding:"required"`
-	Description string            `json:"description"`
-	Settings    ComponentSettings `json:"settings"`
+	Name        string                 `json:"name" binding:"required"`
+	Type        string                 `json:"type" binding:"required"`
+	Description string                 `json:"description"`
+	Values      map[string]interface{} `json:"values"`
 }
 
 // Component Status

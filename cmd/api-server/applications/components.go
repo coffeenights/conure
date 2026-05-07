@@ -189,7 +189,7 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		Type:          request.Type,
 		Description:   request.Description,
 		ApplicationID: handler.Model.ID,
-		Settings:      request.Settings,
+		Values:        request.Values,
 	}
 	err = component.Create(a.MongoDB)
 	if errors.Is(err, conureerrors.ErrObjectAlreadyExists) {
@@ -228,7 +228,7 @@ func (a *ApiHandler) UpdateComponent(c *gin.Context) {
 	component.Type = request.Type
 	component.Description = request.Description
 	component.ApplicationID = handler.Model.ID
-	component.Settings = request.Settings
+	component.Values = request.Values
 
 	err = component.Update(a.MongoDB)
 	if errors.Is(err, conureerrors.ErrObjectAlreadyExists) {

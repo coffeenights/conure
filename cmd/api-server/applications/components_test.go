@@ -337,8 +337,12 @@ func TestUpdateComponent(t *testing.T) {
 	}
 	defer comp.Delete(testConf.app.MongoDB)
 
-	// Modify a  property
-	comp.Settings.ResourcesSettings.CPU = "1000m"
+	// Modify a property
+	comp.Values["resources"] = map[string]interface{}{
+		"replicas": 1,
+		"cpu":      "1000m",
+		"memory":   "200Mi",
+	}
 	payload, err := json.Marshal(comp)
 
 	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID.Hex()
@@ -352,8 +356,9 @@ func TestUpdateComponent(t *testing.T) {
 		t.Errorf("Expected response code 200, got: %v", resp.Code)
 	}
 
-	if comp.Settings.ResourcesSettings.CPU != "1000m" {
-		t.Errorf("Expected CPU to be 1000m, got: %v", comp.Settings.ResourcesSettings.CPU)
+	resources, _ := comp.Values["resources"].(map[string]interface{})
+	if resources["cpu"] != "1000m" {
+		t.Errorf("Expected CPU to be 1000m, got: %v", resources["cpu"])
 	}
 
 }

@@ -48,7 +48,11 @@ func (a *ApiHandler) CreateIntegration(c *gin.Context) {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	valueEncrypted := variables.EncryptValue(a.keyStorage, stringValue)
+	valueEncrypted, err := variables.EncryptValue(a.keyStorage, stringValue)
+	if err != nil {
+		conureerrors.AbortWithError(c, err)
+		return
+	}
 
 	integration := models.Integration{
 		Name:             request.Name,

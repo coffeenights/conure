@@ -7,8 +7,7 @@ import (
 
 const ComponentKind = "Component"
 const (
-	WorkflowRunNamelabel = "conure.io/workflow-run-name"
-	ApplySetsAnnotation  = "conure.io/apply-sets"
+	ApplySetsAnnotation = "conure.io/apply-sets"
 )
 
 type ComponentConditionType string
@@ -22,14 +21,6 @@ type ComponentConditionReason string
 func (t ComponentConditionReason) String() string {
 	return string(t)
 }
-
-const (
-	ComponentConditionTypeWorkflow   ComponentConditionType   = "Workflow"
-	ComponentWorkflowTriggeredReason ComponentConditionReason = "WorkflowTriggered"
-	ComponentWorkflowRunningReason   ComponentConditionReason = "WorkflowRunning"
-	ComponentWorkFlowFailedReason    ComponentConditionReason = "WorkflowFailed"
-	ComponentWorkFlowSucceedReason   ComponentConditionReason = "WorkflowSucceed"
-)
 
 const (
 	ComponentConditionTypeReady          ComponentConditionType   = "Ready"
@@ -46,7 +37,6 @@ const (
 type ComponentSpec struct {
 	ComponentType string                `json:"type"`
 	Values        *runtime.RawExtension `json:"values"`
-	Variables     []Variable            `json:"variables"`
 }
 
 type ComponentStatus struct {
@@ -87,71 +77,6 @@ type ComponentList struct {
 	Items           []Component `json:"items"`
 }
 
-type Values struct {
-	Resources Resources             `json:"resources"`
-	Network   Network               `json:"network"`
-	Source    Source                `json:"source"`
-	Storage   []Storage             `json:"storage"`
-	Advanced  *runtime.RawExtension `json:"advanced,omitempty"`
-}
-
-type Resources struct {
-	Replicas int    `json:"replicas"`
-	CPU      string `json:"cpu"`
-	Memory   string `json:"memory"`
-}
-
-type AccessType string
-
-const (
-	Public  AccessType = "public"
-	Private AccessType = "private"
-)
-
-type Protocol string
-
-const (
-	TCP Protocol = "tcp"
-	UDP Protocol = "udp"
-)
-
-type Port struct {
-	HostPort   int      `json:"hostPort"`
-	TargetPort int      `json:"targetPort"`
-	Protocol   Protocol `json:"protocol"`
-}
-
-type Network struct {
-	Exposed bool       `json:"exposed"`
-	Type    AccessType `json:"type"`
-	Ports   []Port     `json:"ports"`
-}
-
-type Source struct {
-	SourceType           string   `json:"sourceType"`
-	GitRepository        string   `json:"gitRepository,omitempty"`
-	GitBranch            string   `json:"gitBranch,omitempty"`
-	BuildTool            string   `json:"buildTool,omitempty"`
-	DockerfilePath       string   `json:"dockerfilePath,omitempty"`
-	NixpackPath          string   `json:"nixpackPath,omitempty"`
-	OCIRepository        string   `json:"ociRepository,omitempty"`
-	Tag                  string   `json:"tag,omitempty"`
-	Command              []string `json:"command"`
-	WorkingDir           string   `json:"workingDir"`
-	ImagePullSecretsName string   `json:"imagePullSecretsName"`
-}
-
-type Storage struct {
-	Size      string `json:"size"`
-	Name      string `json:"name"`
-	MountPath string `json:"mountPath"`
-}
-
-type Variable struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
-
 //+kubebuilder:object:root=true
 //+kubebuilder:resource:scope=Cluster
 //+genclient
@@ -169,6 +94,7 @@ type ComponentDefinitionSpec struct {
 	Description   string `json:"description"`
 	OCIRepository string `json:"ociRepository"`
 	OCITag        string `json:"ociTag"`
+	OCIDigest     string `json:"ociDigest"`
 	OCIRegistry   string `json:"ociRegistry,omitempty"`
 }
 

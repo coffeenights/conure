@@ -2,6 +2,12 @@ package providers
 
 import "time"
 
+type ComponentVariables struct {
+	ComponentName string
+	Variables     map[string]string
+	Secrets       map[string]string
+}
+
 type NetworkProperties struct {
 	IP         string  `json:"ip"`
 	ExternalIP string  `json:"external_ip"`

@@ -16,6 +16,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
@@ -71,10 +72,12 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 	}
 	_, _ = orgVar.Create(mongo)
 
+	encryptedValue, err := EncryptValue(keyStorage, "value2")
+	require.NoError(t, err)
 	orgVar2 := &models.Variable{
 		OrganizationID: orgID,
 		Name:           "var2",
-		Value:          EncryptValue(keyStorage, "value2"),
+		Value:          encryptedValue,
 		IsEncrypted:    true,
 		Type:           models.OrganizationType,
 	}
@@ -170,12 +173,14 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	}
 	_, _ = orgVar.Create(mongo)
 
+	encryptedValue, err := EncryptValue(keyStorage, "value2")
+	require.NoError(t, err)
 	orgVar2 := &models.Variable{
 		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
 		Name:           "var2",
-		Value:          EncryptValue(keyStorage, "value2"),
+		Value:          encryptedValue,
 		IsEncrypted:    true,
 		Type:           models.EnvironmentType,
 	}
@@ -300,13 +305,15 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	}
 	_, _ = orgVar.Create(mongo)
 
+	encryptedValue, err := EncryptValue(keyStorage, "value2")
+	require.NoError(t, err)
 	orgVar2 := &models.Variable{
 		OrganizationID: orgID1,
 		EnvironmentID:  &env1,
 		ApplicationID:  &app1,
 		ComponentID:    &comp1,
 		Name:           "var2",
-		Value:          EncryptValue(keyStorage, "value2"),
+		Value:          encryptedValue,
 		IsEncrypted:    true,
 		Type:           models.ComponentType,
 	}

@@ -468,10 +468,10 @@ func (p *ProviderDispatcherVela) createNamespace(clientset *k8sUtils.GenericClie
 	return nil
 }
 
-func (p *ProviderDispatcherVela) DeployApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component) error {
+func (p *ProviderDispatcherVela) DeployApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component, compVars []ComponentVariables) error {
 	return conureerrors.ErrProviderNotSupported
 }
 
-func (p *ProviderDispatcherVela) UpdateApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component) error {
+func (p *ProviderDispatcherVela) UpdateApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component, compVars []ComponentVariables) error {
 	return conureerrors.ErrProviderNotSupported
 }

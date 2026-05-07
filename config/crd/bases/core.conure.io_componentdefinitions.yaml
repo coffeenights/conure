@@ -41,6 +41,8 @@ spec:
             properties:
               description:
                 type: string
+              ociDigest:
+                type: string
               ociRegistry:
                 type: string
               ociRepository:
@@ -51,6 +53,7 @@ spec:
                 type: string
             required:
             - description
+            - ociDigest
             - ociRepository
             - ociTag
             - type

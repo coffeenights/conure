@@ -1,0 +1,197 @@
+# -----------------------------------------------------------------------------
+# Default values for the conure chart.
+# -----------------------------------------------------------------------------
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Common labels added to every rendered object.
+commonLabels: {}
+
+# -----------------------------------------------------------------------------
+# CRDs
+# -----------------------------------------------------------------------------
+# CRDs are rendered as templates so they can be enabled/disabled per install.
+# Disable when CRDs are managed out-of-band (e.g. already applied to the cluster).
+crds:
+  install: true
+
+# -----------------------------------------------------------------------------
+# Controller manager (cmd/control)
+# -----------------------------------------------------------------------------
+controller:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: coffeenights/conure-controller
+    tag: ""           # defaults to .Chart.AppVersion when empty
+    pullPolicy: IfNotPresent
+  imagePullSecrets: []
+  serviceAccount:
+    create: true
+    name: ""          # defaults to "<release>-controller"
+    annotations: {}
+  args:
+    - --leader-elect
+    - --health-probe-bind-address=:8081
+    - --metrics-bind-address=0
+  leaderElect: true
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 10m
+      memory: 64Mi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  securityContext:
+    runAsNonRoot: true
+  containerSecurityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: 8081
+    initialDelaySeconds: 15
+    periodSeconds: 20
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: 8081
+    initialDelaySeconds: 5
+    periodSeconds: 10
+  metrics:
+    enabled: false
+    port: 8443
+
+# -----------------------------------------------------------------------------
+# API server (cmd/api-server)
+# -----------------------------------------------------------------------------
+apiServer:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: coffeenights/conure-api
+    tag: ""           # defaults to .Chart.AppVersion when empty
+    pullPolicy: IfNotPresent
+  imagePullSecrets: []
+  serviceAccount:
+    create: true
+    name: ""          # defaults to "<release>-api"
+    annotations: {}
+  command: ["/app/conure_api"]
+  args: ["runserver", "--address=0.0.0.0", "--port=8080"]
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 8080
+    annotations: {}
+  ingress:
+    enabled: false
+    className: ""
+    annotations: {}
+    hosts: []
+    tls: []
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+  podAnnotations: {}
+  podLabels: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  livenessProbe:
+    httpGet:
+      path: /
+      port: 8080
+    initialDelaySeconds: 20
+    periodSeconds: 20
+    failureThreshold: 6
+  readinessProbe:
+    httpGet:
+      path: /
+      port: 8080
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    failureThreshold: 6
+
+  # Configuration consumed as environment variables by the API server.
+  config:
+    mongodbName: conure
+    # Set mongodbUri explicitly to override the auto-derived value when
+    # mongodb.enabled=true. Required when mongodb.enabled=false.
+    mongodbUri: ""
+    jwtExpirationDays: 3
+    providerSource: vela
+    aesStorageStrategy: k8s
+    authStrategySystem: local
+    authServiceUrl: "http://localhost:8080/auth/me"
+    frontendDomain: localhost
+    cookieSecure: false
+    corsOrigins: "http://localhost:5173"
+    ginMode: release
+
+  # Secret values. Provide via existingSecret OR populate inline (chart will
+  # render a Secret). Inline values are stored as plain Secret data, not SealedSecrets.
+  secrets:
+    existingSecret: ""        # if set, the chart skips rendering its own Secret
+    # Random JWT secret. Override in production.
+    jwtSecret: "change-me-in-production"
+    # MongoDB URI override (sensitive). Auto-derived when empty and mongodb.enabled=true.
+    mongodbUri: ""
+
+  # AES storage key — when aesStorageStrategy=k8s the API server expects a
+  # Secret named `secret-key` in the same namespace with a `key` entry. When
+  # this is enabled the chart renders that Secret. Disable if it already
+  # exists in the namespace (e.g. created with `createsecretkey`).
+  aesSecret:
+    create: false
+    name: secret-key
+
+# -----------------------------------------------------------------------------
+# MongoDB — bundled inline (single replica, dev/test grade).
+# Disabled by default: most installs should target an external MongoDB.
+# Not intended for production — point at a managed MongoDB or the official
+# MongoDB operator when running for real workloads.
+# -----------------------------------------------------------------------------
+mongodb:
+  enabled: false
+  image:
+    repository: mongo
+    tag: "7.0"
+    pullPolicy: IfNotPresent
+  auth:
+    rootUser: root
+    rootPassword: "change-me-mongo-root"
+    username: conure
+    password: "change-me-mongo"
+    database: conure
+  service:
+    port: 27017
+  persistence:
+    enabled: true
+    size: 8Gi
+    storageClass: ""        # empty = cluster default
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}

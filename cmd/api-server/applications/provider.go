@@ -45,8 +45,8 @@ func NewProviderStatus(application *models.Application, environment *models.Envi
 }
 
 type ProviderDispatcher interface {
-	DeployApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component) error
-	UpdateApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component) error
+	DeployApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component, compVars []providers.ComponentVariables) error
+	UpdateApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component, compVars []providers.ComponentVariables) error
 }
 
 func NewProviderDispatcher(application *models.Application, environment *models.Environment) (ProviderDispatcher, error) {

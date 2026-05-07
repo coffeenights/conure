@@ -1,0 +1,59 @@
+{{- if .Values.apiServer.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "conure.api.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "conure.api.labels" . | nindent 4 }}
+  {{- with .Values.apiServer.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.apiServer.service.type }}
+  selector:
+    {{- include "conure.api.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.apiServer.service.port }}
+      targetPort: {{ .Values.apiServer.service.targetPort }}
+      protocol: TCP
+{{- end }}
+{{- if and .Values.apiServer.enabled .Values.apiServer.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "conure.api.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "conure.api.labels" . | nindent 4 }}
+  {{- with .Values.apiServer.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.apiServer.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- with .Values.apiServer.ingress.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.apiServer.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                name: {{ include "conure.api.fullname" $ }}
+                port:
+                  number: {{ $.Values.apiServer.service.port }}
+          {{- end }}
+    {{- end }}
+{{- end }}
