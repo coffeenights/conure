@@ -19,7 +19,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       annotations:
-        checksum/config: {{ printf "%v" .Values.apiServer.config | sha256sum }}
+        checksum/configmap: {{ include (print .Template.BasePath "/api-configmap.yaml") . | sha256sum }}
         checksum/secret: {{ printf "%s|%s" (.Values.apiServer.secrets.jwtSecret | default "") (include "conure.api.mongodbUri" .) | sha256sum }}
         {{- with .Values.apiServer.podAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -47,29 +47,11 @@ spec:
               containerPort: 8080
               protocol: TCP
           envFrom:
+            - configMapRef:
+                name: {{ include "conure.api.configMapName" . }}
             - secretRef:
                 name: {{ include "conure.api.secretName" . }}
           env:
-            - name: API_MONGODB_NAME
-              value: {{ .Values.apiServer.config.mongodbName | quote }}
-            - name: JWT_EXPIRATION_DAYS
-              value: {{ .Values.apiServer.config.jwtExpirationDays | quote }}
-            - name: PROVIDER_SOURCE
-              value: {{ .Values.apiServer.config.providerSource | quote }}
-            - name: AES_STORAGE_STRATEGY
-              value: {{ .Values.apiServer.config.aesStorageStrategy | quote }}
-            - name: AUTH_STRATEGY_SYSTEM
-              value: {{ .Values.apiServer.config.authStrategySystem | quote }}
-            - name: AUTH_SERVICE_URL
-              value: {{ .Values.apiServer.config.authServiceUrl | quote }}
-            - name: FRONTEND_DOMAIN
-              value: {{ .Values.apiServer.config.frontendDomain | quote }}
-            - name: COOKIE_SECURE
-              value: {{ .Values.apiServer.config.cookieSecure | quote }}
-            - name: CORS_ORIGINS
-              value: {{ .Values.apiServer.config.corsOrigins | quote }}
-            - name: GIN_MODE
-              value: {{ .Values.apiServer.config.ginMode | quote }}
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
