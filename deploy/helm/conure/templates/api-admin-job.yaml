@@ -1,0 +1,77 @@
+{{- if and .Values.apiServer.enabled .Values.apiServer.adminUser.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "conure.api.fullname" . }}-create-admin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "conure.api.labels" . | nindent 4 }}
+  annotations:
+    # Run only on `helm install`. Idempotency on re-install is handled by
+    # CreateSuperuser, which logs and exits 0 if the email already exists.
+    "helm.sh/hook": post-install
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "conure.api.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "conure.api.serviceAccountName" . }}
+      {{- with .Values.apiServer.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: create-admin
+          image: "{{ .Values.apiServer.image.repository }}:{{ .Values.apiServer.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.apiServer.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              /app/conure_api createsuperuser \
+                -email="$ADMIN_EMAIL" \
+                -password="$ADMIN_PASSWORD"
+          envFrom:
+            - secretRef:
+                name: {{ include "conure.api.secretName" . }}
+          env:
+            - name: API_MONGODB_NAME
+              value: {{ .Values.apiServer.config.mongodbName | quote }}
+            - name: AES_STORAGE_STRATEGY
+              value: {{ .Values.apiServer.config.aesStorageStrategy | quote }}
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: ADMIN_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "conure.api.adminSecretName" . }}
+                  key: email
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "conure.api.adminSecretName" . }}
+                  key: password
+          {{- with .Values.apiServer.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.apiServer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.apiServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.apiServer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -159,6 +159,23 @@ apiServer:
     create: false
     name: secret-key
 
+  # Bootstrap superuser. When enabled, a post-install Helm hook Job runs
+  # `conure_api createsuperuser` once per release to create the admin in
+  # MongoDB. The plaintext password is stored in a Secret (annotated with
+  # helm.sh/resource-policy: keep) so it survives upgrades and uninstalls
+  # and can be retrieved via `kubectl get secret`. Hashed copy lives in the
+  # MongoDB users collection. The Job is idempotent — if the email already
+  # exists in MongoDB the create is skipped.
+  adminUser:
+    enabled: true
+    email: admin@conure.io
+    # Name of the Secret holding `email` and `password` keys. If a Secret
+    # with this name already exists in the release namespace it is reused,
+    # so the password is generated only on first install.
+    secretName: ""           # defaults to "<release>-api-admin"
+    # Optional override. Leave empty to auto-generate on first install.
+    password: ""
+
 # -----------------------------------------------------------------------------
 # MongoDB — bundled inline (single replica, dev/test grade).
 # Disabled by default: most installs should target an external MongoDB.

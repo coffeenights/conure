@@ -1,8 +1,13 @@
 package main
 
 import (
+	"os"
+	"time"
+
+	"github.com/briandowns/spinner"
 	"github.com/fatih/color"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 var (
@@ -17,6 +22,25 @@ var (
 	header  = color.New(color.FgWhite, color.Bold)
 	dim     = color.New(color.FgHiBlack)
 )
+
+// startSpinner returns a started spinner, or nil when output is non-TTY or
+// json so we don't smear escape codes into pipes and CI logs. Callers should
+// always defer stopSpinner(s) — it tolerates a nil receiver.
+func startSpinner(suffix string) *spinner.Spinner {
+	if outputFlag == "json" || !term.IsTerminal(int(os.Stdout.Fd())) {
+		return nil
+	}
+	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
+	s.Suffix = "  " + suffix
+	s.Start()
+	return s
+}
+
+func stopSpinner(s *spinner.Spinner) {
+	if s != nil {
+		s.Stop()
+	}
+}
 
 var rootCmd = &cobra.Command{
 	Use:   "conure",

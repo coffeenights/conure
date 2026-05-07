@@ -88,6 +88,14 @@ app.kubernetes.io/component: api-server
 app.kubernetes.io/component: api-server
 {{- end }}
 
+{{- define "conure.api.adminSecretName" -}}
+{{- if .Values.apiServer.adminUser.secretName -}}
+{{ .Values.apiServer.adminUser.secretName }}
+{{- else -}}
+{{ printf "%s-admin" (include "conure.api.fullname" .) }}
+{{- end -}}
+{{- end }}
+
 {{- define "conure.api.secretName" -}}
 {{- if .Values.apiServer.secrets.existingSecret -}}
 {{ .Values.apiServer.secrets.existingSecret }}

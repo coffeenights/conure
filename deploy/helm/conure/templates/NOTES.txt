@@ -15,3 +15,13 @@ Verify the install:
 
 Port-forward the API:
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "conure.api.fullname" . }} 8080:{{ .Values.apiServer.service.port }}
+{{- if and .Values.apiServer.enabled .Values.apiServer.adminUser.enabled }}
+
+Admin user:
+  Email:    {{ .Values.apiServer.adminUser.email }}
+  Password: kubectl -n {{ .Release.Namespace }} get secret {{ include "conure.api.adminSecretName" . }} -o jsonpath='{.data.password}' | base64 -d
+
+  The Secret is annotated helm.sh/resource-policy=keep so the password
+  survives upgrades and `helm uninstall`. Delete it manually if you need to
+  rotate via reinstall, or use `conure_api resetsuperuserpassword`.
+{{- end }}

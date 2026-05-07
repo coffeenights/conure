@@ -1,15 +1,19 @@
 package auth
 
 import (
-	"github.com/coffeenights/conure/cmd/api-server/models"
+	"errors"
 	"log"
 
+	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
-func CreateSuperuser(mongo *database.MongoDB, email string) {
+func CreateSuperuser(mongo *database.MongoDB, email, password string) {
 	client := "conure"
-	password := GenerateRandomPassword(10)
+	if password == "" {
+		password = GenerateRandomPassword(10)
+	}
 	hashedPassword, err := GenerateFromPassword(password)
 	if err != nil {
 		log.Panic(err)
@@ -22,6 +26,10 @@ func CreateSuperuser(mongo *database.MongoDB, email string) {
 	}
 	err = user.Create(mongo)
 	if err != nil {
+		if errors.Is(err, conureerrors.ErrEmailAlreadyExists) {
+			log.Printf("Superuser %s already exists, skipping creation", email)
+			return
+		}
 		log.Panic(err)
 	}
 

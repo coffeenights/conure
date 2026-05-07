@@ -3,10 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
-	"text/tabwriter"
 
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/coffeenights/conure/pkg/api"
 	"github.com/spf13/cobra"
 )
@@ -99,20 +99,37 @@ func runAppList(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	header.Fprintln(w, "ID\tNAME\tDESCRIPTION\tENVIRONMENTS")
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")).Padding(0, 1)
+	cellStyle := lipgloss.NewStyle().Padding(0, 1)
+	envStyle := cellStyle.Foreground(lipgloss.Color("39"))
+
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		Headers("ID", "NAME", "DESCRIPTION", "ENVIRONMENTS").
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return headerStyle
+			}
+			if col == 3 {
+				return envStyle
+			}
+			return cellStyle
+		})
+
 	for _, app := range resp.Applications {
-		envNames := make([]string, len(app.Environments))
-		for i, e := range app.Environments {
-			envNames[i] = e.Name
-		}
 		envStr := "-"
-		if len(envNames) > 0 {
-			envStr = strings.Join(envNames, ", ")
+		if len(app.Environments) > 0 {
+			names := make([]string, len(app.Environments))
+			for i, e := range app.Environments {
+				names[i] = e.Name
+			}
+			envStr = strings.Join(names, ", ")
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", app.ID, app.Name, app.Description, envStr)
+		t.Row(app.ID, app.Name, app.Description, envStr)
 	}
-	return w.Flush()
+	fmt.Println(t)
+	return nil
 }
 
 func runAppCreate(cmd *cobra.Command, args []string) error {
@@ -158,10 +175,11 @@ func runAppDeploy(cmd *cobra.Command, args []string) error {
 	appID, _ := cmd.Flags().GetString("app")
 	env, _ := cmd.Flags().GetString("env")
 
-	info.Printf("Deploying application %s to %s...\n", appID, env)
-
+	sp := startSpinner(fmt.Sprintf("Deploying %s to %s…", appID, env))
 	data, err := client.put(fmt.Sprintf("/organizations/%s/a/%s/e/%s", orgID, appID, env), nil)
+	stopSpinner(sp)
 	if err != nil {
+		errC.Printf("✗ Deploy failed: %v\n", err)
 		return err
 	}
 
@@ -170,7 +188,7 @@ func runAppDeploy(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	success.Println("Application deployed successfully")
+	success.Printf("✓ Deployed %s to %s\n", appID, env)
 	return nil
 }
 

@@ -28,7 +28,7 @@ func runServer(address string, port int) {
 	}
 }
 
-func createSuperUser(email string) {
+func createSuperUser(email, password string) {
 	conf := config.LoadConfig(apiConfig.Config{})
 	log.Println("Connecting to MongoDB")
 	mongo, err := database.ConnectToMongoDB(conf.MongoDBURI, conf.MongoDBName)
@@ -36,7 +36,7 @@ func createSuperUser(email string) {
 		log.Panic(err)
 	}
 	log.Println("Connected to MongoDB")
-	auth.CreateSuperuser(mongo, email)
+	auth.CreateSuperuser(mongo, email, password)
 }
 
 func createSecretKey() {
@@ -72,6 +72,7 @@ func main() {
 	addressServer := runserverCmd.String("address", "localhost", "The HTTP server bind address.")
 	portServer := runserverCmd.Int("port", 8080, "The HTTP server port")
 	emailSuperuser := createsuperuserCmd.String("email", "", "The email of the superuser")
+	passwordSuperuser := createsuperuserCmd.String("password", "", "The password of the superuser (random if empty)")
 	emailSuperuserReset := resetSuperUserPasswordCmd.String("email", "", "The email of the superuser")
 
 	flag.Usage = func() {
@@ -104,7 +105,7 @@ func main() {
 			createsuperuserCmd.Usage()
 			os.Exit(1)
 		}
-		createSuperUser(*emailSuperuser)
+		createSuperUser(*emailSuperuser, *passwordSuperuser)
 	case "createsecretkey":
 		createSecretKey()
 	case "resetsuperuserpassword":
