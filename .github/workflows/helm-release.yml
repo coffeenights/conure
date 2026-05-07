@@ -45,7 +45,7 @@ jobs:
       - name: Login to GHCR
         run: |
           echo "${{ secrets.GHCR_HELM_PUSH_TOKEN }}" \
-            | helm registry login ghcr.io -u "${{ github.actor }}" --password-stdin
+            | helm registry login ghcr.io -u "${{ vars.GHCR_USER }}" --password-stdin
 
       - name: Push chart to OCI registry
         run: |
