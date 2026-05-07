@@ -27,6 +27,9 @@ spec:
     spec:
       serviceAccountName: {{ include "conure.controller.serviceAccountName" . }}
       terminationGracePeriodSeconds: 10
+      volumes:
+        - name: timoni-cache
+          emptyDir: {}
       {{- with .Values.controller.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -42,6 +45,12 @@ spec:
           command: ["/manager"]
           args:
             {{- toYaml .Values.controller.args | nindent 12 }}
+          env:
+            - name: CONURE_TIMONI_CACHE_DIR
+              value: /var/cache/timoni
+          volumeMounts:
+            - name: timoni-cache
+              mountPath: /var/cache/timoni
           ports:
             - name: probe
               containerPort: 8081

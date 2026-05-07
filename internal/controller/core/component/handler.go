@@ -8,6 +8,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -62,6 +64,13 @@ var orderMap = map[string]int{
 	"CronJob":                  24,
 }
 
+func timoniCacheDir() string {
+	if dir := os.Getenv("CONURE_TIMONI_CACHE_DIR"); dir != "" {
+		return dir
+	}
+	return filepath.Join(os.TempDir(), "conure-timoni-cache")
+}
+
 func NewComponentHandler(ctx context.Context, component *conurev1alpha1.Component, reconciler *ComponentReconciler) *ComponentHandler {
 	return &ComponentHandler{
 		Component:  component,
@@ -104,11 +113,13 @@ func (c *ComponentHandler) renderComponent() error {
 		c.Logger.Error(err, "failed to decode component values")
 		return err
 	}
-	c.componentTemplate, err = module.NewManager(c.Ctx, c.Component.Name, "oci://"+compDef.Spec.OCIRepository, compDef.Spec.OCITag, c.Component.Namespace, "", true, values.Get())
+	mgr, err := module.NewManager(c.Ctx, c.Component.Name, "oci://"+compDef.Spec.OCIRepository, compDef.Spec.OCITag, c.Component.Namespace, "", true, values.Get())
 	if err != nil {
 		c.Logger.Error(err, "failed to initialize template manager", "ociRepository", compDef.Spec.OCIRepository, "ociTag", compDef.Spec.OCITag)
 		return err
 	}
+	mgr.CacheDir = timoniCacheDir()
+	c.componentTemplate = mgr
 	sets, err := c.componentTemplate.GetApplySets()
 	if err != nil {
 		c.Logger.Error(err, "failed to get apply sets")

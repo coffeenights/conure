@@ -72,6 +72,12 @@ spec:
         - --leader-elect
         image: controller:latest
         name: manager
+        env:
+        - name: CONURE_TIMONI_CACHE_DIR
+          value: /var/cache/timoni
+        volumeMounts:
+        - name: timoni-cache
+          mountPath: /var/cache/timoni
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -100,3 +106,6 @@ spec:
             memory: 64Mi
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
+      volumes:
+      - name: timoni-cache
+        emptyDir: {}
