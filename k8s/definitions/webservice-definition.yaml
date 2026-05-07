@@ -8,3 +8,5 @@ spec:
   ociRepository: "ghcr.io/coffeenights/conure-templates/components/webservice"
   ociTag: "0.1.6"
   ociDigest: "sha256:50ea8f932e8eb4ab5100fe882474b27ea13407e64841507d96ee254e50b87a5f"
+  registrySecretRef:
+    name: ghcr-creds

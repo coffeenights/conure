@@ -21,7 +21,7 @@ func TestValidateUserLocal(t *testing.T) {
 
 	config := &apiConfig.Config{
 		MongoDBURI:  "mongodb://localhost:27017",
-		MongoDBName: "conure-test",
+		MongoDBName: "conure-test-middlewares",
 	}
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
 	defer cleanUpDB(mongo)

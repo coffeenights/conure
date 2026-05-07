@@ -9,7 +9,7 @@ import (
 
 func SetupDB() (*database.MongoDB, error) {
 	appConfig := config.LoadConfig(apiConfig.Config{})
-	testDBName := appConfig.MongoDBName + "-test"
+	testDBName := appConfig.MongoDBName + "-test-models"
 	client, err := database.ConnectToMongoDB(appConfig.MongoDBURI, testDBName)
 	if err != nil {
 		return nil, err

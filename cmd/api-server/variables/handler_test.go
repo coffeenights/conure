@@ -49,7 +49,7 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:          "test-secret",
 		MongoDBURI:         "mongodb://localhost:27017",
-		MongoDBName:        "conure-test",
+		MongoDBName:        "conure-test-variables",
 		AuthStrategySystem: "local",
 		AESStorageStrategy: "local",
 	}
@@ -145,7 +145,7 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:          "test-secret",
 		MongoDBURI:         "mongodb://localhost:27017",
-		MongoDBName:        "conure-test",
+		MongoDBName:        "conure-test-variables",
 		AuthStrategySystem: "local",
 	}
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
@@ -275,7 +275,7 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:          "test-secret",
 		MongoDBURI:         "mongodb://localhost:27017",
-		MongoDBName:        "conure-test",
+		MongoDBName:        "conure-test-variables",
 		AuthStrategySystem: "local",
 	}
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
@@ -419,7 +419,7 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:          "test-secret",
 		MongoDBURI:         "mongodb://localhost:27017",
-		MongoDBName:        "conure-test",
+		MongoDBName:        "conure-test-variables",
 		AuthStrategySystem: "local",
 	}
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
@@ -554,7 +554,7 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:          "test-secret",
 		MongoDBURI:         "mongodb://localhost:27017",
-		MongoDBName:        "conure-test",
+		MongoDBName:        "conure-test-variables",
 		AuthStrategySystem: "local",
 	}
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
@@ -686,7 +686,7 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:          "test-secret",
 		MongoDBURI:         "mongodb://localhost:27017",
-		MongoDBName:        "conure-test",
+		MongoDBName:        "conure-test-variables",
 		AuthStrategySystem: "local",
 	}
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
@@ -854,7 +854,7 @@ func TestHandler_DeleteVariable(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:          "test-secret",
 		MongoDBURI:         "mongodb://localhost:27017",
-		MongoDBName:        "conure-test",
+		MongoDBName:        "conure-test-variables",
 		AuthStrategySystem: "local",
 	}
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)

@@ -29,7 +29,7 @@ func TestHandler_Login(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:   "test-secret",
 		MongoDBURI:  "mongodb://localhost:27017",
-		MongoDBName: "conure-test",
+		MongoDBName: "conure-test-auth",
 	}
 	testPassword := "password123"
 	router := gin.New()
@@ -75,7 +75,7 @@ func TestHandler_Login(t *testing.T) {
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
 
-	assert.Equal(t, http.StatusBadRequest, resp.Code, "(invalid password) should return 400 Bad Request")
+	assert.Equal(t, http.StatusUnauthorized, resp.Code, "(invalid password) should return 401 Unauthorized")
 
 	// Create a request with unknown email
 	loginRequest.Email = "fake-email@test.com"
@@ -86,7 +86,7 @@ func TestHandler_Login(t *testing.T) {
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
 
-	assert.Equal(t, http.StatusBadRequest, resp.Code, "(unknown email) should return 400 Bad Request")
+	assert.Equal(t, http.StatusUnauthorized, resp.Code, "(unknown email) should return 401 Unauthorized")
 
 	// Create a request with no email
 	loginRequest.Email = ""
@@ -116,7 +116,7 @@ func TestHandler_Me(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:   "test-secret",
 		MongoDBURI:  "mongodb://localhost:27017",
-		MongoDBName: "conure-test",
+		MongoDBName: "conure-test-auth",
 	}
 
 	testPayload := JWTData{
@@ -198,7 +198,7 @@ func TestHandler_ChangePassword(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:   "test-secret",
 		MongoDBURI:  "mongodb://localhost:27017",
-		MongoDBName: "conure-test",
+		MongoDBName: "conure-test-auth",
 	}
 
 	testPayload := JWTData{

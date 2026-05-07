@@ -118,6 +118,9 @@ func (c *ComponentHandler) renderComponent() error {
 		c.Logger.Error(err, "failed to resolve registry credentials", "ociRepository", compDef.Spec.OCIRepository)
 		return err
 	}
+	if creds == "" {
+		c.Logger.Info("no registrySecretRef set on ComponentDefinition, attempting anonymous pull", "componentDefinition", compDef.Name, "ociRepository", compDef.Spec.OCIRepository)
+	}
 	mgr, err := module.NewManager(c.Ctx, c.Component.Name, "oci://"+compDef.Spec.OCIRepository, compDef.Spec.OCITag, c.Component.Namespace, creds, true, values.Get())
 	if err != nil {
 		c.Logger.Error(err, "failed to initialize template manager", "ociRepository", compDef.Spec.OCIRepository, "ociTag", compDef.Spec.OCITag)

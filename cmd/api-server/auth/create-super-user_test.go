@@ -12,7 +12,7 @@ func TestCreateSuperuser(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:   "test-secret",
 		MongoDBURI:  "mongodb://localhost:27017",
-		MongoDBName: "conure-test",
+		MongoDBName: "conure-test-auth",
 	}
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
 	defer cleanUpDB(mongo)
@@ -47,7 +47,7 @@ func TestResetSuperuserPassword(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:   "test-secret",
 		MongoDBURI:  "mongodb://localhost:27017",
-		MongoDBName: "conure-test",
+		MongoDBName: "conure-test-auth",
 	}
 	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
 	defer cleanUpDB(mongo)

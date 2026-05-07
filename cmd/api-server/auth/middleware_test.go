@@ -27,7 +27,7 @@ func TestCheckCurrentUserValidToken(t *testing.T) {
 	config := &apiConfig.Config{
 		JWTSecret:   "test-secret",
 		MongoDBURI:  "mongodb://localhost:27017",
-		MongoDBName: "conure-test",
+		MongoDBName: "conure-test-auth",
 	}
 	router := gin.New()
 

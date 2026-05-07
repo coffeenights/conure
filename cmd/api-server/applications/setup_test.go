@@ -14,6 +14,7 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/auth"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/internal/config"
 )
@@ -42,9 +43,9 @@ func (tc *testConfig) generateCookie() *http.Cookie {
 
 func setupRouter() (*gin.Engine, *ApiHandler) {
 	router := gin.Default()
-	db, err := models.SetupDB()
 	appConfig := config.LoadConfig(apiConfig.Config{})
-	appConfig.MongoDBName = appConfig.MongoDBName + "-test"
+	appConfig.MongoDBName = appConfig.MongoDBName + "-test-applications"
+	db, err := database.ConnectToMongoDB(appConfig.MongoDBURI, appConfig.MongoDBName)
 	if err != nil {
 		log.Panic(err)
 	}

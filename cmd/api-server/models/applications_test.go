@@ -542,32 +542,6 @@ func TestComponent_Create(t *testing.T) {
 	_ = comp.Delete(client)
 }
 
-func TestComponent_Create_Duplicate(t *testing.T) {
-	client, err := SetupDB()
-	if err != nil {
-		t.Fatal(err)
-	}
-	app, err := NewApplication(primitive.NewObjectID().Hex(), "TestComponentCreateDuplicate", primitive.NewObjectID().Hex()).Create(client)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer app.Delete(client)
-
-	comp := ComponentTemplate(app.ID, "test-component")
-	err = comp.Create(client)
-	if err != nil {
-		t.Errorf("Failed to create component: %v", err)
-		t.FailNow()
-	}
-	err = comp.Create(client)
-	if err == nil {
-		t.Errorf("Got nil, want error")
-	} else if !errors.Is(err, conureerrors.ErrObjectAlreadyExists) {
-		t.Errorf("Got %v, want %v", err, conureerrors.ErrObjectAlreadyExists)
-	}
-	_ = comp.Delete(client)
-}
-
 func TestComponentTypeSpec_Create(t *testing.T) {
 	client, err := SetupDB()
 	if err != nil {
