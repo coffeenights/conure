@@ -37,13 +37,11 @@ spec:
             - "-email=$(ADMIN_EMAIL)"
             - "-password=$(ADMIN_PASSWORD)"
           envFrom:
+            - configMapRef:
+                name: {{ include "conure.api.configMapName" . }}
             - secretRef:
                 name: {{ include "conure.api.secretName" . }}
           env:
-            - name: API_MONGODB_NAME
-              value: {{ .Values.apiServer.config.mongodbName | quote }}
-            - name: AES_STORAGE_STRATEGY
-              value: {{ .Values.apiServer.config.aesStorageStrategy | quote }}
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:

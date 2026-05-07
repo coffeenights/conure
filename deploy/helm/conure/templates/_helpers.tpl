@@ -115,6 +115,10 @@ apiServer.adminUser.rotate=true`.
 {{- $admin._password -}}
 {{- end }}
 
+{{- define "conure.api.configMapName" -}}
+{{ include "conure.api.fullname" . }}
+{{- end }}
+
 {{- define "conure.api.secretName" -}}
 {{- if .Values.apiServer.secrets.existingSecret -}}
 {{ .Values.apiServer.secrets.existingSecret }}

@@ -1,0 +1,20 @@
+{{- if .Values.apiServer.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "conure.api.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "conure.api.labels" . | nindent 4 }}
+data:
+  API_MONGODB_NAME: {{ .Values.apiServer.config.mongodbName | quote }}
+  JWT_EXPIRATION_DAYS: {{ .Values.apiServer.config.jwtExpirationDays | quote }}
+  PROVIDER_SOURCE: {{ .Values.apiServer.config.providerSource | quote }}
+  AES_STORAGE_STRATEGY: {{ .Values.apiServer.config.aesStorageStrategy | quote }}
+  AUTH_STRATEGY_SYSTEM: {{ .Values.apiServer.config.authStrategySystem | quote }}
+  AUTH_SERVICE_URL: {{ .Values.apiServer.config.authServiceUrl | quote }}
+  FRONTEND_DOMAIN: {{ .Values.apiServer.config.frontendDomain | quote }}
+  COOKIE_SECURE: {{ .Values.apiServer.config.cookieSecure | quote }}
+  CORS_ORIGINS: {{ .Values.apiServer.config.corsOrigins | quote }}
+  GIN_MODE: {{ .Values.apiServer.config.ginMode | quote }}
+{{- end }}
