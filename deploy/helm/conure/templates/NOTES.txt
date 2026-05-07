@@ -1,0 +1,17 @@
+Conure {{ .Chart.AppVersion }} has been installed in namespace "{{ .Release.Namespace }}".
+
+Release name: {{ .Release.Name }}
+
+Components:
+  - Controller:  {{ if .Values.controller.enabled }}{{ include "conure.controller.fullname" . }}{{ else }}disabled{{ end }}
+  - API server:  {{ if .Values.apiServer.enabled }}{{ include "conure.api.fullname" . }} (Service on port {{ .Values.apiServer.service.port }}){{ else }}disabled{{ end }}
+  - MongoDB:     {{ if .Values.mongodb.enabled }}bundled (release-{{ .Release.Name }}-mongodb){{ else }}external{{ end }}
+  - CRDs:        {{ if .Values.crds.install }}managed by chart{{ else }}out-of-band{{ end }}
+
+Verify the install:
+  kubectl -n {{ .Release.Namespace }} get pods,svc
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "conure.controller.fullname" . }}
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "conure.api.fullname" . }}
+
+Port-forward the API:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "conure.api.fullname" . }} 8080:{{ .Values.apiServer.service.port }}

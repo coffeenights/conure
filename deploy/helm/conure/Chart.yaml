@@ -1,0 +1,12 @@
+apiVersion: v2
+name: conure
+description: Conure Kubernetes-native application platform (controller + API server)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.24.0-0"
+home: https://github.com/coffeenights/conure
+sources:
+  - https://github.com/coffeenights/conure
+maintainers:
+  - name: Conure Team
