@@ -1,6 +1,7 @@
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -96,6 +97,10 @@ type ComponentDefinitionSpec struct {
 	OCITag        string `json:"ociTag"`
 	OCIDigest     string `json:"ociDigest"`
 	OCIRegistry   string `json:"ociRegistry,omitempty"`
+	// RegistrySecretRef references a Secret of type kubernetes.io/dockerconfigjson
+	// in the controller's namespace, used to authenticate with the OCI registry
+	// when pulling the module artifact. Optional; omit for public registries.
+	RegistrySecretRef *corev1.LocalObjectReference `json:"registrySecretRef,omitempty"`
 }
 
 //+kubebuilder:object:root=true

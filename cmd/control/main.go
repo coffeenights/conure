@@ -22,6 +22,7 @@ import (
 	"os"
 
 	"github.com/coffeenights/conure/internal/controller/core"
+	"github.com/coffeenights/conure/internal/controller/core/component"
 	"go.uber.org/zap/zapcore"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -62,6 +63,7 @@ func main() {
 	var enableHTTP2 bool
 	var enableDevelopment bool
 	var logLevel int
+	var registrySecretNamespace string
 	var tlsOpts []func(*tls.Config)
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
@@ -75,7 +77,10 @@ func main() {
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
 	flag.BoolVar(&enableDevelopment, "development", false, "Enable development mode")
 	flag.IntVar(&logLevel, "log-level", 0, "Log level: 0 - info, 1 - debug, 5 - Reconciler debug")
+	flag.StringVar(&registrySecretNamespace, "registry-secret-namespace", os.Getenv("POD_NAMESPACE"),
+		"Namespace where ComponentDefinition pull secrets are looked up. Defaults to POD_NAMESPACE.")
 	flag.Parse()
+	component.RegistrySecretNamespace = registrySecretNamespace
 	opts := zap.Options{
 		Development: enableDevelopment,
 		Level:       zapcore.Level(-logLevel),
