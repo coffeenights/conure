@@ -31,12 +31,11 @@ spec:
         - name: rotate-admin
           image: "{{ .Values.apiServer.image.repository }}:{{ .Values.apiServer.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.apiServer.image.pullPolicy }}
-          command: ["/bin/sh", "-c"]
+          command: ["/app/conure_api"]
           args:
-            - |
-              /app/conure_api resetsuperuserpassword \
-                -email="$ADMIN_EMAIL" \
-                -password="$ADMIN_PASSWORD"
+            - "resetsuperuserpassword"
+            - "-email=$(ADMIN_EMAIL)"
+            - "-password=$(ADMIN_PASSWORD)"
           envFrom:
             - secretRef:
                 name: {{ include "conure.api.secretName" . }}
