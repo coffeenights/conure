@@ -171,7 +171,7 @@ spec:
     - metadata:
         name: data
         labels:
-          {{- include "conure.mongodb.labels" . | nindent 10 }}
+          {{- include "conure.mongodb.selectorLabels" . | nindent 10 }}
       spec:
         accessModes:
           - {{ .Values.mongodb.persistence.accessMode }}
