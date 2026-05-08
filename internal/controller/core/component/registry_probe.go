@@ -52,7 +52,41 @@ func logRegistryPullFailure(ctx context.Context, logger logr.Logger, ociReposito
 		return
 	}
 
-	// Step 2: hit the token endpoint with credentials, following each redirect
+	// Step 2a: hit the token endpoint WITHOUT credentials. If go-containerregistry
+	// is somehow stripping the Authorization header, this is the request shape
+	// the OCI client is actually issuing — and any redirect loop here is the
+	// real source of the "stopped after 10 redirects" error.
+	logger.Info("registry probe: probing token URL anonymously to compare against OCI client behavior")
+	currentAnon := tokenURL
+	for hop := 1; hop <= 6; hop++ {
+		resp, body, err := probeRequest(ctx, currentAnon, "")
+		if err != nil {
+			logger.Error(err, "registry probe: anonymous token hop failed", "hop", hop, "url", currentAnon)
+			break
+		}
+		logger.Info("registry probe: token hop (anonymous)",
+			"hop", hop,
+			"url", currentAnon,
+			"status", resp.StatusCode,
+			"location", resp.Header.Get("Location"),
+			"wwwAuthenticate", resp.Header.Get("WWW-Authenticate"),
+			"body", truncate(body, 256))
+		if resp.StatusCode < 300 || resp.StatusCode >= 400 {
+			break
+		}
+		loc := resp.Header.Get("Location")
+		if loc == "" {
+			break
+		}
+		next, err := resolveRedirect(currentAnon, loc)
+		if err != nil {
+			logger.Error(err, "registry probe: failed to resolve anonymous redirect", "hop", hop, "location", loc)
+			break
+		}
+		currentAnon = next
+	}
+
+	// Step 2b: hit the token endpoint with credentials, following each redirect
 	// manually so we can log it.
 	current := tokenURL
 	for hop := 1; hop <= 6; hop++ {
