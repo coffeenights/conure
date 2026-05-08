@@ -164,10 +164,6 @@ func (a *ApiHandler) DeployApplication(c *gin.Context) {
 	if errors.Is(err, conureerrors.ErrApplicationExists) {
 		log.Println("Application exists, updating instead")
 		err = provider.UpdateApplication(app, components, compVars)
-		if err != nil {
-			conureerrors.AbortWithError(c, err)
-			return
-		}
 	}
 	if err != nil {
 		log.Printf("Error deploying application: %v\n", err)

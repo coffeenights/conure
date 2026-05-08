@@ -6,7 +6,7 @@ spec:
   type: webservice
   description: "A web service component that deploys a container with network exposure"
   ociRepository: "ghcr.io/coffeenights/conure-templates/components/webservice"
-  ociTag: "0.1.6"
-  ociDigest: "sha256:50ea8f932e8eb4ab5100fe882474b27ea13407e64841507d96ee254e50b87a5f"
+  ociTag: "0.1.8"
+  ociDigest: "sha256:0a497c28f34a32104a0be41ecb6ef78129959f0683b270c8464aa3334804c860"
   registrySecretRef:
     name: ghcr-creds
