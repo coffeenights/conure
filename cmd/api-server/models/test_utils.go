@@ -22,33 +22,38 @@ func ComponentTemplate(appID primitive.ObjectID, name string) *Component {
 		ApplicationID: appID,
 		Name:          name,
 		Type:          "service",
-		Values: map[string]interface{}{
-			"resources": map[string]interface{}{
-				"replicas": 1,
-				"cpu":      "500m",
-				"memory":   "200Mi",
-			},
-			"source": map[string]interface{}{
-				"ociRepository": "coffeenights/django:latest",
-				"command":       []string{"python", "manage.py", "runserver", "0.0.0.0:8000"},
-			},
-			"network": map[string]interface{}{
-				"exposed": true,
-				"type":    "public",
-				"ports": []map[string]interface{}{
-					{
-						"hostPort":   8000,
-						"targetPort": 8000,
-						"protocol":   "tcp",
-					},
-				},
-			},
-			"storage": []map[string]interface{}{
+	}
+}
+
+// ComponentRevisionValuesTemplate returns the canonical "service" values map
+// used by tests that need a realistic revision payload.
+func ComponentRevisionValuesTemplate() map[string]interface{} {
+	return map[string]interface{}{
+		"resources": map[string]interface{}{
+			"replicas": 1,
+			"cpu":      "500m",
+			"memory":   "200Mi",
+		},
+		"source": map[string]interface{}{
+			"ociRepository": "coffeenights/django:latest",
+			"command":       []string{"python", "manage.py", "runserver", "0.0.0.0:8000"},
+		},
+		"network": map[string]interface{}{
+			"exposed": true,
+			"type":    "public",
+			"ports": []map[string]interface{}{
 				{
-					"size":      "20Gi",
-					"name":      "Volume1",
-					"mountPath": "/tmp",
+					"hostPort":   8000,
+					"targetPort": 8000,
+					"protocol":   "tcp",
 				},
+			},
+		},
+		"storage": []map[string]interface{}{
+			{
+				"size":      "20Gi",
+				"name":      "Volume1",
+				"mountPath": "/tmp",
 			},
 		},
 	}

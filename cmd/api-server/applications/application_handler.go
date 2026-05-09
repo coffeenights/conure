@@ -10,15 +10,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
-type Properties interface {
-}
-
-type Trait struct {
-	Name       string                 `json:"name"`
-	Type       string                 `json:"type"`
-	Properties map[string]interface{} `json:"properties"`
-}
-
 type ApplicationHandler struct {
 	ID             string
 	OrganizationID string
@@ -51,29 +42,14 @@ func ListOrganizationApplications(organizationID string, db *database.MongoDB) (
 }
 
 func (ah *ApplicationHandler) GetApplicationByID(appID string) error {
-	err := ah.Model.GetByID(ah.DB, appID)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (ah *ApplicationHandler) Status(environment *models.Environment) (ProviderStatus, error) {
-	status, err := NewProviderStatus(ah.Model, environment)
-	if err != nil {
-		return nil, err
-	}
-	return status, nil
+	return ah.Model.GetByID(ah.DB, appID)
 }
 
 func getHandlerFromRoute(c *gin.Context, db *database.MongoDB) (*ApplicationHandler, error) {
-	// Escape the organizationID
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
 		return nil, err
-
 	}
-	// Escape the applicationID
 	if _, err := primitive.ObjectIDFromHex(c.Param("applicationID")); err != nil {
 		log.Printf("Error parsing applicationID: %v\n", err)
 		return nil, err
@@ -84,8 +60,7 @@ func getHandlerFromRoute(c *gin.Context, db *database.MongoDB) (*ApplicationHand
 		log.Printf("Error creating application handler: %v\n", err)
 		return nil, err
 	}
-	err = handler.GetApplicationByID(c.Param("applicationID"))
-	if err != nil {
+	if err = handler.GetApplicationByID(c.Param("applicationID")); err != nil {
 		log.Printf("Error getting application: %v\n", err)
 		return nil, conureerrors.ErrObjectNotFound
 	}

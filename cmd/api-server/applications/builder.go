@@ -15,8 +15,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-func BuildApplicationManifest(application *models.Application, environment *models.Environment, db *database.MongoDB, keyStorage variables.SecretKeyStorage) (*conurev1alpha1.Application, []conurev1alpha1.Component, []providers.ComponentVariables, error) {
-	app := conurev1alpha1.Application{
+// BuildApplicationCRD assembles the env-scoped Application CRD object. It
+// does not list components — Application CRD creation is handled per-deploy
+// by the provider (idempotent), so this just shapes the metadata.
+func BuildApplicationCRD(application *models.Application, environment *models.Environment) *conurev1alpha1.Application {
+	return &conurev1alpha1.Application{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: conurev1alpha1.GroupVersion.String(),
 			Kind:       "Application",
@@ -35,37 +38,17 @@ func BuildApplicationManifest(application *models.Application, environment *mode
 			},
 		},
 	}
-
-	dbComponents, err := application.ListComponents(db)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
-	var components []conurev1alpha1.Component
-	var compVars []providers.ComponentVariables
-	for _, comp := range dbComponents {
-		component, cv, err := buildComponentManifest(application, environment, &comp, db, keyStorage)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		components = append(components, *component)
-		compVars = append(compVars, cv)
-	}
-
-	return &app, components, compVars, nil
 }
 
-func buildComponentManifest(application *models.Application, environment *models.Environment, component *models.Component, db *database.MongoDB, keyStorage variables.SecretKeyStorage) (*conurev1alpha1.Component, providers.ComponentVariables, error) {
-	valuesJSON, err := json.Marshal(component.Values)
+// BuildComponentCRD turns a single (component, revision-values) pair into a
+// Component CRD object scoped to the env namespace. This replaces the old
+// "walk every component in Mongo" path: each deploy now operates on exactly
+// one revision.
+func BuildComponentCRD(application *models.Application, environment *models.Environment, component *models.Component, values map[string]interface{}) (*conurev1alpha1.Component, error) {
+	valuesJSON, err := json.Marshal(values)
 	if err != nil {
-		return nil, providers.ComponentVariables{}, fmt.Errorf("marshaling component values: %w", err)
+		return nil, fmt.Errorf("marshaling component values: %w", err)
 	}
-
-	cv, err := gatherVariables(db, application, environment, component, keyStorage)
-	if err != nil {
-		return nil, providers.ComponentVariables{}, err
-	}
-	cv.ComponentName = component.Name
 
 	return &conurev1alpha1.Component{
 		TypeMeta: metav1.TypeMeta{
@@ -88,7 +71,7 @@ func buildComponentManifest(application *models.Application, environment *models
 			ComponentType: component.Type,
 			Values:        &runtime.RawExtension{Raw: valuesJSON},
 		},
-	}, cv, nil
+	}, nil
 }
 
 // gatherVariables collects variables from all scopes (org → environment → component),
@@ -136,14 +119,10 @@ func gatherVariables(db *database.MongoDB, application *models.Application, envi
 		}
 	}
 
-	if len(merged) == 0 {
-		log.Printf("gatherVariables: no variables found for component %q (org=%s app=%s env=%s component=%s)",
-			component.Name, application.OrganizationID.Hex(), application.ID.Hex(), environment.ID, component.ID.Hex())
-	}
-
 	cv := providers.ComponentVariables{
-		Variables: make(map[string]string),
-		Secrets:   make(map[string]string),
+		ComponentName: component.Name,
+		Variables:     make(map[string]string),
+		Secrets:       make(map[string]string),
 	}
 	for name, e := range merged {
 		if e.isEncrypted {

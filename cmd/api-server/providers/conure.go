@@ -6,13 +6,15 @@ import (
 	"log"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
-	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// ProviderDispatcherConure is the per-environment driver for applying and
+// removing Component CRDs. The plural name is historical; with Vela gone it
+// is the only provider, called directly from handlers.
 type ProviderDispatcherConure struct {
 	OrganizationID  string
 	ApplicationID   string
@@ -21,7 +23,9 @@ type ProviderDispatcherConure struct {
 	Environment     string
 }
 
-func (p *ProviderDispatcherConure) createNamespace(clientset *k8sUtils.GenericClientset) error {
+// EnsureNamespace creates the env namespace if missing. Idempotent — an
+// existing namespace is reused without error.
+func (p *ProviderDispatcherConure) EnsureNamespace(ctx context.Context, clientset *k8sUtils.GenericClientset) error {
 	ns := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: p.Namespace,
@@ -32,15 +36,27 @@ func (p *ProviderDispatcherConure) createNamespace(clientset *k8sUtils.GenericCl
 			},
 		},
 	}
-	_, err := clientset.K8s.CoreV1().Namespaces().Create(context.Background(), ns, metav1.CreateOptions{})
+	_, err := clientset.K8s.CoreV1().Namespaces().Create(ctx, ns, metav1.CreateOptions{})
 	if k8sErrors.IsAlreadyExists(err) {
-		log.Printf("Namespace %s already exists, reusing it\n", p.Namespace)
 		return nil
 	}
 	return err
 }
 
-func (p *ProviderDispatcherConure) syncComponentVariables(clientset *k8sUtils.GenericClientset, cv ComponentVariables) error {
+// EnsureApplicationCRD creates the Application CRD in the env namespace if
+// missing. The Application CRD is scoped per-environment in this model.
+func (p *ProviderDispatcherConure) EnsureApplicationCRD(ctx context.Context, clientset *k8sUtils.GenericClientset, app *conurev1alpha1.Application) error {
+	apps := clientset.Conure.CoreV1alpha1().Applications(p.Namespace)
+	_, err := apps.Create(ctx, app, metav1.CreateOptions{})
+	if k8sErrors.IsAlreadyExists(err) {
+		return nil
+	}
+	return err
+}
+
+// SyncComponentVariables creates or updates the ConfigMap (plain variables)
+// and Secret (encrypted secrets) backing a component's runtime values.
+func (p *ProviderDispatcherConure) SyncComponentVariables(clientset *k8sUtils.GenericClientset, cv ComponentVariables) error {
 	cm := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-variables", cv.ComponentName),
@@ -63,91 +79,71 @@ func (p *ProviderDispatcherConure) syncComponentVariables(clientset *k8sUtils.Ge
 	if err := k8sUtils.CreateOrUpdateSecret(clientset, p.Namespace, secret); err != nil {
 		return fmt.Errorf("syncing secret for component %q: %w", cv.ComponentName, err)
 	}
-
 	return nil
 }
 
-func (p *ProviderDispatcherConure) DeployApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component, compVars []ComponentVariables) error {
+// ApplyComponent creates or updates a single Component CRD in the env
+// namespace, syncing its variables ConfigMap/Secret first. Used by the per-
+// component deploy path.
+func (p *ProviderDispatcherConure) ApplyComponent(ctx context.Context, app *conurev1alpha1.Application, component *conurev1alpha1.Component, cv ComponentVariables) error {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
-		log.Printf("Error getting clientset: %v\n", err)
 		return err
 	}
 
-	if err = p.createNamespace(clientset); err != nil {
+	if err = p.EnsureNamespace(ctx, clientset); err != nil {
+		return err
+	}
+	if err = p.EnsureApplicationCRD(ctx, clientset, app); err != nil {
+		return err
+	}
+	if err = p.SyncComponentVariables(clientset, cv); err != nil {
 		return err
 	}
 
-	coreClient := clientset.Conure.CoreV1alpha1()
-
-	_, err = coreClient.Applications(p.Namespace).Create(context.Background(), app, metav1.CreateOptions{})
-	if k8sErrors.IsAlreadyExists(err) {
-		log.Printf("Application %s already exists\n", p.ApplicationName)
-		return conureerrors.ErrApplicationExists
-	}
-	if err != nil {
-		return err
-	}
-	log.Printf("Created application %q\n", p.ApplicationName)
-
-	for i := range components {
-		if err = p.syncComponentVariables(clientset, compVars[i]); err != nil {
-			return err
-		}
-		_, err = coreClient.Components(p.Namespace).Create(context.Background(), &components[i], metav1.CreateOptions{})
+	components := clientset.Conure.CoreV1alpha1().Components(p.Namespace)
+	existing, err := components.Get(ctx, component.Name, metav1.GetOptions{})
+	if k8sErrors.IsNotFound(err) {
+		_, err = components.Create(ctx, component, metav1.CreateOptions{})
 		if err != nil {
 			return err
 		}
-		log.Printf("Created component %q\n", components[i].Name)
+		log.Printf("Created component %q in %s\n", component.Name, p.Namespace)
+		return nil
 	}
-
+	if err != nil {
+		return err
+	}
+	component.ResourceVersion = existing.ResourceVersion
+	_, err = components.Update(ctx, component, metav1.UpdateOptions{})
+	if err != nil {
+		return err
+	}
+	log.Printf("Updated component %q in %s\n", component.Name, p.Namespace)
 	return nil
 }
 
-func (p *ProviderDispatcherConure) UpdateApplication(app *conurev1alpha1.Application, components []conurev1alpha1.Component, compVars []ComponentVariables) error {
+// DeleteComponentCRD removes the Component CRD in the env namespace, plus
+// its variables ConfigMap and Secret. Idempotent — missing resources do not
+// produce errors.
+func (p *ProviderDispatcherConure) DeleteComponentCRD(ctx context.Context, componentName string) error {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
-		log.Printf("Error getting clientset: %v\n", err)
 		return err
 	}
 
-	coreClient := clientset.Conure.CoreV1alpha1()
-
-	existing, err := coreClient.Applications(p.Namespace).Get(context.Background(), p.ApplicationName, metav1.GetOptions{})
-	if err != nil {
+	err = clientset.Conure.CoreV1alpha1().Components(p.Namespace).Delete(ctx, componentName, metav1.DeleteOptions{})
+	if err != nil && !k8sErrors.IsNotFound(err) {
 		return err
 	}
-	app.ResourceVersion = existing.ResourceVersion
-	_, err = coreClient.Applications(p.Namespace).Update(context.Background(), app, metav1.UpdateOptions{})
-	if err != nil {
+
+	cmName := fmt.Sprintf("%s-variables", componentName)
+	if err := clientset.K8s.CoreV1().ConfigMaps(p.Namespace).Delete(ctx, cmName, metav1.DeleteOptions{}); err != nil && !k8sErrors.IsNotFound(err) {
 		return err
 	}
-	log.Printf("Updated application %q\n", p.ApplicationName)
-
-	for i := range components {
-		comp := &components[i]
-		if err = p.syncComponentVariables(clientset, compVars[i]); err != nil {
-			return err
-		}
-		existingComp, err := coreClient.Components(p.Namespace).Get(context.Background(), comp.Name, metav1.GetOptions{})
-		if k8sErrors.IsNotFound(err) {
-			_, err = coreClient.Components(p.Namespace).Create(context.Background(), comp, metav1.CreateOptions{})
-			if err != nil {
-				return err
-			}
-			log.Printf("Created component %q\n", comp.Name)
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		comp.ResourceVersion = existingComp.ResourceVersion
-		_, err = coreClient.Components(p.Namespace).Update(context.Background(), comp, metav1.UpdateOptions{})
-		if err != nil {
-			return err
-		}
-		log.Printf("Updated component %q\n", comp.Name)
+	secretName := fmt.Sprintf("%s-secrets", componentName)
+	if err := clientset.K8s.CoreV1().Secrets(p.Namespace).Delete(ctx, secretName, metav1.DeleteOptions{}); err != nil && !k8sErrors.IsNotFound(err) {
+		return err
 	}
-
 	return nil
 }

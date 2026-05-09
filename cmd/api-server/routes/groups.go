@@ -54,7 +54,7 @@ func GenerateRouter() *gin.Engine {
 		gin.Recovery(),
 		getCorsMiddleware(),
 	)
-	appHandler := apps.NewApiHandler(conf, mongo, keyStorage)
+	appHandler := apps.NewApiHandler(conf, mongo, keyStorage, nil)
 	settingsHandler := settings.NewApiHandler(conf, mongo, keyStorage)
 	authHandler := auth.NewAuthHandler(conf, mongo)
 	variablesHandler := variables.NewVariablesHandler(conf, mongo, keyStorage)

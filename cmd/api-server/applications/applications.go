@@ -2,7 +2,6 @@ package applications
 
 import (
 	"errors"
-	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"log"
 	"net/http"
 
@@ -14,7 +13,6 @@ import (
 )
 
 func (a *ApiHandler) ListApplications(c *gin.Context) {
-	// Escape the organizationID
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
 		conureerrors.AbortWithError(c, err)
@@ -29,7 +27,6 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 		log.Printf("Error getting organization: %v\n", err)
 		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
 		return
-
 	}
 	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
@@ -42,9 +39,8 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 		return
 	}
 
-	response := ApplicationListResponse{}
-	response.Organization = OrganizationResponse{
-		Organization: &org,
+	response := ApplicationListResponse{
+		Organization: OrganizationResponse{Organization: &org},
 	}
 	applicationResponses := make([]ApplicationResponse, len(handlers))
 	for i, handler := range handlers {
@@ -54,24 +50,21 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 			conureerrors.AbortWithError(c, err)
 			return
 		}
-		r := ApplicationResponse{
+		applicationResponses[i] = ApplicationResponse{
 			Application:     handler.Model,
 			TotalComponents: totalComponents,
 		}
-		applicationResponses[i] = r
 	}
 	response.Applications = applicationResponses
 	c.JSON(http.StatusOK, response)
 }
 
 func (a *ApiHandler) DetailApplication(c *gin.Context) {
-	// Escape the organizationID
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	// Escape the applicationID
 	if _, err := primitive.ObjectIDFromHex(c.Param("applicationID")); err != nil {
 		log.Printf("Error parsing applicationID: %v\n", err)
 		conureerrors.AbortWithError(c, err)
@@ -84,25 +77,19 @@ func (a *ApiHandler) DetailApplication(c *gin.Context) {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	err = handler.GetApplicationByID(c.Param("applicationID"))
-	if err != nil {
+	if err := handler.GetApplicationByID(c.Param("applicationID")); err != nil {
 		log.Printf("Error getting application: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-
 	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
-	response := ApplicationResponse{
-		Application: handler.Model,
-	}
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, ApplicationResponse{Application: handler.Model})
 }
 
 func (a *ApiHandler) CreateApplication(c *gin.Context) {
-	// Escape the organizationID
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
 		conureerrors.AbortWithError(c, err)
@@ -120,91 +107,15 @@ func (a *ApiHandler) CreateApplication(c *gin.Context) {
 		return
 	}
 	request := CreateApplicationRequest{}
-	err = c.BindJSON(&request)
-	if err != nil {
+	if err := c.BindJSON(&request); err != nil {
 		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	application := models.NewApplication(c.Param("organizationID"), request.Name, uID.Hex())
 	application.Description = request.Description
-	_, err = application.Create(a.MongoDB)
-	if err != nil {
+	if _, err := application.Create(a.MongoDB); err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
 	c.JSON(http.StatusCreated, application)
-}
-
-func (a *ApiHandler) DeployApplication(c *gin.Context) {
-	handler, err := getHandlerFromRoute(c, a.MongoDB)
-	if err != nil {
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-
-	env, err := handler.Model.GetEnvironmentByName(a.MongoDB, c.Param("environment"))
-	if err != nil {
-		log.Printf("Error getting environment: %v\n", err)
-		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
-		return
-	}
-	app, components, compVars, err := BuildApplicationManifest(handler.Model, env, a.MongoDB, a.KeyStorage)
-	if err != nil {
-		log.Printf("Error building application manifest: %v\n", err)
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-	provider, err := NewProviderDispatcher(handler.Model, env)
-	if err != nil {
-		log.Printf("Error creating provider dispatcher: %v\n", err)
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-	err = provider.DeployApplication(app, components, compVars)
-	if errors.Is(err, conureerrors.ErrApplicationExists) {
-		log.Println("Application exists, updating instead")
-		err = provider.UpdateApplication(app, components, compVars)
-	}
-	if err != nil {
-		log.Printf("Error deploying application: %v\n", err)
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Application deployed",
-	})
-}
-
-func (a *ApiHandler) StatusApplication(c *gin.Context) {
-	handler, err := getHandlerFromRoute(c, a.MongoDB)
-	if err != nil {
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-
-	env, err := handler.Model.GetEnvironmentByName(a.MongoDB, c.Param("environment"))
-	if err != nil {
-		log.Printf("Error getting environment: %v\n", err)
-		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
-		return
-	}
-	status, err := handler.Status(env)
-	if errors.Is(err, k8sUtils.ErrApplicationNotFound) {
-		conureerrors.AbortWithError(c, conureerrors.ErrApplicationNotDeployed)
-		return
-	} else if err != nil {
-		log.Printf("Error getting status: %v\n", err)
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-	appStatus, err := status.GetApplicationStatus()
-	if err != nil {
-		log.Printf("Error getting application status: %v\n", err)
-		conureerrors.AbortWithError(c, err)
-		return
-	}
-	var response ApplicationStatusResponse
-	response.Status = ApplicationStatus(appStatus)
-	c.JSON(http.StatusOK, gin.H{"status": appStatus})
-
 }
