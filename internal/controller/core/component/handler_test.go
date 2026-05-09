@@ -400,6 +400,114 @@ func encodeApplySets(t *testing.T, sets []module.ResourceSet) string {
 	return base64.StdEncoding.EncodeToString(buf.Bytes())
 }
 
+// TestReconcileDeployedObjects_ReAppliesCachedResources verifies the
+// drift-detection path: with a populated apply-set annotation,
+// ReconcileDeployedObjects decodes the cached resources and re-applies
+// every one of them via the timoni/fluxcd ApplyObject path. This is what
+// runs on every periodic requeue (post-fix to component_controller.go),
+// so a child resource deleted out-of-band is recreated within RequeueAfter.
+func TestReconcileDeployedObjects_ReAppliesCachedResources(t *testing.T) {
+	ctx := context.Background()
+
+	deploy := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      "web",
+				"namespace": "default",
+			},
+			"spec": map[string]interface{}{},
+		},
+	}
+	svc := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "v1",
+			"kind":       "Service",
+			"metadata": map[string]interface{}{
+				"name":      "web-svc",
+				"namespace": "default",
+			},
+			"spec": map[string]interface{}{},
+		},
+	}
+	encoded := encodeApplySets(t, []module.ResourceSet{
+		{Name: "main", Objects: []*unstructured.Unstructured{deploy, svc}},
+	})
+
+	comp := newTestComponent("web", "default", "webservice")
+	comp.Annotations = map[string]string{conurev1alpha1.ApplySetsAnnotation: encoded}
+
+	mock := &mockModuleManager{}
+	handler := newTestHandler(ctx, newFakeClient(comp), comp)
+	handler.componentTemplate = mock
+
+	if err := handler.ReconcileDeployedObjects(); err != nil {
+		t.Fatalf("ReconcileDeployedObjects failed: %v", err)
+	}
+
+	if len(mock.appliedObjs) != 2 {
+		t.Fatalf("expected 2 cached resources to be re-applied, got %d", len(mock.appliedObjs))
+	}
+	// Order is by orderMap: Service (16) before Deployment (21).
+	if mock.appliedObjs[0].GetKind() != "Service" || mock.appliedObjs[1].GetKind() != "Deployment" {
+		t.Fatalf("expected Service then Deployment, got %s then %s",
+			mock.appliedObjs[0].GetKind(), mock.appliedObjs[1].GetKind())
+	}
+}
+
+// TestReconcileDeployedObjects_DriftFailureFlipsDeployedCondition verifies
+// that when SSA-apply fails during the drift-recovery sweep, the Deployed
+// condition flips to False and Ready rolls up to DeploymentFailed — so an
+// operator looking at the Component sees the failure on `kubectl get`.
+func TestReconcileDeployedObjects_DriftFailureFlipsDeployedCondition(t *testing.T) {
+	ctx := context.Background()
+
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata":   map[string]interface{}{"name": "web", "namespace": "default"},
+			"spec":       map[string]interface{}{},
+		},
+	}
+	encoded := encodeApplySets(t, []module.ResourceSet{
+		{Name: "main", Objects: []*unstructured.Unstructured{obj}},
+	})
+
+	comp := newTestComponent("web", "default", "webservice")
+	comp.Annotations = map[string]string{conurev1alpha1.ApplySetsAnnotation: encoded}
+	// Steady-state Component before the drift sweep.
+	comp.Status.Conditions = []metav1.Condition{
+		{
+			Type:   conurev1alpha1.ComponentConditionTypeReady.String(),
+			Status: metav1.ConditionTrue,
+			Reason: conurev1alpha1.ComponentReasonReady.String(),
+		},
+	}
+
+	mock := &mockModuleManager{applyObjErr: fmt.Errorf("apiserver said no")}
+	handler := newTestHandler(ctx, newFakeClient(comp), comp)
+	handler.componentTemplate = mock
+
+	if err := handler.ReconcileDeployedObjects(); err == nil {
+		t.Fatal("expected ReconcileDeployedObjects to surface the apply error")
+	}
+
+	deployed := handler.GetCondition(conurev1alpha1.ComponentConditionTypeDeployed)
+	if deployed == nil || deployed.Status != metav1.ConditionFalse {
+		t.Fatalf("expected Deployed=False after apply failure, got %+v", deployed)
+	}
+	if deployed.Reason != conurev1alpha1.ComponentReasonFailed.String() {
+		t.Fatalf("expected reason Failed, got %s", deployed.Reason)
+	}
+
+	ready := handler.GetConditionReady()
+	if ready.Reason != conurev1alpha1.ComponentReasonDeploymentFailed.String() {
+		t.Fatalf("expected Ready rolled up to DeploymentFailed, got %s", ready.Reason)
+	}
+}
+
 func TestReconcileDeployedObjects_NoAnnotation(t *testing.T) {
 	ctx := context.Background()
 	comp := newTestComponent("web", "default", "webservice")

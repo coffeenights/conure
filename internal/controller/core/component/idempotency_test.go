@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
+	"github.com/stefanprodan/timoni/pkg/module"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/event"
@@ -123,6 +125,74 @@ func TestReconcile_DoesWorkWhenGenerationDrifts(t *testing.T) {
 	}
 	if _, ok := containsType(got.Status.Conditions, conurev1alpha1.ComponentConditionTypeRendered.String()); !ok {
 		t.Fatal("expected the reconciler to write a Rendered condition when generation drifts")
+	}
+}
+
+// TestReconcile_RunsDriftDetectionInSteadyState is the explicit assertion
+// that the periodic 3-min requeue is actually a drift-detection loop. Even
+// when the Component is in steady state (Ready=True, ObservedGeneration
+// matching), Reconcile must call ReconcileDeployedObjects so fluxcd/pkg/ssa
+// gets a chance to revert/recreate any out-of-band changes to child
+// resources. Only the expensive OCI pull + render path stays gated by the
+// steady-state guard.
+//
+// We prove this by injecting a mock componentTemplate that records every
+// ApplyObject call and seeding the Component with a cached apply-set in
+// its annotation. After Reconcile, the cached resources should have been
+// re-applied; meanwhile the steady-state Ready=True condition must remain
+// untouched (proving RenderComponent did NOT run — that path would write
+// a Rendered condition or, given no ComponentDefinition exists in the test,
+// flip Rendered to Failed).
+func TestReconcile_RunsDriftDetectionInSteadyState(t *testing.T) {
+	ctx := context.Background()
+
+	deploy := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata":   map[string]interface{}{"name": "web", "namespace": "default"},
+			"spec":       map[string]interface{}{},
+		},
+	}
+	encoded := encodeApplySets(t, []module.ResourceSet{
+		{Name: "main", Objects: []*unstructured.Unstructured{deploy}},
+	})
+
+	comp := componentWith(3, 3, metav1.ConditionTrue, conurev1alpha1.ComponentReasonReady)
+	comp.Spec = conurev1alpha1.ComponentSpec{ComponentType: "webservice"}
+	comp.Annotations = map[string]string{conurev1alpha1.ApplySetsAnnotation: encoded}
+
+	c := newFakeClient(comp)
+	mock := &mockModuleManager{}
+	r := &ComponentReconciler{
+		Client: c,
+		Scheme: newTestScheme(),
+		newHandler: func(ctx context.Context, comp *conurev1alpha1.Component, recon *ComponentReconciler) *ComponentHandler {
+			h := NewComponentHandler(ctx, comp, recon)
+			h.componentTemplate = mock
+			return h
+		},
+	}
+
+	if _, err := r.Reconcile(ctx, ctrl.Request{NamespacedName: types.NamespacedName{Name: comp.Name, Namespace: comp.Namespace}}); err != nil {
+		t.Fatalf("reconcile returned error: %v", err)
+	}
+
+	// Drift sweep ran: the cached Deployment was re-applied via SSA.
+	if len(mock.appliedObjs) != 1 || mock.appliedObjs[0].GetKind() != "Deployment" {
+		t.Fatalf("expected the cached Deployment to be re-applied; got %+v", mock.appliedObjs)
+	}
+
+	// Render path was skipped: no Rendered condition was written.
+	got := &conurev1alpha1.Component{}
+	if err := c.Get(ctx, types.NamespacedName{Name: comp.Name, Namespace: comp.Namespace}, got); err != nil {
+		t.Fatalf("failed to fetch component: %v", err)
+	}
+	if _, ok := containsType(got.Status.Conditions, conurev1alpha1.ComponentConditionTypeRendered.String()); ok {
+		t.Fatal("expected RenderComponent to be skipped in steady state, but a Rendered condition was written")
+	}
+	if got.Status.ObservedGeneration != 3 {
+		t.Fatalf("expected ObservedGeneration to remain 3, got %d", got.Status.ObservedGeneration)
 	}
 }
 

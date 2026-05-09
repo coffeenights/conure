@@ -19,6 +19,18 @@ const RequeueAfter = time.Minute * 3
 type ComponentReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+
+	// newHandler builds the ComponentHandler used during Reconcile. Tests
+	// override this to inject a mock componentTemplate so the OCI pull and
+	// SSA apply paths can be exercised against a fake client.
+	newHandler func(context.Context, *conurev1alpha1.Component, *ComponentReconciler) *ComponentHandler
+}
+
+func (r *ComponentReconciler) handlerFor(ctx context.Context, c *conurev1alpha1.Component) *ComponentHandler {
+	if r.newHandler != nil {
+		return r.newHandler(ctx, c, r)
+	}
+	return NewComponentHandler(ctx, c, r)
 }
 
 //+kubebuilder:rbac:groups=core.conure.io,resources=applications,verbs=get;list;watch;create;update;patch;delete
@@ -47,14 +59,21 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	if isReconciledUpToDate(&component) {
+	componentHandler := r.handlerFor(ctx, &component)
+
+	// Re-apply the cached apply-set on every reconcile. fluxcd/pkg/ssa
+	// (via timoni's ApplyObject) diffs live state against each object and
+	// recreates / reverts drift, so the periodic requeue is the drift-detection
+	// loop. This path is cheap — no OCI pull, no Timoni render — so it runs
+	// even when spec.generation hasn't changed.
+	if err := componentHandler.ReconcileDeployedObjects(); err != nil {
+		logger.Info("Failed to reconcile deployed objects", "error", err)
 		return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 	}
 
-	componentHandler := NewComponentHandler(ctx, &component, r)
-
-	if err := componentHandler.ReconcileDeployedObjects(); err != nil {
-		logger.Info("Failed to reconcile deployed objects", "error", err)
+	// Skip the expensive render path when spec.generation hasn't changed and
+	// Ready is already True; drift was just handled above.
+	if isReconciledUpToDate(&component) {
 		return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 	}
 
