@@ -23,6 +23,14 @@ func (t ComponentConditionReason) String() string {
 	return string(t)
 }
 
+// IsValid reports whether this reason is one of the known
+// ComponentConditionReason constants. Used at the boundary in
+// setConditionReady to reject typos.
+func (t ComponentConditionReason) IsValid() bool {
+	_, ok := knownComponentConditionReasons[t]
+	return ok
+}
+
 const (
 	ComponentConditionTypeReady          ComponentConditionType   = "Ready"
 	ComponentReadyPendingReason          ComponentConditionReason = "Pending"
@@ -34,6 +42,17 @@ const (
 	ComponentReadyDeployingSucceedReason ComponentConditionReason = "DeployingSucceed"
 	ComponentReadyRunningReason          ComponentConditionReason = "Running"
 )
+
+var knownComponentConditionReasons = map[ComponentConditionReason]struct{}{
+	ComponentReadyPendingReason:          {},
+	ComponentReadyRenderingReason:        {},
+	ComponentReadyRenderingFailedReason:  {},
+	ComponentReadyRenderingSucceedReason: {},
+	ComponentReadyDeployingReason:        {},
+	ComponentReadyDeployingFailedReason:  {},
+	ComponentReadyDeployingSucceedReason: {},
+	ComponentReadyRunningReason:          {},
+}
 
 type ComponentSpec struct {
 	ComponentType string                `json:"type"`

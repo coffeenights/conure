@@ -2,10 +2,11 @@ package common
 
 import (
 	"context"
+
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 )
 
 // ContainsCondition checks if a condition with the given type exists in the conditions slice.
@@ -19,21 +20,16 @@ func ContainsCondition(conditions []metav1.Condition, conditionType string) (int
 	return -1, false
 }
 
-// SetCondition sets a condition with the given type, status, reason and message in the conditions slice.
+// SetCondition sets a condition with the given type, status, reason and message
+// in the conditions slice, delegating to meta.SetStatusCondition so that
+// LastTransitionTime is preserved when Status does not flip.
 func SetCondition(conditions []metav1.Condition, conditionType string, status metav1.ConditionStatus, reason string, message string) []metav1.Condition {
-	condition := metav1.Condition{
-		Type:               conditionType,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		LastTransitionTime: metav1.Time{Time: time.Now()},
-	}
-	index, exists := ContainsCondition(conditions, conditionType)
-	if exists {
-		conditions[index] = condition
-	} else {
-		conditions = append(conditions, condition)
-	}
+	meta.SetStatusCondition(&conditions, metav1.Condition{
+		Type:    conditionType,
+		Status:  status,
+		Reason:  reason,
+		Message: message,
+	})
 	return conditions
 }
 

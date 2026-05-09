@@ -18,7 +18,6 @@ import (
 	"github.com/coffeenights/conure/internal/timoni"
 	"github.com/go-logr/logr"
 	"github.com/stefanprodan/timoni/pkg/module"
-	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -191,17 +190,51 @@ func (c *ComponentHandler) renderComponent() error {
 	return nil
 }
 
-func (c *ComponentHandler) setConditionReady(reason conurev1alpha1.ComponentConditionReason, message string) error {
-	status := metav1.ConditionFalse
-	if reason == conurev1alpha1.ComponentReadyRunningReason {
-		status = metav1.ConditionTrue
+// bufferConditionReady mutates Component.Status.Conditions in memory only;
+// callers must invoke flushStatus to persist the result. Returns false when
+// the buffered state matches the current state (caller can decide whether
+// to skip flushing).
+func (c *ComponentHandler) bufferConditionReady(reason conurev1alpha1.ComponentConditionReason, message string) (changed bool, err error) {
+	if !reason.IsValid() {
+		return false, fmt.Errorf("unknown ComponentConditionReason %q", reason)
 	}
+	// Ready is currently always reported as False; the Running rollup that flipped
+	// it to True was never wired up. Phase 3 reintroduces a rollup based on
+	// per-step conditions plus workload health.
+	status := metav1.ConditionFalse
 	currentCondition := c.GetConditionReady()
 	if currentCondition != nil && currentCondition.Status == status && currentCondition.Reason == string(reason) {
-		return nil
+		// For failure reasons the message is the diagnostic; if it changed,
+		// re-patch so retries don't mask later errors with the first one.
+		if !isFailureReason(reason) || currentCondition.Message == message {
+			return false, nil
+		}
 	}
 	c.Component.Status.Conditions = common.SetCondition(c.Component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String(), status, reason.String(), message)
+	return true, nil
+}
+
+// setConditionReady buffers the condition update and flushes it as a single
+// status patch. Use bufferConditionReady + flushStatus when batching multiple
+// transitions in one reconcile.
+func (c *ComponentHandler) setConditionReady(reason conurev1alpha1.ComponentConditionReason, message string) error {
+	changed, err := c.bufferConditionReady(reason, message)
+	if err != nil {
+		return err
+	}
+	if !changed {
+		return nil
+	}
+	return c.flushStatus()
+}
+
+func (c *ComponentHandler) flushStatus() error {
 	return common.ApplyStatus(c.Ctx, c.Component, c.Reconciler.Client)
+}
+
+func isFailureReason(reason conurev1alpha1.ComponentConditionReason) bool {
+	return reason == conurev1alpha1.ComponentReadyRenderingFailedReason ||
+		reason == conurev1alpha1.ComponentReadyDeployingFailedReason
 }
 
 func (c *ComponentHandler) GetConditionReady() *metav1.Condition {
@@ -212,30 +245,34 @@ func (c *ComponentHandler) GetConditionReady() *metav1.Condition {
 	return nil
 }
 
+// RenderComponent renders the component template and applies resources. All
+// intermediate condition transitions (Rendering, RenderingSucceed, Deploying)
+// are buffered in memory; only the terminal condition is patched, so a
+// successful or failed reconcile produces a single status write.
 func (c *ComponentHandler) RenderComponent() error {
-	condition := c.GetConditionReady()
-	if condition == nil || condition.Reason != conurev1alpha1.ComponentReadyRenderingFailedReason.String() {
-		if err := c.setConditionReady(conurev1alpha1.ComponentReadyRenderingReason, "Component is being rendered"); err != nil {
-			return err
-		}
-	}
 	if err := c.renderComponent(); err != nil {
-		if err2 := c.setConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, err.Error()); err2 != nil {
-			return err2
+		if _, bufErr := c.bufferConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, err.Error()); bufErr != nil {
+			return bufErr
 		}
-		return err
-	}
-	if err := c.setConditionReady(conurev1alpha1.ComponentReadyRenderingSucceedReason, "Component rendered successfully"); err != nil {
-		return err
-	}
-	if err := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingReason, "Component is being deployed"); err != nil {
+		if flushErr := c.flushStatus(); flushErr != nil {
+			return flushErr
+		}
 		return err
 	}
 	if err := c.applyResources(); err != nil {
+		if _, bufErr := c.bufferConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, err.Error()); bufErr != nil {
+			return bufErr
+		}
+		if flushErr := c.flushStatus(); flushErr != nil {
+			return flushErr
+		}
 		return err
 	}
 	c.Component.Status.ObservedGeneration = c.Component.Generation
-	return c.setConditionReady(conurev1alpha1.ComponentReadyDeployingSucceedReason, "Component deployed successfully")
+	if _, err := c.bufferConditionReady(conurev1alpha1.ComponentReadyDeployingSucceedReason, "Component deployed successfully"); err != nil {
+		return err
+	}
+	return c.flushStatus()
 }
 
 // applyResources applies the resources in the applySet to the cluster only if they have changed since the last apply or if they are new.
@@ -260,13 +297,9 @@ func (c *ComponentHandler) applyResources() error {
 
 	for _, resource := range c.applySet {
 		resource.SetOwnerReferences([]metav1.OwnerReference{ownerRef})
-		_, err := c.componentTemplate.ApplyObject(resource, false)
-		if err != nil {
+		if _, err := c.componentTemplate.ApplyObject(resource, false); err != nil {
 			c.Logger.Error(err, "failed to apply resource", "kind", resource.GetKind(), "name", resource.GetName(), "namespace", resource.GetNamespace())
-			if err2 := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, err.Error()); err2 != nil {
-				return err2
-			}
-			return err
+			return fmt.Errorf("failed to apply %s/%s: %w", resource.GetKind(), resource.GetName(), err)
 		}
 	}
 	// Clear the apply set
@@ -316,25 +349,13 @@ func (c *ComponentHandler) ReconcileDeployedObjects() error {
 		return nil
 	}
 
-	return c.applyResources()
-}
-
-func (c *ComponentHandler) updateStatus() error {
-	// Update the status with the current objects
-	for _, obj := range c.applySet {
-		if obj.GetKind() == "Deployment" {
-			deployment := &appsv1.Deployment{}
-			if err := c.Reconciler.Get(c.Ctx, types.NamespacedName{Name: obj.GetName(), Namespace: obj.GetNamespace()}, deployment); err != nil {
-				c.Logger.Error(err, "failed to get deployment status", "name", obj.GetName(), "namespace", obj.GetNamespace())
-				continue
-			}
-			if deployment.Status.ReadyReplicas == deployment.Status.Replicas {
-				if err := c.setConditionReady(conurev1alpha1.ComponentReadyRunningReason, "Component is running"); err != nil {
-					c.Logger.Error(err, "Failed to set condition ready")
-					return err
-				}
-			}
+	if err := c.applyResources(); err != nil {
+		// Reflect the apply failure in the status; the caller (Reconcile) then
+		// requeues without invoking RenderComponent.
+		if condErr := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, err.Error()); condErr != nil {
+			return condErr
 		}
+		return err
 	}
 	return nil
 }

@@ -18,9 +18,29 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
+
+// newFakeClientWithStatusUpdateCounter returns a fake client backed by a
+// counter that increments every time Status().Update(...) is invoked. Useful
+// for asserting that a reconcile produces a single status patch.
+func newFakeClientWithStatusUpdateCounter(counter *int, objs ...client.Object) client.Client {
+	return fake.NewClientBuilder().
+		WithScheme(newTestScheme()).
+		WithStatusSubresource(&conurev1alpha1.Component{}).
+		WithObjects(objs...).
+		WithInterceptorFuncs(interceptor.Funcs{
+			SubResourceUpdate: func(ctx context.Context, c client.Client, subResourceName string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+				if subResourceName == "status" {
+					*counter++
+				}
+				return c.Status().Update(ctx, obj, opts...)
+			},
+		}).
+		Build()
+}
 
 // mockModuleManager implements timoni.ModuleManager for testing.
 type mockModuleManager struct {
@@ -125,8 +145,8 @@ func TestGetConditionReady_WithCondition(t *testing.T) {
 	comp.Status.Conditions = []metav1.Condition{
 		{
 			Type:   conurev1alpha1.ComponentConditionTypeReady.String(),
-			Status: metav1.ConditionTrue,
-			Reason: conurev1alpha1.ComponentReadyRunningReason.String(),
+			Status: metav1.ConditionFalse,
+			Reason: conurev1alpha1.ComponentReadyDeployingSucceedReason.String(),
 		},
 	}
 	handler := newTestHandler(ctx, newFakeClient(), comp)
@@ -135,28 +155,8 @@ func TestGetConditionReady_WithCondition(t *testing.T) {
 	if condition == nil {
 		t.Fatal("expected non-nil condition")
 	}
-	if condition.Reason != conurev1alpha1.ComponentReadyRunningReason.String() {
-		t.Fatalf("expected reason Running, got %s", condition.Reason)
-	}
-}
-
-func TestSetConditionReady_SetsStatusTrue_ForRunning(t *testing.T) {
-	ctx := context.Background()
-	comp := newTestComponent("web", "default", "webservice")
-	k8sClient := newFakeClient(comp)
-	handler := newTestHandler(ctx, k8sClient, comp)
-
-	err := handler.setConditionReady(conurev1alpha1.ComponentReadyRunningReason, "running")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	condition := handler.GetConditionReady()
-	if condition == nil {
-		t.Fatal("expected condition to be set")
-	}
-	if condition.Status != metav1.ConditionTrue {
-		t.Fatalf("expected ConditionTrue for Running, got %s", condition.Status)
+	if condition.Reason != conurev1alpha1.ComponentReadyDeployingSucceedReason.String() {
+		t.Fatalf("expected reason DeployingSucceed, got %s", condition.Reason)
 	}
 }
 
@@ -183,17 +183,139 @@ func TestSetConditionReady_NoOpWhenUnchanged(t *testing.T) {
 	comp.Status.Conditions = []metav1.Condition{
 		{
 			Type:   conurev1alpha1.ComponentConditionTypeReady.String(),
-			Status: metav1.ConditionTrue,
-			Reason: conurev1alpha1.ComponentReadyRunningReason.String(),
+			Status: metav1.ConditionFalse,
+			Reason: conurev1alpha1.ComponentReadyDeployingSucceedReason.String(),
 		},
 	}
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
 
 	// Should be a no-op since status and reason match
-	err := handler.setConditionReady(conurev1alpha1.ComponentReadyRunningReason, "running")
+	err := handler.setConditionReady(conurev1alpha1.ComponentReadyDeployingSucceedReason, "deployed")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRenderComponent_FailureProducesSingleStatusPatch(t *testing.T) {
+	ctx := context.Background()
+	comp := newTestComponent("web", "default", "nonexistent-type")
+
+	var statusUpdates int
+	k8sClient := newFakeClientWithStatusUpdateCounter(&statusUpdates, comp)
+	handler := newTestHandler(ctx, k8sClient, comp)
+
+	// renderComponent fails because no ComponentDefinition exists for the type;
+	// RenderComponent should buffer Rendering→RenderingFailed and emit one patch.
+	if err := handler.RenderComponent(); err == nil {
+		t.Fatal("expected error from RenderComponent without matching ComponentDefinition")
+	}
+
+	if statusUpdates != 1 {
+		t.Fatalf("expected exactly 1 status update on failure path, got %d", statusUpdates)
+	}
+
+	condition := handler.GetConditionReady()
+	if condition == nil {
+		t.Fatal("expected condition to be set")
+	}
+	if condition.Reason != conurev1alpha1.ComponentReadyRenderingFailedReason.String() {
+		t.Fatalf("expected RenderingFailed reason, got %s", condition.Reason)
+	}
+}
+
+func TestRenderComponent_BufferedTransitionsOnlyEmitTerminal(t *testing.T) {
+	ctx := context.Background()
+	comp := newTestComponent("web", "default", "webservice")
+
+	var statusUpdates int
+	k8sClient := newFakeClientWithStatusUpdateCounter(&statusUpdates, comp)
+	handler := newTestHandler(ctx, k8sClient, comp)
+
+	// Simulate the intermediate buffering done by RenderComponent without
+	// invoking the real OCI pull path.
+	for _, reason := range []conurev1alpha1.ComponentConditionReason{
+		conurev1alpha1.ComponentReadyRenderingReason,
+		conurev1alpha1.ComponentReadyRenderingSucceedReason,
+		conurev1alpha1.ComponentReadyDeployingReason,
+		conurev1alpha1.ComponentReadyDeployingSucceedReason,
+	} {
+		if _, err := handler.bufferConditionReady(reason, "step"); err != nil {
+			t.Fatalf("buffer failed: %v", err)
+		}
+	}
+	if statusUpdates != 0 {
+		t.Fatalf("expected 0 status updates after buffering, got %d", statusUpdates)
+	}
+	if err := handler.flushStatus(); err != nil {
+		t.Fatalf("flush failed: %v", err)
+	}
+	if statusUpdates != 1 {
+		t.Fatalf("expected exactly 1 status update after flush, got %d", statusUpdates)
+	}
+
+	// Only the terminal reason should be visible.
+	condition := handler.GetConditionReady()
+	if condition.Reason != conurev1alpha1.ComponentReadyDeployingSucceedReason.String() {
+		t.Fatalf("expected DeployingSucceed reason, got %s", condition.Reason)
+	}
+}
+
+func TestSetConditionReady_RejectsUnknownReason(t *testing.T) {
+	ctx := context.Background()
+	comp := newTestComponent("web", "default", "webservice")
+	handler := newTestHandler(ctx, newFakeClient(comp), comp)
+
+	err := handler.setConditionReady(conurev1alpha1.ComponentConditionReason("Rendring"), "typo")
+	if err == nil {
+		t.Fatal("expected error for unknown reason")
+	}
+	if handler.GetConditionReady() != nil {
+		t.Fatal("expected no condition to be set when reason is invalid")
+	}
+}
+
+func TestSetConditionReady_UpdatesMessageOnFailureRetry(t *testing.T) {
+	ctx := context.Background()
+	comp := newTestComponent("web", "default", "webservice")
+	k8sClient := newFakeClient(comp)
+	handler := newTestHandler(ctx, k8sClient, comp)
+
+	if err := handler.setConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, "error A"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if err := handler.setConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, "error B"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	condition := handler.GetConditionReady()
+	if condition.Message != "error B" {
+		t.Fatalf("expected failure message to be updated to 'error B', got %q", condition.Message)
+	}
+}
+
+func TestSetConditionReady_NoOpWhenFailureMessageUnchanged(t *testing.T) {
+	ctx := context.Background()
+	comp := newTestComponent("web", "default", "webservice")
+	comp.Status.Conditions = []metav1.Condition{
+		{
+			Type:    conurev1alpha1.ComponentConditionTypeReady.String(),
+			Status:  metav1.ConditionFalse,
+			Reason:  conurev1alpha1.ComponentReadyRenderingFailedReason.String(),
+			Message: "error A",
+		},
+	}
+	original := comp.Status.Conditions[0].LastTransitionTime
+	k8sClient := newFakeClient(comp)
+	handler := newTestHandler(ctx, k8sClient, comp)
+
+	if err := handler.setConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, "error A"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	condition := handler.GetConditionReady()
+	if !condition.LastTransitionTime.Equal(&original) {
+		t.Fatal("expected LastTransitionTime to be preserved when nothing changed")
 	}
 }
 
@@ -246,7 +368,7 @@ func TestApplyResources_OrdersByKind(t *testing.T) {
 	}
 }
 
-func TestApplyResources_SetsFailedConditionOnError(t *testing.T) {
+func TestApplyResources_ReturnsErrorWithoutSettingCondition(t *testing.T) {
 	ctx := context.Background()
 	comp := newTestComponent("web", "default", "webservice")
 	k8sClient := newFakeClient(comp)
@@ -264,13 +386,10 @@ func TestApplyResources_SetsFailedConditionOnError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-
-	condition := handler.GetConditionReady()
-	if condition == nil {
-		t.Fatal("expected failed condition to be set")
-	}
-	if condition.Reason != conurev1alpha1.ComponentReadyDeployingFailedReason.String() {
-		t.Fatalf("expected DeployingFailed reason, got %s", condition.Reason)
+	// Condition setting is the caller's responsibility (RenderComponent or
+	// ReconcileDeployedObjects); applyResources just propagates the error.
+	if handler.GetConditionReady() != nil {
+		t.Fatal("expected applyResources to leave conditions untouched")
 	}
 }
 

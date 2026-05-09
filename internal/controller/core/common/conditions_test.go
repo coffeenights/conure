@@ -2,6 +2,7 @@ package common
 
 import (
 	"testing"
+	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -87,6 +88,37 @@ func TestSetCondition_UpdatesExisting(t *testing.T) {
 	}
 	if c.Reason != "Deployed" {
 		t.Fatalf("expected updated reason Deployed, got %s", c.Reason)
+	}
+}
+
+func TestSetCondition_PreservesLastTransitionTimeOnSameStatus(t *testing.T) {
+	conditions := SetCondition(nil, "Ready", metav1.ConditionFalse, "Pending", "msg one")
+	original := conditions[0].LastTransitionTime
+	if original.IsZero() {
+		t.Fatal("expected LastTransitionTime to be set on first call")
+	}
+
+	// Force a measurable wall-clock gap so an unintended overwrite is observable.
+	time.Sleep(10 * time.Millisecond)
+
+	conditions = SetCondition(conditions, "Ready", metav1.ConditionFalse, "Pending", "msg two")
+	if !conditions[0].LastTransitionTime.Equal(&original) {
+		t.Fatalf("expected LastTransitionTime to be preserved on same Status; got %v, want %v", conditions[0].LastTransitionTime, original)
+	}
+	if conditions[0].Message != "msg two" {
+		t.Fatalf("expected message to be updated to 'msg two', got %q", conditions[0].Message)
+	}
+}
+
+func TestSetCondition_UpdatesLastTransitionTimeOnStatusFlip(t *testing.T) {
+	conditions := SetCondition(nil, "Ready", metav1.ConditionFalse, "Pending", "")
+	original := conditions[0].LastTransitionTime
+
+	time.Sleep(10 * time.Millisecond)
+
+	conditions = SetCondition(conditions, "Ready", metav1.ConditionTrue, "Deployed", "")
+	if conditions[0].LastTransitionTime.Equal(&original) {
+		t.Fatal("expected LastTransitionTime to advance when Status flips")
 	}
 }
 
