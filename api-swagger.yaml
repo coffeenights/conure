@@ -2,13 +2,28 @@ openapi: 3.0.3
 info:
   title: Conure API
   description: |
-    Conure is a Kubernetes-native application platform that provides:
-    - Organization and application management
-    - Component-based application deployment
-    - Environment management
-    - Variable and secret management
-    - Container registry integrations
-  version: 1.0.0
+    Conure is a Kubernetes-native application platform.
+
+    **Source-of-truth model:** Kubernetes holds what is actually running.
+    MongoDB holds the immutable revision history. Component values are
+    versioned per `(component, environment)` pair via `ComponentRevision`s.
+
+    **Core flow:**
+    1. `POST /a/{appID}/c` registers a component identity and writes the
+       first draft revision in a target environment.
+    2. `POST /e/{env}/c/{id}/revisions` adds further drafts.
+    3. `POST /e/{env}/c/{id}/deploy` applies the latest draft to K8s and
+       flips it to `deployed`. Deployed revisions are immutable.
+    4. `POST /e/{env}/c/{id}/revisions/{revID}/deploy` is the rollback
+       primitive: it copies a historical revision's values into a new
+       deployed revision at the head and applies them.
+    5. `POST /a/{appID}/c/{id}/promote` copies the latest deployed revision
+       from one env to another as a fresh draft.
+
+    Drift = live `Component.Spec.Values` in K8s vs. the latest deployed
+    revision in Mongo. The env-scoped detail endpoint reports both values
+    and a structured diff.
+  version: 2.0.0
   contact:
     name: Conure API Support
     url: https://github.com/coffeenights/conure
@@ -22,12 +37,12 @@ security:
   - cookieAuth: []
 
 paths:
-  # Authentication endpoints
+  # Authentication ---------------------------------------------------------
   /auth/login:
     post:
       tags: [Authentication]
       summary: User login
-      description: Authenticate user with email and password
+      description: Authenticate user with email and password.
       security: []
       requestBody:
         required: true
@@ -60,7 +75,6 @@ paths:
     get:
       tags: [Authentication]
       summary: Get current user profile
-      description: Get the authenticated user's profile information
       responses:
         '200':
           description: User profile
@@ -75,7 +89,6 @@ paths:
     patch:
       tags: [Authentication]
       summary: Change password
-      description: Change the authenticated user's password
       requestBody:
         required: true
         content:
@@ -98,12 +111,11 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
-  # Organization endpoints
+  # Organizations ----------------------------------------------------------
   /organizations:
     get:
       tags: [Organizations]
       summary: List organizations
-      description: List all organizations accessible to the authenticated user
       responses:
         '200':
           description: List of organizations
@@ -113,11 +125,9 @@ paths:
                 $ref: '#/components/schemas/OrganizationListResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
-
     post:
       tags: [Organizations]
       summary: Create organization
-      description: Create a new organization
       requestBody:
         required: true
         content:
@@ -140,7 +150,6 @@ paths:
     get:
       tags: [Organizations]
       summary: Get organization details
-      description: Get details of a specific organization
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
       responses:
@@ -157,12 +166,11 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  # Application endpoints
+  # Applications -----------------------------------------------------------
   /organizations/{organizationID}/a:
     get:
       tags: [Applications]
       summary: List applications
-      description: List all applications in an organization
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
       responses:
@@ -178,11 +186,9 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-
     post:
       tags: [Applications]
       summary: Create application
-      description: Create a new application in an organization
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
       requestBody:
@@ -205,11 +211,35 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+  /organizations/{organizationID}/a/{applicationID}:
+    get:
+      tags: [Applications]
+      summary: Get application details
+      description: |
+        Returns app identity plus the embedded `environments` array.
+        Use the env-scoped endpoints below to read live state per env.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+      responses:
+        '200':
+          description: Application details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Environments -----------------------------------------------------------
   /organizations/{organizationID}/a/{applicationID}/e:
     post:
       tags: [Environments]
       summary: Create environment
-      description: Create a new environment for an application
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
@@ -230,58 +260,13 @@ paths:
           $ref: '#/components/responses/Forbidden'
 
   /organizations/{organizationID}/a/{applicationID}/e/{environment}:
-    get:
-      tags: [Applications]
-      summary: Get application details for environment
-      description: Get application details for a specific environment
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-        - $ref: '#/components/parameters/ApplicationID'
-        - $ref: '#/components/parameters/Environment'
-      responses:
-        '200':
-          description: Application details
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Application'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-    put:
-      tags: [Applications]
-      summary: Deploy application
-      description: Deploy application to an environment
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-        - $ref: '#/components/parameters/ApplicationID'
-        - $ref: '#/components/parameters/Environment'
-      responses:
-        '200':
-          description: Application deployed
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message:
-                    type: string
-                    example: "Application deployed"
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
     delete:
       tags: [Environments]
       summary: Delete environment
-      description: Delete an environment and all its resources
+      description: |
+        Removes the environment from the application. Live K8s resources in
+        the environment namespace are not automatically reaped — uninstall
+        each component first if you want a clean teardown.
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
@@ -296,22 +281,27 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /organizations/{organizationID}/a/{applicationID}/e/{environment}/status:
-    get:
-      tags: [Applications]
-      summary: Get application status
-      description: Get the current status of an application in an environment
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/deploy:
+    post:
+      tags: [Environments]
+      summary: Bulk-deploy every draft in this environment
+      description: |
+        For every component that has a `draft` revision in this env, deploy
+        its latest draft. Failures are reported per-component; partial
+        success is allowed.
+
+        Replaces the legacy `PUT /e/{env}` (DeployApplication).
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
         - $ref: '#/components/parameters/Environment'
       responses:
         '200':
-          description: Application status
+          description: Bulk deploy result
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ApplicationStatusResponse'
+                $ref: '#/components/schemas/DeployBatchResponse'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -319,16 +309,18 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  # Component endpoints
-  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c:
+  # App-wide component identity --------------------------------------------
+  /organizations/{organizationID}/a/{applicationID}/c:
     get:
       tags: [Components]
-      summary: List components
-      description: List all components in an application environment
+      summary: List components for the application
+      description: |
+        Returns each component's identity plus a per-environment presence
+        rollup: whether it is active (CRD exists), whether a draft is
+        outstanding, latest deployed/draft versions, and drift flag.
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
-        - $ref: '#/components/parameters/Environment'
       responses:
         '200':
           description: List of components
@@ -342,15 +334,21 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
-
     post:
       tags: [Components]
-      summary: Create component
-      description: Create a new component in an application environment
+      summary: Create component (identity + first draft revision)
+      description: |
+        Registers the component identity (name, type, description) and
+        writes a v1 `draft` revision in the target environment using the
+        provided `values`. Use `POST /e/{env}/c/{id}/deploy` afterwards to
+        push the draft to K8s.
+
+        If creating the identity succeeds but the first revision insert
+        fails, the identity is rolled back so the slate stays clean for a
+        retry.
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
-        - $ref: '#/components/parameters/Environment'
       requestBody:
         required: true
         content:
@@ -359,11 +357,16 @@ paths:
               $ref: '#/components/schemas/CreateComponentRequest'
       responses:
         '201':
-          description: Component created
+          description: Component identity + first draft revision
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Component'
+                type: object
+                properties:
+                  component:
+                    $ref: '#/components/schemas/Component'
+                  revision:
+                    $ref: '#/components/schemas/ComponentRevision'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -371,23 +374,41 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
-  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}:
+  /organizations/{organizationID}/a/{applicationID}/c/{componentID}:
     get:
       tags: [Components]
-      summary: Get component details
-      description: Get details of a specific component
+      summary: Get component identity + per-env presence rollup
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
-        - $ref: '#/components/parameters/Environment'
         - $ref: '#/components/parameters/ComponentID'
       responses:
         '200':
-          description: Component details
+          description: Component identity with environment presence
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Component'
+                $ref: '#/components/schemas/ComponentResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [Components]
+      summary: Wipe component identity, all revisions, all env CRDs
+      description: |
+        Deletes the Mongo identity row, every revision (drafts + deployed
+        history), and the live `Component` CRD in every environment where
+        the component had any revision. Idempotent against missing CRDs.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '204':
+          description: Component fully removed
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -395,10 +416,183 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-    put:
+  /organizations/{organizationID}/a/{applicationID}/c/{componentID}/promote:
+    post:
       tags: [Components]
-      summary: Update component
-      description: Update an existing component
+      summary: Promote the latest deployed revision from one env to another
+      description: |
+        Reads the latest `deployed` revision in `from` and inserts a new
+        `draft` in `to` with copied values. Returns 400 if `from` has no
+        deployed revision (drafts are not promotable).
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/ComponentID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromoteRequest'
+      responses:
+        '201':
+          description: New draft revision in the target env
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  # Env-scoped components & revisions --------------------------------------
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c:
+    get:
+      tags: [Components]
+      summary: List components present in this environment
+      description: |
+        Reads `Component` CRDs from the environment namespace
+        (`{envID}-{envName}`) filtered by the `conure.io/application-id`
+        label.
+
+        **Lazy auto-import:** any CRD with the required labels but no
+        matching Mongo identity is auto-imported on observation —
+        identity is created and a v1 `deployed` revision is written with
+        the live values. Idempotent: re-listing without changes does not
+        write a duplicate revision; mutations do produce a new deployed
+        revision.
+
+        Each entry includes the live values, the last-deployed revision
+        snapshot, the structured drift diff, and the rollup `Ready`
+        condition reported by the controller.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+      responses:
+        '200':
+          description: Components present in the env namespace
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentInEnvListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}:
+    get:
+      tags: [Components]
+      summary: Live K8s state + last-deployed snapshot + drift
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '200':
+          description: Component env-scoped detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentInEnvResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/deploy:
+    post:
+      tags: [Components]
+      summary: Deploy the latest draft to K8s
+      description: |
+        Loads the latest `draft` revision for `(component, env)`, applies
+        the rendered manifest to K8s, and atomically flips the revision to
+        `deployed` with `deployed_at=now`. The status transition is final
+        and immutable.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '200':
+          description: Revision deployed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentRevision'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/uninstall:
+    post:
+      tags: [Components]
+      summary: Remove the component from this environment
+      description: |
+        Deletes the live `Component` CRD plus its variables `ConfigMap` and
+        `Secret` in the env namespace, and purges all `draft` revisions for
+        `(component, env)`. Deployed history is retained for audit and
+        potential rollback. Idempotent.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '204':
+          description: Component uninstalled from this env
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/revisions:
+    get:
+      tags: [Revisions]
+      summary: List revisions for (component, env)
+      description: Newest first. Includes both drafts and deployed revisions.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+        - $ref: '#/components/parameters/ApplicationID'
+        - $ref: '#/components/parameters/Environment'
+        - $ref: '#/components/parameters/ComponentID'
+      responses:
+        '200':
+          description: Revision list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentRevisionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    post:
+      tags: [Revisions]
+      summary: Create a new draft revision
+      description: |
+        Inserts a new `draft` revision at the next version. Promote is the
+        recommended way to seed a brand-new env; this endpoint is the right
+        call when editing values directly in the current env.
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
@@ -409,14 +603,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateComponentRequest'
+              $ref: '#/components/schemas/CreateRevisionRequest'
       responses:
-        '200':
-          description: Component updated
+        '201':
+          description: Draft revision created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Component'
+                $ref: '#/components/schemas/ComponentRevision'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -426,122 +620,68 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-    delete:
-      tags: [Components]
-      summary: Delete component
-      description: Delete a component and all its resources
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/revisions/{revID}:
+    put:
+      tags: [Revisions]
+      summary: Update a draft revision's values
+      description: |
+        Replaces `values` on an existing `draft` revision. Deployed
+        revisions are immutable and reject this call with 403.
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
         - $ref: '#/components/parameters/Environment'
         - $ref: '#/components/parameters/ComponentID'
-      responses:
-        '204':
-          description: Component deleted
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/status:
-    get:
-      tags: [Components]
-      summary: Get component status
-      description: Get the current status of a component
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-        - $ref: '#/components/parameters/ApplicationID'
-        - $ref: '#/components/parameters/Environment'
-        - $ref: '#/components/parameters/ComponentID'
+        - $ref: '#/components/parameters/RevisionID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRevisionRequest'
       responses:
         '200':
-          description: Component status
+          description: Draft updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ComponentStatusResponse'
+                $ref: '#/components/schemas/ComponentRevision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/status/health:
-    get:
-      tags: [Components]
-      summary: Get component health
-      description: Get the health status of a component
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-        - $ref: '#/components/parameters/ApplicationID'
-        - $ref: '#/components/parameters/Environment'
-        - $ref: '#/components/parameters/ComponentID'
-      responses:
-        '200':
-          description: Component health status
+          description: Target revision is deployed and immutable
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ComponentStatusHealth'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: '#/components/schemas/Error'
         '404':
           $ref: '#/components/responses/NotFound'
 
-  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/status/logs:
-    get:
-      tags: [Components]
-      summary: Stream component logs
-      description: Stream real-time logs from component pods
+  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/revisions/{revID}/deploy:
+    post:
+      tags: [Revisions]
+      summary: Deploy a specific revision (rollback / redeploy)
+      description: |
+        Loads revision `revID`, copies its `values` into a **new** revision
+        at the next version, marks the new revision `deployed`, and applies
+        it to K8s. The original revision is untouched (immutable history).
+        This is the rollback primitive: pointing at a historical revision
+        creates a fresh deployed revision at the head.
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
         - $ref: '#/components/parameters/Environment'
         - $ref: '#/components/parameters/ComponentID'
-        - name: pods
-          in: query
-          required: true
-          description: Comma-separated list of pod names to stream logs from
-          schema:
-            type: string
-            example: "pod-1,pod-2,pod-3"
+        - $ref: '#/components/parameters/RevisionID'
       responses:
         '200':
-          description: Log stream
-          content:
-            text/event-stream:
-              schema:
-                type: string
-                description: Server-sent events stream of log entries
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
-
-  /organizations/{organizationID}/a/{applicationID}/e/{environment}/c/{componentID}/status/pods:
-    get:
-      tags: [Components]
-      summary: Get component pods
-      description: Get all pods belonging to a component
-      parameters:
-        - $ref: '#/components/parameters/OrganizationID'
-        - $ref: '#/components/parameters/ApplicationID'
-        - $ref: '#/components/parameters/Environment'
-        - $ref: '#/components/parameters/ComponentID'
-      responses:
-        '200':
-          description: Component pods
+          description: New deployed revision created and applied
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ComponentPodsResponse'
+                $ref: '#/components/schemas/ComponentRevision'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -549,12 +689,11 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
-  # Variable endpoints
+  # Variables --------------------------------------------------------------
   /variables/{organizationID}:
     get:
       tags: [Variables]
       summary: List organization variables
-      description: List all variables defined at organization level
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
       responses:
@@ -570,11 +709,9 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-
     post:
       tags: [Variables]
       summary: Create organization variable
-      description: Create a new variable at organization level
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
       requestBody:
@@ -601,7 +738,6 @@ paths:
     delete:
       tags: [Variables]
       summary: Delete variable
-      description: Delete a variable
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/VariableID'
@@ -619,7 +755,6 @@ paths:
     get:
       tags: [Variables]
       summary: List environment variables
-      description: List all variables defined at environment level
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
@@ -637,11 +772,9 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-
     post:
       tags: [Variables]
       summary: Create environment variable
-      description: Create a new variable at environment level
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
@@ -670,7 +803,6 @@ paths:
     get:
       tags: [Variables]
       summary: List component variables
-      description: List all variables defined at component level
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
@@ -689,11 +821,9 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-
     post:
       tags: [Variables]
       summary: Create component variable
-      description: Create a new variable at component level
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/ApplicationID'
@@ -719,12 +849,11 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
-  # Integration endpoints
+  # Integrations -----------------------------------------------------------
   /settings/{organizationID}/i:
     get:
       tags: [Integrations]
       summary: List integrations
-      description: List all integrations for an organization
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
       responses:
@@ -740,11 +869,9 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-
     post:
       tags: [Integrations]
       summary: Create integration
-      description: Create a new integration for an organization
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
       requestBody:
@@ -771,7 +898,6 @@ paths:
     delete:
       tags: [Integrations]
       summary: Delete integration
-      description: Delete an integration
       parameters:
         - $ref: '#/components/parameters/OrganizationID'
         - $ref: '#/components/parameters/IntegrationID'
@@ -827,6 +953,16 @@ components:
         pattern: '^[0-9a-fA-F]{24}$'
         example: "507f1f77bcf86cd799439013"
 
+    RevisionID:
+      name: revID
+      in: path
+      required: true
+      description: Component revision ID
+      schema:
+        type: string
+        pattern: '^[0-9a-fA-F]{24}$'
+        example: "507f1f77bcf86cd799439020"
+
     Environment:
       name: environment
       in: path
@@ -841,7 +977,7 @@ components:
       name: environmentID
       in: path
       required: true
-      description: Environment name/ID
+      description: Environment name (used as path-id by the variables routes)
       schema:
         type: string
         pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
@@ -868,12 +1004,10 @@ components:
         example: "507f1f77bcf86cd799439015"
 
   schemas:
-    # Authentication schemas
+    # Authentication -------------------------------------------------------
     LoginRequest:
       type: object
-      required:
-        - email
-        - password
+      required: [email, password]
       properties:
         email:
           type: string
@@ -886,23 +1020,17 @@ components:
 
     ChangePasswordRequest:
       type: object
-      required:
-        - old_password
-        - password
-        - password2
+      required: [old_password, password, password2]
       properties:
         old_password:
           type: string
           format: password
-          description: Current password
         password:
           type: string
           format: password
-          description: New password
         password2:
           type: string
           format: password
-          description: Confirm new password
 
     User:
       type: object
@@ -910,14 +1038,11 @@ components:
         id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439010"
         email:
           type: string
           format: email
-          example: "admin@example.com"
         is_active:
           type: boolean
-          example: true
         last_login_at:
           type: string
           format: date-time
@@ -930,35 +1055,29 @@ components:
           format: date-time
         client:
           type: string
-          example: "web"
 
-    # Organization schemas
+    # Organizations --------------------------------------------------------
     Organization:
       type: object
       properties:
         id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439011"
         status:
           type: string
           enum: [active, deleted, disabled]
-          example: "active"
         account_id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439010"
         name:
           type: string
-          example: "My Organization"
         created_at:
           type: string
           format: date-time
 
     CreateOrganizationRequest:
       type: object
-      required:
-        - name
+      required: [name]
       properties:
         name:
           type: string
@@ -972,32 +1091,26 @@ components:
           items:
             $ref: '#/components/schemas/Organization'
 
-    # Application schemas
+    # Applications ---------------------------------------------------------
     Application:
       type: object
       properties:
         id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439012"
         organization_id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439011"
         name:
           type: string
-          example: "My Application"
         description:
           type: string
-          example: "Application description"
         created_by:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439010"
         account_id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439010"
         created_at:
           type: string
           format: date-time
@@ -1008,15 +1121,12 @@ components:
 
     CreateApplicationRequest:
       type: object
-      required:
-        - name
+      required: [name]
       properties:
         name:
           type: string
-          example: "My Application"
         description:
           type: string
-          example: "Application description"
 
     ApplicationListResponse:
       type: object
@@ -1034,73 +1144,48 @@ components:
                     type: integer
                     example: 3
 
-    ApplicationStatusResponse:
-      type: object
-      properties:
-        status:
-          type: string
-          enum:
-            - starting
-            - rendering
-            - generatingPolicy
-            - runningWorkflow
-            - workflowSuspending
-            - workflowTerminated
-            - workflowFailed
-            - running
-            - unhealthy
-            - deleting
-          example: "running"
-
-    # Environment schemas
+    # Environments ---------------------------------------------------------
     Environment:
       type: object
       properties:
         id:
           type: string
-          example: "production"
+          description: 8-digit hash assigned at creation
+          example: "a706b839"
         name:
           type: string
-          example: "production"
-        created_at:
-          type: string
-          format: date-time
+          example: "staging"
 
     CreateEnvironmentRequest:
       type: object
-      required:
-        - name
+      required: [name]
       properties:
         name:
           type: string
           pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
           example: "production"
 
-    # Component schemas
+    # Components -----------------------------------------------------------
     Component:
       type: object
+      description: |
+        Component identity. **Note:** values are stored on per-environment
+        `ComponentRevision`s, not on the identity row.
       properties:
         id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439013"
         name:
           type: string
-          example: "web-service"
+          example: "fastapi-demo"
         type:
           type: string
           example: "webservice"
         description:
           type: string
-          example: "Web service component"
         application_id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439012"
-        values:
-          type: object
-          additionalProperties: true
-          description: Flexible key-value map for component configuration
         created_at:
           type: string
           format: date-time
@@ -1110,23 +1195,58 @@ components:
 
     CreateComponentRequest:
       type: object
-      required:
-        - name
-        - type
+      required: [name, type, environment]
       properties:
         name:
           type: string
-          example: "web-service"
+          example: "fastapi-demo"
         type:
           type: string
           example: "webservice"
         description:
           type: string
-          example: "Web service component"
+        environment:
+          type: string
+          description: Target env for the first draft revision
+          example: "staging"
         values:
           type: object
           additionalProperties: true
-          description: Flexible key-value map for component configuration
+          description: Initial values for the v1 draft revision
+
+    EnvironmentPresence:
+      type: object
+      description: Per-environment rollup for an app-wide component view.
+      properties:
+        environment_id:
+          type: string
+          example: "a706b839"
+        environment_name:
+          type: string
+          example: "staging"
+        active:
+          type: boolean
+          description: True iff a `Component` CRD currently exists in the env namespace.
+        has_draft:
+          type: boolean
+        latest_draft_version:
+          type: integer
+          nullable: true
+        latest_deployed_version:
+          type: integer
+          nullable: true
+        drifted:
+          type: boolean
+
+    ComponentResponse:
+      allOf:
+        - $ref: '#/components/schemas/Component'
+        - type: object
+          properties:
+            environments:
+              type: array
+              items:
+                $ref: '#/components/schemas/EnvironmentPresence'
 
     ComponentListResponse:
       type: object
@@ -1134,173 +1254,207 @@ components:
         components:
           type: array
           items:
-            $ref: '#/components/schemas/Component'
+            $ref: '#/components/schemas/ComponentResponse'
 
-    ComponentStatusResponse:
+    ComponentInEnvResponse:
       type: object
+      description: |
+        Env-scoped detail: live K8s values, last-deployed Mongo snapshot,
+        latest draft, structured drift diff, and the controller's Ready
+        rollup condition.
       properties:
-        component:
-          $ref: '#/components/schemas/Component'
-        properties:
-          $ref: '#/components/schemas/ComponentProperties'
-
-    ComponentProperties:
-      type: object
-      properties:
-        network:
-          $ref: '#/components/schemas/NetworkProperties'
-        resources:
-          $ref: '#/components/schemas/ResourcesProperties'
-        storage:
-          $ref: '#/components/schemas/StorageProperties'
-        source:
-          $ref: '#/components/schemas/SourceProperties'
-        health:
-          $ref: '#/components/schemas/ComponentStatusHealth'
-
-    NetworkProperties:
-      type: object
-      properties:
-        external_url:
+        component_id:
           type: string
-          example: "https://my-app.example.com"
-
-    ResourcesProperties:
-      type: object
-      properties:
-        updated_replicas:
-          type: integer
-          example: 3
-        ready_replicas:
-          type: integer
-          example: 3
-        available_replicas:
-          type: integer
-          example: 3
-        condition_available:
-          type: string
-          example: "True"
-        condition_progressing:
-          type: string
-          example: "True"
-        created:
-          type: string
-          format: date-time
-        updated:
-          type: string
-          format: date-time
-
-    StorageProperties:
-      type: object
-      properties:
-        volumes:
-          type: array
-          items:
-            type: object
-            properties:
-              name:
-                type: string
-              size:
-                type: string
-              status:
-                type: string
-
-    SourceProperties:
-      type: object
-      properties:
-        image:
-          type: string
-          example: "ghcr.io/myorg/myapp:latest"
-        tag:
-          type: string
-          example: "latest"
-
-    ComponentStatusHealth:
-      type: object
-      properties:
-        status:
-          type: string
-          enum: [healthy, unhealthy, unknown]
-          example: "healthy"
-        checks:
-          type: array
-          items:
-            type: object
-            properties:
-              name:
-                type: string
-              status:
-                type: string
-              message:
-                type: string
-
-    ComponentPodsResponse:
-      type: object
-      properties:
-        pods:
-          type: array
-          items:
-            $ref: '#/components/schemas/Pod'
-
-    Pod:
-      type: object
-      properties:
+          pattern: '^[0-9a-fA-F]{24}$'
         name:
           type: string
-          example: "web-service-7d9c8f5b6-xyz12"
+        environment_id:
+          type: string
+        environment_name:
+          type: string
+        live_values:
+          type: object
+          additionalProperties: true
+          description: Spec.Values from the live `Component` CRD.
+        deployed_revision:
+          $ref: '#/components/schemas/ComponentRevision'
+        latest_draft:
+          $ref: '#/components/schemas/ComponentRevision'
+        drifted:
+          type: boolean
+        diff:
+          type: array
+          items:
+            $ref: '#/components/schemas/DriftEntry'
+        health_condition:
+          type: string
+          example: "Ready"
+        health_status:
+          type: string
+          enum: ["True", "False", "Unknown"]
+          example: "True"
+        health_message:
+          type: string
+
+    ComponentInEnvListResponse:
+      type: object
+      properties:
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentInEnvResponse'
+
+    DriftEntry:
+      type: object
+      description: One point of divergence between live and deployed values.
+      properties:
+        path:
+          type: string
+          description: Dot-separated path (`spec.replicas`, `image`, `ports.0.targetPort`).
+          example: "image"
+        live:
+          description: Value observed in the live CRD.
+        deployed:
+          description: Value from the last deployed revision.
+
+    # Revisions ------------------------------------------------------------
+    ComponentRevision:
+      type: object
+      description: |
+        Versioned, immutable-once-deployed snapshot of values for a
+        `(component, environment)` pair.
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+        component_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+        environment_id:
+          type: string
+          example: "a706b839"
+        version:
+          type: integer
+          minimum: 1
+          example: 3
+        values:
+          type: object
+          additionalProperties: true
         status:
           type: string
-          example: "Running"
-        ready:
-          type: boolean
-          example: true
-        restart_count:
-          type: integer
-          example: 0
+          enum: [draft, deployed]
+        deployed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when status flips to `deployed`; never modified after.
+        created_by:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
         created_at:
           type: string
           format: date-time
 
-    # Variable schemas
+    ComponentRevisionListResponse:
+      type: object
+      properties:
+        revisions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentRevision'
+
+    CreateRevisionRequest:
+      type: object
+      properties:
+        values:
+          type: object
+          additionalProperties: true
+
+    UpdateRevisionRequest:
+      type: object
+      properties:
+        values:
+          type: object
+          additionalProperties: true
+
+    PromoteRequest:
+      type: object
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          description: Source environment name
+          example: "staging"
+        to:
+          type: string
+          description: Target environment name
+          example: "production"
+
+    # Bulk deploy ----------------------------------------------------------
+    DeployBatchEntry:
+      type: object
+      properties:
+        component_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+        component_name:
+          type: string
+        revision_id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+          nullable: true
+          description: Set on the `deployed` slice; absent on `failed`.
+        version:
+          type: integer
+          nullable: true
+        error:
+          type: string
+          nullable: true
+          description: Set on the `failed` slice.
+
+    DeployBatchResponse:
+      type: object
+      properties:
+        deployed:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeployBatchEntry'
+        failed:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeployBatchEntry'
+
+    # Variables ------------------------------------------------------------
     Variable:
       type: object
       properties:
         id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439014"
         name:
           type: string
           pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
-          example: "DATABASE_URL"
         value:
           type: string
-          example: "postgres://user:pass@localhost:5432/db"
         type:
           type: string
           enum: [organization, environment, component]
-          example: "environment"
         organization_id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439011"
         application_id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
           nullable: true
-          example: "507f1f77bcf86cd799439012"
         environment_id:
           type: string
           nullable: true
-          example: "production"
         component_id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
           nullable: true
-          example: "507f1f77bcf86cd799439013"
         is_encrypted:
           type: boolean
-          example: true
         created_at:
           type: string
           format: date-time
@@ -1310,40 +1464,32 @@ components:
 
     CreateVariableRequest:
       type: object
-      required:
-        - name
-        - value
+      required: [name, value]
       properties:
         name:
           type: string
           pattern: '^[a-zA-Z_][a-zA-Z0-9_]*$'
-          example: "DATABASE_URL"
         value:
           type: string
-          example: "postgres://user:pass@localhost:5432/db"
         is_encrypted:
           type: boolean
           default: false
-          example: true
 
-    # Integration schemas
+    # Integrations ---------------------------------------------------------
     Integration:
       type: object
       properties:
         id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439015"
         organization_id:
           type: string
           pattern: '^[0-9a-fA-F]{24}$'
-          example: "507f1f77bcf86cd799439011"
         integration_type:
           type: string
           example: "docker_registry"
         name:
           type: string
-          example: "Docker Hub Registry"
         created_at:
           type: string
           format: date-time
@@ -1353,54 +1499,40 @@ components:
 
     CreateIntegrationRequest:
       type: object
-      required:
-        - name
-        - integration_type
-        - integration_value
+      required: [name, integration_type, integration_value]
       properties:
         name:
           type: string
-          example: "Docker Hub Registry"
         integration_type:
           type: string
           enum: [docker_registry]
-          example: "docker_registry"
         integration_value:
           oneOf:
             - $ref: '#/components/schemas/DockerRegistryIntegration'
 
     DockerRegistryIntegration:
       type: object
-      required:
-        - registry_url
-        - username
-        - password
+      required: [registry_url, username, password]
       properties:
         registry_url:
           type: string
           format: uri
-          example: "https://index.docker.io/v1/"
         username:
           type: string
-          example: "myusername"
         password:
           type: string
           format: password
-          example: "mypassword"
 
-    # Error schemas
+    # Errors ---------------------------------------------------------------
     Error:
       type: object
       properties:
         error:
           type: string
-          description: Error message
         code:
           type: string
-          description: Error code
         details:
           type: object
-          description: Additional error details
 
   responses:
     BadRequest:
@@ -1410,8 +1542,8 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
           example:
-            error: "Invalid request format"
-            code: "INVALID_REQUEST"
+            error: "invalid_request"
+            code: "2001"
 
     Unauthorized:
       description: Unauthorized
@@ -1420,8 +1552,8 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
           example:
-            error: "Authentication required"
-            code: "UNAUTHORIZED"
+            error: "unauthorized"
+            code: "1000"
 
     Forbidden:
       description: Forbidden
@@ -1430,8 +1562,8 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
           example:
-            error: "Access denied"
-            code: "FORBIDDEN"
+            error: "not_allowed"
+            code: "1007"
 
     NotFound:
       description: Not found
@@ -1440,8 +1572,8 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
           example:
-            error: "Resource not found"
-            code: "NOT_FOUND"
+            error: "object_not_found"
+            code: "2002"
 
     InternalServerError:
       description: Internal server error
@@ -1450,8 +1582,8 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
           example:
-            error: "Internal server error"
-            code: "INTERNAL_ERROR"
+            error: "internal_error"
+            code: "3001"
 
 tags:
   - name: Authentication
@@ -1459,12 +1591,14 @@ tags:
   - name: Organizations
     description: Organization management
   - name: Applications
-    description: Application lifecycle management
+    description: Application identity and listing
   - name: Environments
-    description: Environment management
+    description: Per-application environments and bulk deploy
   - name: Components
-    description: Component management and monitoring
+    description: Component identity (app-wide) and env-scoped live state
+  - name: Revisions
+    description: Versioned values for a (component, environment) pair
   - name: Variables
-    description: Environment variables and secrets
+    description: Scoped variables and secrets (org / env / component)
   - name: Integrations
     description: External service integrations
