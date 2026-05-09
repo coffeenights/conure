@@ -13,8 +13,8 @@ import (
 )
 
 // componentWith builds a Component with the given generation, observedGeneration
-// and Ready-condition reason. An empty reason means no Ready condition is set.
-func componentWith(generation, observedGen int64, reason string) *conurev1alpha1.Component {
+// and a Ready-condition status (when readyStatus is non-empty).
+func componentWith(generation, observedGen int64, readyStatus metav1.ConditionStatus, reason conurev1alpha1.ComponentConditionReason) *conurev1alpha1.Component {
 	c := &conurev1alpha1.Component{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:       "test",
@@ -25,12 +25,12 @@ func componentWith(generation, observedGen int64, reason string) *conurev1alpha1
 			ObservedGeneration: observedGen,
 		},
 	}
-	if reason != "" {
+	if readyStatus != "" {
 		c.Status.Conditions = []metav1.Condition{
 			{
 				Type:   conurev1alpha1.ComponentConditionTypeReady.String(),
-				Status: metav1.ConditionFalse,
-				Reason: reason,
+				Status: readyStatus,
+				Reason: reason.String(),
 			},
 		}
 	}
@@ -42,21 +42,21 @@ func TestIsReconciledUpToDate(t *testing.T) {
 		name       string
 		generation int64
 		observed   int64
-		reason     string
+		status     metav1.ConditionStatus
+		reason     conurev1alpha1.ComponentConditionReason
 		want       bool
 	}{
-		{"no observed generation, no condition", 1, 0, "", false},
-		{"observed but no condition yet", 1, 1, "", false},
-		{"generation drifted ahead of observed", 2, 1, conurev1alpha1.ComponentReadyDeployingSucceedReason.String(), false},
-		{"in-progress rendering", 1, 1, conurev1alpha1.ComponentReadyRenderingReason.String(), false},
-		{"render failed", 1, 1, conurev1alpha1.ComponentReadyRenderingFailedReason.String(), false},
-		{"deploying not yet succeeded", 1, 1, conurev1alpha1.ComponentReadyDeployingReason.String(), false},
-		{"deploy succeeded — steady state", 1, 1, conurev1alpha1.ComponentReadyDeployingSucceedReason.String(), true},
-		{"running — steady state", 1, 1, conurev1alpha1.ComponentReadyRunningReason.String(), true},
+		{"no observed generation, no condition", 1, 0, "", "", false},
+		{"observed but no condition yet", 1, 1, "", "", false},
+		{"generation drifted ahead of observed", 2, 1, metav1.ConditionTrue, conurev1alpha1.ComponentReasonReady, false},
+		{"in-progress (Ready=False)", 1, 1, metav1.ConditionFalse, conurev1alpha1.ComponentReasonInProgress, false},
+		{"render failed (Ready=False)", 1, 1, metav1.ConditionFalse, conurev1alpha1.ComponentReasonRenderingFailed, false},
+		{"deploy failed (Ready=False)", 1, 1, metav1.ConditionFalse, conurev1alpha1.ComponentReasonDeploymentFailed, false},
+		{"ready — steady state", 1, 1, metav1.ConditionTrue, conurev1alpha1.ComponentReasonReady, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := isReconciledUpToDate(componentWith(tc.generation, tc.observed, tc.reason))
+			got := isReconciledUpToDate(componentWith(tc.generation, tc.observed, tc.status, tc.reason))
 			if got != tc.want {
 				t.Fatalf("isReconciledUpToDate=%v, want %v", got, tc.want)
 			}
@@ -66,13 +66,12 @@ func TestIsReconciledUpToDate(t *testing.T) {
 
 // TestReconcile_NoOpInSteadyState exercises Bug 1: the controller used to re-run
 // renderComponent every time it saw a Component that was already deployed. The
-// guard in Reconcile must short-circuit when ObservedGeneration matches and the
-// condition is in a terminal-success state — otherwise renderComponent would
-// fail looking up a (test-absent) ComponentDefinition and flip the status to
-// RenderingFailed.
+// guard in Reconcile must short-circuit when ObservedGeneration matches and
+// Ready=True — otherwise renderComponent would fail looking up a (test-absent)
+// ComponentDefinition and flip Rendered to Failed.
 func TestReconcile_NoOpInSteadyState(t *testing.T) {
 	ctx := context.Background()
-	comp := componentWith(3, 3, conurev1alpha1.ComponentReadyDeployingSucceedReason.String())
+	comp := componentWith(3, 3, metav1.ConditionTrue, conurev1alpha1.ComponentReasonReady)
 	comp.Spec = conurev1alpha1.ComponentSpec{ComponentType: "webservice"}
 
 	c := newFakeClient(comp)
@@ -93,8 +92,8 @@ func TestReconcile_NoOpInSteadyState(t *testing.T) {
 	if len(got.Status.Conditions) != 1 {
 		t.Fatalf("expected exactly 1 condition, got %d", len(got.Status.Conditions))
 	}
-	if got.Status.Conditions[0].Reason != conurev1alpha1.ComponentReadyDeployingSucceedReason.String() {
-		t.Fatalf("expected condition to remain DeployingSucceed, got %s", got.Status.Conditions[0].Reason)
+	if got.Status.Conditions[0].Status != metav1.ConditionTrue {
+		t.Fatalf("expected Ready to remain True, got %s", got.Status.Conditions[0].Status)
 	}
 	if got.Status.ObservedGeneration != 3 {
 		t.Fatalf("expected ObservedGeneration to remain 3, got %d", got.Status.ObservedGeneration)
@@ -105,10 +104,10 @@ func TestReconcile_NoOpInSteadyState(t *testing.T) {
 // test: when spec.generation has moved ahead of ObservedGeneration, the guard
 // must NOT skip work. We verify this by observing the side-effect of the
 // reconciler attempting to render — without a matching ComponentDefinition in
-// the fake client, that path flips the condition to RenderingFailed.
+// the fake client, that path flips Rendered to Failed.
 func TestReconcile_DoesWorkWhenGenerationDrifts(t *testing.T) {
 	ctx := context.Background()
-	comp := componentWith(5, 4, conurev1alpha1.ComponentReadyDeployingSucceedReason.String())
+	comp := componentWith(5, 4, metav1.ConditionTrue, conurev1alpha1.ComponentReasonReady)
 	comp.Spec = conurev1alpha1.ComponentSpec{ComponentType: "webservice"}
 
 	c := newFakeClient(comp)
@@ -122,11 +121,8 @@ func TestReconcile_DoesWorkWhenGenerationDrifts(t *testing.T) {
 	if err := c.Get(ctx, types.NamespacedName{Name: comp.Name, Namespace: comp.Namespace}, got); err != nil {
 		t.Fatalf("failed to fetch component: %v", err)
 	}
-	if len(got.Status.Conditions) == 0 {
-		t.Fatalf("expected the reconciler to update conditions when generation drifts")
-	}
-	if got.Status.Conditions[0].Reason == conurev1alpha1.ComponentReadyDeployingSucceedReason.String() {
-		t.Fatalf("expected condition to leave DeployingSucceed when generation drifted, but reconciler short-circuited")
+	if _, ok := containsType(got.Status.Conditions, conurev1alpha1.ComponentConditionTypeRendered.String()); !ok {
+		t.Fatal("expected the reconciler to write a Rendered condition when generation drifts")
 	}
 }
 
@@ -139,16 +135,25 @@ func TestReconcile_DoesWorkWhenGenerationDrifts(t *testing.T) {
 func TestGenerationChangedPredicate_FiltersStatusOnlyUpdate(t *testing.T) {
 	p := predicate.GenerationChangedPredicate{}
 
-	oldObj := componentWith(7, 6, conurev1alpha1.ComponentReadyRenderingReason.String())
-	newObj := componentWith(7, 7, conurev1alpha1.ComponentReadyDeployingSucceedReason.String())
+	oldObj := componentWith(7, 6, metav1.ConditionFalse, conurev1alpha1.ComponentReasonInProgress)
+	newObj := componentWith(7, 7, metav1.ConditionTrue, conurev1alpha1.ComponentReasonReady)
 
 	if p.Update(event.UpdateEvent{ObjectOld: oldObj, ObjectNew: newObj}) {
 		t.Fatal("expected GenerationChangedPredicate to filter out a status-only update")
 	}
 
 	// Sanity check: a real spec change (generation bump) MUST pass the filter.
-	bumped := componentWith(8, 7, conurev1alpha1.ComponentReadyDeployingSucceedReason.String())
+	bumped := componentWith(8, 7, metav1.ConditionTrue, conurev1alpha1.ComponentReasonReady)
 	if !p.Update(event.UpdateEvent{ObjectOld: newObj, ObjectNew: bumped}) {
 		t.Fatal("expected generation bump to pass the predicate")
 	}
+}
+
+func containsType(conditions []metav1.Condition, conditionType string) (metav1.Condition, bool) {
+	for _, c := range conditions {
+		if c.Type == conditionType {
+			return c, true
+		}
+	}
+	return metav1.Condition{}, false
 }

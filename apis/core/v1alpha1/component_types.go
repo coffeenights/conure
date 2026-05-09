@@ -31,27 +31,38 @@ func (t ComponentConditionReason) IsValid() bool {
 	return ok
 }
 
+// Component status uses three typed conditions following the K8s convention
+// (multiple typed conditions, each with its own Status/Reason/Message):
+//
+//   - Rendered: True when the last template render succeeded
+//   - Deployed: True when the last apply succeeded
+//   - Ready:    True when both Rendered and Deployed are True (rollup)
+//
+// `kubectl get component` then shows useful per-step diagnostics, and
+// Ready=True/False is a single meaningful boolean for clients.
 const (
-	ComponentConditionTypeReady          ComponentConditionType   = "Ready"
-	ComponentReadyPendingReason          ComponentConditionReason = "Pending"
-	ComponentReadyRenderingReason        ComponentConditionReason = "Rendering"
-	ComponentReadyRenderingFailedReason  ComponentConditionReason = "RenderingFailed"
-	ComponentReadyRenderingSucceedReason ComponentConditionReason = "RenderingSucceed"
-	ComponentReadyDeployingReason        ComponentConditionReason = "Deploying"
-	ComponentReadyDeployingFailedReason  ComponentConditionReason = "DeployingFailed"
-	ComponentReadyDeployingSucceedReason ComponentConditionReason = "DeployingSucceed"
-	ComponentReadyRunningReason          ComponentConditionReason = "Running"
+	ComponentConditionTypeReady    ComponentConditionType = "Ready"
+	ComponentConditionTypeRendered ComponentConditionType = "Rendered"
+	ComponentConditionTypeDeployed ComponentConditionType = "Deployed"
+
+	// Reasons shared by Rendered and Deployed.
+	ComponentReasonInProgress ComponentConditionReason = "InProgress"
+	ComponentReasonSucceeded  ComponentConditionReason = "Succeeded"
+	ComponentReasonFailed     ComponentConditionReason = "Failed"
+
+	// Reasons used by the Ready rollup.
+	ComponentReasonReady            ComponentConditionReason = "Ready"
+	ComponentReasonRenderingFailed  ComponentConditionReason = "RenderingFailed"
+	ComponentReasonDeploymentFailed ComponentConditionReason = "DeploymentFailed"
 )
 
 var knownComponentConditionReasons = map[ComponentConditionReason]struct{}{
-	ComponentReadyPendingReason:          {},
-	ComponentReadyRenderingReason:        {},
-	ComponentReadyRenderingFailedReason:  {},
-	ComponentReadyRenderingSucceedReason: {},
-	ComponentReadyDeployingReason:        {},
-	ComponentReadyDeployingFailedReason:  {},
-	ComponentReadyDeployingSucceedReason: {},
-	ComponentReadyRunningReason:          {},
+	ComponentReasonInProgress:       {},
+	ComponentReasonSucceeded:        {},
+	ComponentReasonFailed:           {},
+	ComponentReasonReady:            {},
+	ComponentReasonRenderingFailed:  {},
+	ComponentReasonDeploymentFailed: {},
 }
 
 type ComponentSpec struct {

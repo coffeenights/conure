@@ -133,67 +133,109 @@ func TestGetConditionReady_NoConditions(t *testing.T) {
 	comp := newTestComponent("web", "default", "webservice")
 	handler := newTestHandler(ctx, newFakeClient(), comp)
 
-	condition := handler.GetConditionReady()
-	if condition != nil {
-		t.Fatal("expected nil condition when no conditions set")
+	if handler.GetConditionReady() != nil {
+		t.Fatal("expected nil Ready condition when no conditions set")
 	}
 }
 
-func TestGetConditionReady_WithCondition(t *testing.T) {
+func TestGetCondition_ReturnsTypedConditions(t *testing.T) {
 	ctx := context.Background()
 	comp := newTestComponent("web", "default", "webservice")
 	comp.Status.Conditions = []metav1.Condition{
 		{
-			Type:   conurev1alpha1.ComponentConditionTypeReady.String(),
-			Status: metav1.ConditionFalse,
-			Reason: conurev1alpha1.ComponentReadyDeployingSucceedReason.String(),
+			Type:   conurev1alpha1.ComponentConditionTypeRendered.String(),
+			Status: metav1.ConditionTrue,
+			Reason: conurev1alpha1.ComponentReasonSucceeded.String(),
 		},
 	}
 	handler := newTestHandler(ctx, newFakeClient(), comp)
 
-	condition := handler.GetConditionReady()
-	if condition == nil {
-		t.Fatal("expected non-nil condition")
+	rendered := handler.GetCondition(conurev1alpha1.ComponentConditionTypeRendered)
+	if rendered == nil || rendered.Status != metav1.ConditionTrue {
+		t.Fatalf("expected Rendered=True, got %+v", rendered)
 	}
-	if condition.Reason != conurev1alpha1.ComponentReadyDeployingSucceedReason.String() {
-		t.Fatalf("expected reason DeployingSucceed, got %s", condition.Reason)
-	}
-}
-
-func TestSetConditionReady_SetsStatusFalse_ForNonRunning(t *testing.T) {
-	ctx := context.Background()
-	comp := newTestComponent("web", "default", "webservice")
-	k8sClient := newFakeClient(comp)
-	handler := newTestHandler(ctx, k8sClient, comp)
-
-	err := handler.setConditionReady(conurev1alpha1.ComponentReadyRenderingReason, "rendering")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	condition := handler.GetConditionReady()
-	if condition.Status != metav1.ConditionFalse {
-		t.Fatalf("expected ConditionFalse for Rendering, got %s", condition.Status)
+	if handler.GetCondition(conurev1alpha1.ComponentConditionTypeDeployed) != nil {
+		t.Fatal("expected Deployed condition to be absent")
 	}
 }
 
-func TestSetConditionReady_NoOpWhenUnchanged(t *testing.T) {
+func TestBufferCondition_RejectsUnknownReason(t *testing.T) {
 	ctx := context.Background()
 	comp := newTestComponent("web", "default", "webservice")
-	comp.Status.Conditions = []metav1.Condition{
-		{
-			Type:   conurev1alpha1.ComponentConditionTypeReady.String(),
-			Status: metav1.ConditionFalse,
-			Reason: conurev1alpha1.ComponentReadyDeployingSucceedReason.String(),
-		},
-	}
-	k8sClient := newFakeClient(comp)
-	handler := newTestHandler(ctx, k8sClient, comp)
+	handler := newTestHandler(ctx, newFakeClient(comp), comp)
 
-	// Should be a no-op since status and reason match
-	err := handler.setConditionReady(conurev1alpha1.ComponentReadyDeployingSucceedReason, "deployed")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	err := handler.bufferCondition(conurev1alpha1.ComponentConditionTypeRendered, metav1.ConditionFalse, conurev1alpha1.ComponentConditionReason("Rendring"), "typo")
+	if err == nil {
+		t.Fatal("expected error for unknown reason")
+	}
+	if handler.GetCondition(conurev1alpha1.ComponentConditionTypeRendered) != nil {
+		t.Fatal("expected no condition to be written when reason is invalid")
+	}
+}
+
+func TestRollupReady_AllSucceeded(t *testing.T) {
+	ctx := context.Background()
+	comp := newTestComponent("web", "default", "webservice")
+	handler := newTestHandler(ctx, newFakeClient(comp), comp)
+
+	if err := handler.bufferCondition(conurev1alpha1.ComponentConditionTypeRendered, metav1.ConditionTrue, conurev1alpha1.ComponentReasonSucceeded, ""); err != nil {
+		t.Fatalf("buffer failed: %v", err)
+	}
+	if err := handler.bufferCondition(conurev1alpha1.ComponentConditionTypeDeployed, metav1.ConditionTrue, conurev1alpha1.ComponentReasonSucceeded, ""); err != nil {
+		t.Fatalf("buffer failed: %v", err)
+	}
+	handler.rollupReady()
+
+	ready := handler.GetConditionReady()
+	if ready == nil || ready.Status != metav1.ConditionTrue {
+		t.Fatalf("expected Ready=True, got %+v", ready)
+	}
+	if ready.Reason != conurev1alpha1.ComponentReasonReady.String() {
+		t.Fatalf("expected reason Ready, got %s", ready.Reason)
+	}
+}
+
+func TestRollupReady_RenderFailureWins(t *testing.T) {
+	ctx := context.Background()
+	comp := newTestComponent("web", "default", "webservice")
+	handler := newTestHandler(ctx, newFakeClient(comp), comp)
+
+	if err := handler.bufferCondition(conurev1alpha1.ComponentConditionTypeRendered, metav1.ConditionFalse, conurev1alpha1.ComponentReasonFailed, "render error"); err != nil {
+		t.Fatalf("buffer failed: %v", err)
+	}
+	handler.rollupReady()
+
+	ready := handler.GetConditionReady()
+	if ready.Status != metav1.ConditionFalse {
+		t.Fatalf("expected Ready=False, got %s", ready.Status)
+	}
+	if ready.Reason != conurev1alpha1.ComponentReasonRenderingFailed.String() {
+		t.Fatalf("expected reason RenderingFailed, got %s", ready.Reason)
+	}
+	if ready.Message != "render error" {
+		t.Fatalf("expected rolled-up message to carry render error, got %q", ready.Message)
+	}
+}
+
+func TestRollupReady_DeployFailureWhenRendered(t *testing.T) {
+	ctx := context.Background()
+	comp := newTestComponent("web", "default", "webservice")
+	handler := newTestHandler(ctx, newFakeClient(comp), comp)
+
+	if err := handler.bufferCondition(conurev1alpha1.ComponentConditionTypeRendered, metav1.ConditionTrue, conurev1alpha1.ComponentReasonSucceeded, ""); err != nil {
+		t.Fatalf("buffer failed: %v", err)
+	}
+	if err := handler.bufferCondition(conurev1alpha1.ComponentConditionTypeDeployed, metav1.ConditionFalse, conurev1alpha1.ComponentReasonFailed, "apply error"); err != nil {
+		t.Fatalf("buffer failed: %v", err)
+	}
+	handler.rollupReady()
+
+	ready := handler.GetConditionReady()
+	if ready.Reason != conurev1alpha1.ComponentReasonDeploymentFailed.String() {
+		t.Fatalf("expected reason DeploymentFailed, got %s", ready.Reason)
+	}
+	if ready.Message != "apply error" {
+		t.Fatalf("expected rolled-up message to carry apply error, got %q", ready.Message)
 	}
 }
 
@@ -205,8 +247,6 @@ func TestRenderComponent_FailureProducesSingleStatusPatch(t *testing.T) {
 	k8sClient := newFakeClientWithStatusUpdateCounter(&statusUpdates, comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
 
-	// renderComponent fails because no ComponentDefinition exists for the type;
-	// RenderComponent should buffer Rendering→RenderingFailed and emit one patch.
 	if err := handler.RenderComponent(); err == nil {
 		t.Fatal("expected error from RenderComponent without matching ComponentDefinition")
 	}
@@ -215,12 +255,13 @@ func TestRenderComponent_FailureProducesSingleStatusPatch(t *testing.T) {
 		t.Fatalf("expected exactly 1 status update on failure path, got %d", statusUpdates)
 	}
 
-	condition := handler.GetConditionReady()
-	if condition == nil {
-		t.Fatal("expected condition to be set")
+	rendered := handler.GetCondition(conurev1alpha1.ComponentConditionTypeRendered)
+	if rendered == nil || rendered.Reason != conurev1alpha1.ComponentReasonFailed.String() {
+		t.Fatalf("expected Rendered=Failed, got %+v", rendered)
 	}
-	if condition.Reason != conurev1alpha1.ComponentReadyRenderingFailedReason.String() {
-		t.Fatalf("expected RenderingFailed reason, got %s", condition.Reason)
+	ready := handler.GetConditionReady()
+	if ready == nil || ready.Reason != conurev1alpha1.ComponentReasonRenderingFailed.String() {
+		t.Fatalf("expected Ready rolled up to RenderingFailed, got %+v", ready)
 	}
 }
 
@@ -232,18 +273,25 @@ func TestRenderComponent_BufferedTransitionsOnlyEmitTerminal(t *testing.T) {
 	k8sClient := newFakeClientWithStatusUpdateCounter(&statusUpdates, comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
 
-	// Simulate the intermediate buffering done by RenderComponent without
-	// invoking the real OCI pull path.
-	for _, reason := range []conurev1alpha1.ComponentConditionReason{
-		conurev1alpha1.ComponentReadyRenderingReason,
-		conurev1alpha1.ComponentReadyRenderingSucceedReason,
-		conurev1alpha1.ComponentReadyDeployingReason,
-		conurev1alpha1.ComponentReadyDeployingSucceedReason,
-	} {
-		if _, err := handler.bufferConditionReady(reason, "step"); err != nil {
+	// Simulate the per-step buffering done by RenderComponent without invoking
+	// the real OCI pull path.
+	steps := []struct {
+		t      conurev1alpha1.ComponentConditionType
+		status metav1.ConditionStatus
+		reason conurev1alpha1.ComponentConditionReason
+	}{
+		{conurev1alpha1.ComponentConditionTypeRendered, metav1.ConditionFalse, conurev1alpha1.ComponentReasonInProgress},
+		{conurev1alpha1.ComponentConditionTypeRendered, metav1.ConditionTrue, conurev1alpha1.ComponentReasonSucceeded},
+		{conurev1alpha1.ComponentConditionTypeDeployed, metav1.ConditionFalse, conurev1alpha1.ComponentReasonInProgress},
+		{conurev1alpha1.ComponentConditionTypeDeployed, metav1.ConditionTrue, conurev1alpha1.ComponentReasonSucceeded},
+	}
+	for _, s := range steps {
+		if err := handler.bufferCondition(s.t, s.status, s.reason, "step"); err != nil {
 			t.Fatalf("buffer failed: %v", err)
 		}
 	}
+	handler.rollupReady()
+
 	if statusUpdates != 0 {
 		t.Fatalf("expected 0 status updates after buffering, got %d", statusUpdates)
 	}
@@ -254,68 +302,9 @@ func TestRenderComponent_BufferedTransitionsOnlyEmitTerminal(t *testing.T) {
 		t.Fatalf("expected exactly 1 status update after flush, got %d", statusUpdates)
 	}
 
-	// Only the terminal reason should be visible.
-	condition := handler.GetConditionReady()
-	if condition.Reason != conurev1alpha1.ComponentReadyDeployingSucceedReason.String() {
-		t.Fatalf("expected DeployingSucceed reason, got %s", condition.Reason)
-	}
-}
-
-func TestSetConditionReady_RejectsUnknownReason(t *testing.T) {
-	ctx := context.Background()
-	comp := newTestComponent("web", "default", "webservice")
-	handler := newTestHandler(ctx, newFakeClient(comp), comp)
-
-	err := handler.setConditionReady(conurev1alpha1.ComponentConditionReason("Rendring"), "typo")
-	if err == nil {
-		t.Fatal("expected error for unknown reason")
-	}
-	if handler.GetConditionReady() != nil {
-		t.Fatal("expected no condition to be set when reason is invalid")
-	}
-}
-
-func TestSetConditionReady_UpdatesMessageOnFailureRetry(t *testing.T) {
-	ctx := context.Background()
-	comp := newTestComponent("web", "default", "webservice")
-	k8sClient := newFakeClient(comp)
-	handler := newTestHandler(ctx, k8sClient, comp)
-
-	if err := handler.setConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, "error A"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if err := handler.setConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, "error B"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	condition := handler.GetConditionReady()
-	if condition.Message != "error B" {
-		t.Fatalf("expected failure message to be updated to 'error B', got %q", condition.Message)
-	}
-}
-
-func TestSetConditionReady_NoOpWhenFailureMessageUnchanged(t *testing.T) {
-	ctx := context.Background()
-	comp := newTestComponent("web", "default", "webservice")
-	comp.Status.Conditions = []metav1.Condition{
-		{
-			Type:    conurev1alpha1.ComponentConditionTypeReady.String(),
-			Status:  metav1.ConditionFalse,
-			Reason:  conurev1alpha1.ComponentReadyRenderingFailedReason.String(),
-			Message: "error A",
-		},
-	}
-	original := comp.Status.Conditions[0].LastTransitionTime
-	k8sClient := newFakeClient(comp)
-	handler := newTestHandler(ctx, k8sClient, comp)
-
-	if err := handler.setConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, "error A"); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	condition := handler.GetConditionReady()
-	if !condition.LastTransitionTime.Equal(&original) {
-		t.Fatal("expected LastTransitionTime to be preserved when nothing changed")
+	ready := handler.GetConditionReady()
+	if ready.Status != metav1.ConditionTrue || ready.Reason != conurev1alpha1.ComponentReasonReady.String() {
+		t.Fatalf("expected terminal Ready=True/Ready, got %+v", ready)
 	}
 }
 

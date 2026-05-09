@@ -52,8 +52,12 @@ func TestReconcile_NoComponentDefinition_SetsRenderingFailed(t *testing.T) {
 	}
 
 	waitForConditionReason(t, "test-comp-no-def", "default",
+		conurev1alpha1.ComponentConditionTypeRendered.String(),
+		conurev1alpha1.ComponentReasonFailed.String(),
+	)
+	waitForConditionReason(t, "test-comp-no-def", "default",
 		conurev1alpha1.ComponentConditionTypeReady.String(),
-		conurev1alpha1.ComponentReadyRenderingFailedReason.String(),
+		conurev1alpha1.ComponentReasonRenderingFailed.String(),
 	)
 }
 

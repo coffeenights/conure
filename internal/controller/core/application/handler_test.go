@@ -36,18 +36,6 @@ func newTestApplication(name, namespace string) *conurev1alpha1.Application {
 	}
 }
 
-func newTestComponent(name, namespace, componentType string) *conurev1alpha1.Component {
-	return &conurev1alpha1.Component{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: conurev1alpha1.ComponentSpec{
-			ComponentType: componentType,
-		},
-	}
-}
-
 func newTestHandler(ctx context.Context, k8sClient client.Client, app *conurev1alpha1.Application) *ApplicationHandler {
 	reconciler := &ApplicationReconciler{
 		Client: k8sClient,
@@ -172,75 +160,6 @@ func TestStatusTransition_RenderingToFailed(t *testing.T) {
 	}
 	if app.Status.Conditions[0].Status != metav1.ConditionFalse {
 		t.Fatalf("expected ConditionFalse after failure, got %s", app.Status.Conditions[0].Status)
-	}
-}
-
-func TestGetConditionReady_Component(t *testing.T) {
-	ctx := context.Background()
-	app := newTestApplication("myapp", "default")
-	comp := newTestComponent("web", "default", "webservice")
-	comp.Status.Conditions = []metav1.Condition{
-		{
-			Type:   conurev1alpha1.ComponentConditionTypeReady.String(),
-			Status: metav1.ConditionTrue,
-			Reason: conurev1alpha1.ComponentReadyRunningReason.String(),
-		},
-	}
-	k8sClient := newFakeClient(app, comp)
-	handler := newTestHandler(ctx, k8sClient, app)
-
-	condition := handler.getConditionReady(comp)
-	if condition.Reason != conurev1alpha1.ComponentReadyRunningReason.String() {
-		t.Fatalf("expected Running, got %s", condition.Reason)
-	}
-}
-
-func TestGetConditionReady_ComponentNoCondition(t *testing.T) {
-	ctx := context.Background()
-	app := newTestApplication("myapp", "default")
-	comp := newTestComponent("web", "default", "webservice")
-	k8sClient := newFakeClient(app, comp)
-	handler := newTestHandler(ctx, k8sClient, app)
-
-	condition := handler.getConditionReady(comp)
-	if condition.Reason != "" {
-		t.Fatalf("expected empty reason for missing condition, got %s", condition.Reason)
-	}
-}
-
-func TestSetConditionReady_Component_Running(t *testing.T) {
-	ctx := context.Background()
-	app := newTestApplication("myapp", "default")
-	comp := newTestComponent("web", "default", "webservice")
-	k8sClient := newFakeClient(app, comp)
-	handler := newTestHandler(ctx, k8sClient, app)
-
-	err := handler.setConditionReady(comp, conurev1alpha1.ComponentReadyRunningReason, "running")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	condition := handler.getConditionReady(comp)
-	if condition.Status != metav1.ConditionTrue {
-		t.Fatalf("expected ConditionTrue for Running, got %s", condition.Status)
-	}
-}
-
-func TestSetConditionReady_Component_Pending(t *testing.T) {
-	ctx := context.Background()
-	app := newTestApplication("myapp", "default")
-	comp := newTestComponent("web", "default", "webservice")
-	k8sClient := newFakeClient(app, comp)
-	handler := newTestHandler(ctx, k8sClient, app)
-
-	err := handler.setConditionReady(comp, conurev1alpha1.ComponentReadyPendingReason, "waiting")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-
-	condition := handler.getConditionReady(comp)
-	if condition.Status != metav1.ConditionFalse {
-		t.Fatalf("expected ConditionFalse for Pending, got %s", condition.Status)
 	}
 }
 

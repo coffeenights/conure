@@ -190,88 +190,80 @@ func (c *ComponentHandler) renderComponent() error {
 	return nil
 }
 
-// bufferConditionReady mutates Component.Status.Conditions in memory only;
-// callers must invoke flushStatus to persist the result. Returns false when
-// the buffered state matches the current state (caller can decide whether
-// to skip flushing).
-func (c *ComponentHandler) bufferConditionReady(reason conurev1alpha1.ComponentConditionReason, message string) (changed bool, err error) {
+// bufferCondition mutates Component.Status.Conditions in memory only;
+// callers must invoke flushStatus to persist the result. The reason is
+// validated against the known set so typos surface at runtime.
+func (c *ComponentHandler) bufferCondition(conditionType conurev1alpha1.ComponentConditionType, status metav1.ConditionStatus, reason conurev1alpha1.ComponentConditionReason, message string) error {
 	if !reason.IsValid() {
-		return false, fmt.Errorf("unknown ComponentConditionReason %q", reason)
+		return fmt.Errorf("unknown ComponentConditionReason %q", reason)
 	}
-	// Ready is currently always reported as False; the Running rollup that flipped
-	// it to True was never wired up. Phase 3 reintroduces a rollup based on
-	// per-step conditions plus workload health.
-	status := metav1.ConditionFalse
-	currentCondition := c.GetConditionReady()
-	if currentCondition != nil && currentCondition.Status == status && currentCondition.Reason == string(reason) {
-		// For failure reasons the message is the diagnostic; if it changed,
-		// re-patch so retries don't mask later errors with the first one.
-		if !isFailureReason(reason) || currentCondition.Message == message {
-			return false, nil
-		}
-	}
-	c.Component.Status.Conditions = common.SetCondition(c.Component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String(), status, reason.String(), message)
-	return true, nil
-}
-
-// setConditionReady buffers the condition update and flushes it as a single
-// status patch. Use bufferConditionReady + flushStatus when batching multiple
-// transitions in one reconcile.
-func (c *ComponentHandler) setConditionReady(reason conurev1alpha1.ComponentConditionReason, message string) error {
-	changed, err := c.bufferConditionReady(reason, message)
-	if err != nil {
-		return err
-	}
-	if !changed {
-		return nil
-	}
-	return c.flushStatus()
+	c.Component.Status.Conditions = common.SetCondition(c.Component.Status.Conditions, conditionType.String(), status, reason.String(), message)
+	return nil
 }
 
 func (c *ComponentHandler) flushStatus() error {
 	return common.ApplyStatus(c.Ctx, c.Component, c.Reconciler.Client)
 }
 
-func isFailureReason(reason conurev1alpha1.ComponentConditionReason) bool {
-	return reason == conurev1alpha1.ComponentReadyRenderingFailedReason ||
-		reason == conurev1alpha1.ComponentReadyDeployingFailedReason
+// rollupReady recomputes the Ready condition from the Rendered and Deployed
+// conditions. Ready=True only when both are True; otherwise it carries the
+// most informative failure reason.
+func (c *ComponentHandler) rollupReady() {
+	rendered := c.GetCondition(conurev1alpha1.ComponentConditionTypeRendered)
+	deployed := c.GetCondition(conurev1alpha1.ComponentConditionTypeDeployed)
+
+	switch {
+	case rendered != nil && rendered.Status == metav1.ConditionFalse:
+		_ = c.bufferCondition(conurev1alpha1.ComponentConditionTypeReady, metav1.ConditionFalse, conurev1alpha1.ComponentReasonRenderingFailed, rendered.Message)
+	case deployed != nil && deployed.Status == metav1.ConditionFalse:
+		_ = c.bufferCondition(conurev1alpha1.ComponentConditionTypeReady, metav1.ConditionFalse, conurev1alpha1.ComponentReasonDeploymentFailed, deployed.Message)
+	case rendered != nil && rendered.Status == metav1.ConditionTrue && deployed != nil && deployed.Status == metav1.ConditionTrue:
+		_ = c.bufferCondition(conurev1alpha1.ComponentConditionTypeReady, metav1.ConditionTrue, conurev1alpha1.ComponentReasonReady, "Component is ready")
+	default:
+		_ = c.bufferCondition(conurev1alpha1.ComponentConditionTypeReady, metav1.ConditionFalse, conurev1alpha1.ComponentReasonInProgress, "Reconciliation in progress")
+	}
 }
 
-func (c *ComponentHandler) GetConditionReady() *metav1.Condition {
-	index, exists := common.ContainsCondition(c.Component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String())
+func (c *ComponentHandler) GetCondition(conditionType conurev1alpha1.ComponentConditionType) *metav1.Condition {
+	index, exists := common.ContainsCondition(c.Component.Status.Conditions, conditionType.String())
 	if exists {
 		return &c.Component.Status.Conditions[index]
 	}
 	return nil
 }
 
-// RenderComponent renders the component template and applies resources. All
-// intermediate condition transitions (Rendering, RenderingSucceed, Deploying)
-// are buffered in memory; only the terminal condition is patched, so a
-// successful or failed reconcile produces a single status write.
+// GetConditionReady is a convenience wrapper around GetCondition for the Ready
+// condition; preserved as a stable accessor for callers that read the rollup.
+func (c *ComponentHandler) GetConditionReady() *metav1.Condition {
+	return c.GetCondition(conurev1alpha1.ComponentConditionTypeReady)
+}
+
+// RenderComponent renders the component template and applies resources.
+// Intermediate state is buffered in memory and the Ready rollup is computed
+// from per-step Rendered/Deployed conditions, so a successful or failed
+// reconcile produces a single status write.
 func (c *ComponentHandler) RenderComponent() error {
 	if err := c.renderComponent(); err != nil {
-		if _, bufErr := c.bufferConditionReady(conurev1alpha1.ComponentReadyRenderingFailedReason, err.Error()); bufErr != nil {
-			return bufErr
-		}
+		_ = c.bufferCondition(conurev1alpha1.ComponentConditionTypeRendered, metav1.ConditionFalse, conurev1alpha1.ComponentReasonFailed, err.Error())
+		c.rollupReady()
 		if flushErr := c.flushStatus(); flushErr != nil {
 			return flushErr
 		}
 		return err
 	}
+	_ = c.bufferCondition(conurev1alpha1.ComponentConditionTypeRendered, metav1.ConditionTrue, conurev1alpha1.ComponentReasonSucceeded, "Component rendered successfully")
+
 	if err := c.applyResources(); err != nil {
-		if _, bufErr := c.bufferConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, err.Error()); bufErr != nil {
-			return bufErr
-		}
+		_ = c.bufferCondition(conurev1alpha1.ComponentConditionTypeDeployed, metav1.ConditionFalse, conurev1alpha1.ComponentReasonFailed, err.Error())
+		c.rollupReady()
 		if flushErr := c.flushStatus(); flushErr != nil {
 			return flushErr
 		}
 		return err
 	}
+	_ = c.bufferCondition(conurev1alpha1.ComponentConditionTypeDeployed, metav1.ConditionTrue, conurev1alpha1.ComponentReasonSucceeded, "Component deployed successfully")
+	c.rollupReady()
 	c.Component.Status.ObservedGeneration = c.Component.Generation
-	if _, err := c.bufferConditionReady(conurev1alpha1.ComponentReadyDeployingSucceedReason, "Component deployed successfully"); err != nil {
-		return err
-	}
 	return c.flushStatus()
 }
 
@@ -352,8 +344,12 @@ func (c *ComponentHandler) ReconcileDeployedObjects() error {
 	if err := c.applyResources(); err != nil {
 		// Reflect the apply failure in the status; the caller (Reconcile) then
 		// requeues without invoking RenderComponent.
-		if condErr := c.setConditionReady(conurev1alpha1.ComponentReadyDeployingFailedReason, err.Error()); condErr != nil {
-			return condErr
+		if bufErr := c.bufferCondition(conurev1alpha1.ComponentConditionTypeDeployed, metav1.ConditionFalse, conurev1alpha1.ComponentReasonFailed, err.Error()); bufErr != nil {
+			return bufErr
+		}
+		c.rollupReady()
+		if flushErr := c.flushStatus(); flushErr != nil {
+			return flushErr
 		}
 		return err
 	}

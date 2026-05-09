@@ -6,6 +6,7 @@ import (
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/controller/core/common"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,8 +26,8 @@ type ComponentReconciler struct {
 //+kubebuilder:rbac:groups=core.conure.io,resources=applications/finalizers,verbs=update
 
 // isReconciledUpToDate returns true when the component's spec.generation has
-// already been observed and the current condition indicates a terminal-success
-// state. When this returns true, the reconciler can skip rendering and applying.
+// already been observed and the Ready rollup is True. When this returns true,
+// the reconciler can skip rendering and applying.
 func isReconciledUpToDate(c *conurev1alpha1.Component) bool {
 	if c.Status.ObservedGeneration != c.Generation {
 		return false
@@ -35,9 +36,7 @@ func isReconciledUpToDate(c *conurev1alpha1.Component) bool {
 	if !ok {
 		return false
 	}
-	reason := c.Status.Conditions[idx].Reason
-	return reason == conurev1alpha1.ComponentReadyDeployingSucceedReason.String() ||
-		reason == conurev1alpha1.ComponentReadyRunningReason.String()
+	return c.Status.Conditions[idx].Status == metav1.ConditionTrue
 }
 
 func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {

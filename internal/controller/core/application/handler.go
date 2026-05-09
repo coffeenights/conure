@@ -27,23 +27,6 @@ func NewApplicationHandler(ctx context.Context, application *conurev1alpha1.Appl
 	return &handler, nil
 }
 
-func (a *ApplicationHandler) getConditionReady(component *conurev1alpha1.Component) metav1.Condition {
-	index, exists := common.ContainsCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String())
-	if exists {
-		return component.Status.Conditions[index]
-	}
-	return metav1.Condition{}
-}
-
-func (a *ApplicationHandler) setConditionReady(component *conurev1alpha1.Component, reason conurev1alpha1.ComponentConditionReason, message string) error {
-	status := metav1.ConditionFalse
-	if reason == conurev1alpha1.ComponentReadyRunningReason {
-		status = metav1.ConditionTrue
-	}
-	component.Status.Conditions = common.SetCondition(component.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String(), status, reason.String(), message)
-	return common.ApplyStatus(a.Ctx, component, a.Reconciler.Client)
-}
-
 func (a *ApplicationHandler) setRenderingComponentStatus(componentName string) error {
 	message := fmt.Sprintf("Component %s is being rendered", componentName)
 	a.Application.Status.Conditions = common.SetCondition(a.Application.Status.Conditions, conurev1alpha1.ApplicationConditionTypeStatus.String(), metav1.ConditionTrue, conurev1alpha1.ApplicationStatusReasonRendering.String(), message)
