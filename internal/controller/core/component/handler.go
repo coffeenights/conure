@@ -235,6 +235,7 @@ func (c *ComponentHandler) RenderComponent() error {
 	if err := c.applyResources(); err != nil {
 		return err
 	}
+	c.Component.Status.ObservedGeneration = c.Component.Generation
 	return c.setConditionReady(conurev1alpha1.ComponentReadyDeployingSucceedReason, "Component deployed successfully")
 }
 

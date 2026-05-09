@@ -42,6 +42,11 @@ type ComponentSpec struct {
 
 type ComponentStatus struct {
 	Conditions []metav1.Condition `json:"conditions"`
+	// ObservedGeneration is the spec generation that was last successfully
+	// rendered and deployed. The reconciler skips re-rendering when
+	// metadata.generation matches this value and the component is in a
+	// terminal-success condition.
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
 }
 
 //+kubebuilder:object:root=true
