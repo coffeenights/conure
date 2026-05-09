@@ -2,12 +2,13 @@ package api
 
 import "time"
 
-// Organization
+// ----- Organizations -------------------------------------------------------
 
 type Organization struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Status    string    `json:"status"`
+	AccountID string    `json:"account_id"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -23,40 +24,28 @@ type CreateOrganizationRequest struct {
 	Name string `json:"name" binding:"required"`
 }
 
-// Application
+// ----- Applications --------------------------------------------------------
 
 type Environment struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
 
-type ApplicationRevision struct {
-	RevisionNumber int       `json:"revision_number"`
-	CreatedAt      time.Time `json:"created_at"`
-}
-
 type Application struct {
-	ID              string                `json:"id"`
-	OrganizationID  string                `json:"organization_id"`
-	Name            string                `json:"name"`
-	Description     string                `json:"description,omitempty"`
-	TotalComponents int64                 `json:"total_components"`
-	Revisions       []ApplicationRevision `json:"revisions,omitempty"`
-	CreatedAt       time.Time             `json:"created_at"`
-	Environments    []Environment         `json:"environments,omitempty"`
+	ID              string        `json:"id"`
+	OrganizationID  string        `json:"organization_id"`
+	Name            string        `json:"name"`
+	Description     string        `json:"description,omitempty"`
+	TotalComponents int64         `json:"total_components,omitempty"`
+	CreatedBy       string        `json:"created_by,omitempty"`
+	AccountID       string        `json:"account_id,omitempty"`
+	CreatedAt       time.Time     `json:"created_at"`
+	Environments    []Environment `json:"environments,omitempty"`
 }
 
 type ApplicationListResponse struct {
 	Organization Organization  `json:"organization"`
 	Applications []Application `json:"applications"`
-}
-
-type ApplicationResponse struct {
-	Application
-}
-
-type ApplicationStatusResponse struct {
-	Status string `json:"status"`
 }
 
 type CreateApplicationRequest struct {
@@ -68,110 +57,131 @@ type CreateEnvironmentRequest struct {
 	Name string `json:"name" binding:"required"`
 }
 
-// Component
+// ----- Component identity (app-wide) --------------------------------------
+
+type EnvironmentPresence struct {
+	EnvironmentID         string `json:"environment_id"`
+	EnvironmentName       string `json:"environment_name"`
+	Active                bool   `json:"active"`
+	HasDraft              bool   `json:"has_draft"`
+	LatestDraftVersion    int    `json:"latest_draft_version,omitempty"`
+	LatestDeployedVersion int    `json:"latest_deployed_version,omitempty"`
+	Drifted               bool   `json:"drifted"`
+}
 
 type Component struct {
-	ID            string                 `json:"id"`
-	Name          string                 `json:"name"`
-	Type          string                 `json:"type"`
-	Description   string                 `json:"description"`
-	ApplicationID string                 `json:"application_id"`
-	Values        map[string]interface{} `json:"values"`
-	CreatedAt     time.Time              `json:"created_at"`
+	ID            string                `json:"id"`
+	Name          string                `json:"name"`
+	Type          string                `json:"type"`
+	Description   string                `json:"description,omitempty"`
+	ApplicationID string                `json:"application_id"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	Environments  []EnvironmentPresence `json:"environments,omitempty"`
 }
 
 type ComponentListResponse struct {
 	Components []Component `json:"components"`
 }
 
-type ComponentResponse struct {
-	Component
-}
-
 type CreateComponentRequest struct {
 	Name        string                 `json:"name" binding:"required"`
 	Type        string                 `json:"type" binding:"required"`
-	Description string                 `json:"description"`
-	Values      map[string]interface{} `json:"values"`
+	Description string                 `json:"description,omitempty"`
+	Environment string                 `json:"environment" binding:"required"`
+	Values      map[string]interface{} `json:"values,omitempty"`
 }
 
-// Component Status
-
-type NetworkProperties struct {
-	IP         string  `json:"ip"`
-	ExternalIP string  `json:"external_ip"`
-	Host       string  `json:"host"`
-	Ports      []int32 `json:"port"`
+type CreateComponentResponse struct {
+	Component Component         `json:"component"`
+	Revision  ComponentRevision `json:"revision"`
 }
 
-type ResourcesProperties struct {
-	Replicas int32  `json:"replicas"`
-	CPU      string `json:"cpu"`
-	Memory   string `json:"memory"`
+// ----- Component revisions -------------------------------------------------
+
+type ComponentRevision struct {
+	ID            string                 `json:"id"`
+	ComponentID   string                 `json:"component_id"`
+	EnvironmentID string                 `json:"environment_id"`
+	Version       int                    `json:"version"`
+	Values        map[string]interface{} `json:"values"`
+	Status        string                 `json:"status"` // draft | deployed
+	DeployedAt    *time.Time             `json:"deployed_at,omitempty"`
+	CreatedBy     string                 `json:"created_by,omitempty"`
+	CreatedAt     time.Time              `json:"created_at"`
 }
 
-type VolumeProperties struct {
-	Name string `json:"name"`
-	Path string `json:"path"`
-	Size string `json:"size"`
+type ComponentRevisionListResponse struct {
+	Revisions []ComponentRevision `json:"revisions"`
 }
 
-type StorageProperties struct {
-	Volumes []VolumeProperties `json:"volumes"`
-	Healthy bool               `json:"health"`
+type CreateRevisionRequest struct {
+	Values map[string]interface{} `json:"values"`
 }
 
-type SourceProperties struct {
-	ContainerImage string `json:"container_image"`
-	Command        string `json:"command"`
+type UpdateRevisionRequest struct {
+	Values map[string]interface{} `json:"values"`
 }
 
-type ComponentStatusHealth struct {
-	Healthy bool      `json:"healthy"`
-	Message string    `json:"message"`
-	Updated time.Time `json:"updated"`
+// ----- Env-scoped component view ------------------------------------------
+
+type DriftEntry struct {
+	Path     string      `json:"path"`
+	Live     interface{} `json:"live"`
+	Deployed interface{} `json:"deployed"`
 }
 
-type ComponentProperties struct {
-	Network   *NetworkProperties     `json:"network"`
-	Resources *ResourcesProperties   `json:"resources"`
-	Storage   *StorageProperties     `json:"storage"`
-	Source    *SourceProperties      `json:"source"`
-	Health    *ComponentStatusHealth `json:"health"`
+type ComponentInEnvResponse struct {
+	ComponentID      string                 `json:"component_id"`
+	Name             string                 `json:"name"`
+	EnvironmentID    string                 `json:"environment_id"`
+	EnvironmentName  string                 `json:"environment_name"`
+	LiveValues       map[string]interface{} `json:"live_values,omitempty"`
+	DeployedRevision *ComponentRevision     `json:"deployed_revision,omitempty"`
+	LatestDraft      *ComponentRevision     `json:"latest_draft,omitempty"`
+	Drifted          bool                   `json:"drifted"`
+	Diff             []DriftEntry           `json:"diff,omitempty"`
+	HealthCondition  string                 `json:"health_condition,omitempty"`
+	HealthStatus     string                 `json:"health_status,omitempty"`
+	HealthMessage    string                 `json:"health_message,omitempty"`
 }
 
-type ComponentStatusResponse struct {
-	Component  Component           `json:"component"`
-	Properties ComponentProperties `json:"properties"`
+type ComponentInEnvListResponse struct {
+	Components []ComponentInEnvResponse `json:"components"`
 }
 
-// Pods
+// ----- Promote / bulk deploy ----------------------------------------------
 
-type PodCondition struct {
-	Type    string `json:"type"`
-	Status  string `json:"status"`
-	Reason  string `json:"reason"`
-	Message string `json:"message"`
+type PromoteRequest struct {
+	From string `json:"from" binding:"required"`
+	To   string `json:"to" binding:"required"`
 }
 
-type Pod struct {
-	Name       string         `json:"name"`
-	Phase      string         `json:"phase"`
-	Conditions []PodCondition `json:"conditions"`
+type DeployBatchEntry struct {
+	ComponentID   string `json:"component_id"`
+	ComponentName string `json:"component_name"`
+	RevisionID    string `json:"revision_id,omitempty"`
+	Version       int    `json:"version,omitempty"`
+	Error         string `json:"error,omitempty"`
 }
 
-type ComponentPodsResponse struct {
-	Pods []Pod `json:"pods"`
+type DeployBatchResponse struct {
+	Deployed []DeployBatchEntry `json:"deployed"`
+	Failed   []DeployBatchEntry `json:"failed"`
 }
 
-// Service Component Status
+// ----- Component definitions (templates) ----------------------------------
 
-type ServiceComponentStatusResponse struct {
-	UpdatedReplicas      int32     `json:"updated_replicas"`
-	ReadyReplicas        int32     `json:"ready_replicas"`
-	AvailableReplicas    int32     `json:"available_replicas"`
-	ConditionAvailable   string    `json:"condition_available"`
-	ConditionProgressing string    `json:"condition_progressing"`
-	Created              time.Time `json:"created"`
-	Updated              time.Time `json:"updated"`
+type ComponentDefinition struct {
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Type          string  `json:"type"`
+	Description   string  `json:"description"`
+	OCIRepository string  `json:"oci_repository"`
+	OCITag        string  `json:"oci_tag"`
+	IconURL       *string `json:"icon_url"`
+}
+
+type ComponentDefinitionListResponse struct {
+	Definitions []ComponentDefinition `json:"definitions"`
 }

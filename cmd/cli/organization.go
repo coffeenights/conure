@@ -3,10 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"text/tabwriter"
 
-	"github.com/coffeenights/conure/pkg/api"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
 )
 
@@ -22,19 +21,23 @@ var orgListCmd = &cobra.Command{
 	RunE:  runOrgList,
 }
 
-var orgCreateCmd = &cobra.Command{
-	Use:   "create",
-	Short: "Create an organization",
-	RunE:  runOrgCreate,
+var switchCmd = &cobra.Command{
+	Use:   "switch",
+	Short: "Switch the active context",
+}
+
+var switchOrgCmd = &cobra.Command{
+	Use:   "org <name-or-id>",
+	Short: "Set the active organization in ~/.conure/config.json",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runSwitchOrg,
 }
 
 func init() {
-	orgCreateCmd.Flags().String("name", "", "Organization name")
-	orgCreateCmd.MarkFlagRequired("name")
-
 	orgCmd.AddCommand(orgListCmd)
-	orgCmd.AddCommand(orgCreateCmd)
+	switchCmd.AddCommand(switchOrgCmd)
 	rootCmd.AddCommand(orgCmd)
+	rootCmd.AddCommand(switchCmd)
 }
 
 func runOrgList(cmd *cobra.Command, args []string) error {
@@ -43,59 +46,78 @@ func runOrgList(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	client := newClient(cfg)
-
-	data, err := client.get("/organizations/")
+	orgs, err := listOrgs(client)
 	if err != nil {
 		return err
 	}
-
 	if outputFlag == "json" {
-		fmt.Println(string(data))
+		out, _ := json.MarshalIndent(orgs, "", "  ")
+		fmt.Println(string(out))
 		return nil
 	}
-
-	var resp api.OrganizationListResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-
-	if len(resp.Organizations) == 0 {
+	if len(orgs) == 0 {
 		info.Println("No organizations found")
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	header.Fprintln(w, "ID\tNAME")
-	for _, org := range resp.Organizations {
-		fmt.Fprintf(w, "%s\t%s\n", org.ID, org.Name)
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")).Padding(0, 1)
+	cellStyle := lipgloss.NewStyle().Padding(0, 1)
+	activeStyle := cellStyle.Foreground(lipgloss.Color("42"))
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		Headers("ACTIVE", "ID", "NAME").
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return headerStyle
+			}
+			if col == 0 {
+				return activeStyle
+			}
+			return cellStyle
+		})
+	for _, o := range orgs {
+		marker := ""
+		if o.ID == cfg.ActiveOrg {
+			marker = "*"
+		}
+		t.Row(marker, o.ID, o.Name)
 	}
-	return w.Flush()
+	fmt.Println(t)
+	return nil
 }
 
-func runOrgCreate(cmd *cobra.Command, args []string) error {
+func runSwitchOrg(cmd *cobra.Command, args []string) error {
 	cfg, err := requireAuth()
 	if err != nil {
 		return err
 	}
 	client := newClient(cfg)
-
-	name, _ := cmd.Flags().GetString("name")
-
-	data, err := client.post("/organizations/", api.CreateOrganizationRequest{Name: name})
+	orgs, err := listOrgs(client)
 	if err != nil {
 		return err
 	}
-
-	if outputFlag == "json" {
-		fmt.Println(string(data))
-		return nil
+	target := args[0]
+	var matchID, matchName string
+	for _, o := range orgs {
+		if o.ID == target || o.Name == target {
+			matchID = o.ID
+			matchName = o.Name
+			break
+		}
 	}
-
-	var resp api.OrganizationResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
+	if matchID == "" {
+		errC.Printf("✗ No organization matches `%s`\n", target)
+		fmt.Println("Available:")
+		for _, o := range orgs {
+			fmt.Printf("  %s  (%s)\n", o.Name, o.ID)
+		}
+		return fmt.Errorf("no match")
 	}
-
-	success.Printf("Organization created: %s (%s)\n", resp.Name, resp.ID)
+	cfg.ActiveOrg = matchID
+	if err := saveConfig(cfg); err != nil {
+		return err
+	}
+	success.Printf("✓ Active org: %s (%s)\n", matchName, matchID)
 	return nil
 }

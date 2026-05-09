@@ -72,3 +72,8 @@ func (c *apiClient) put(path string, body interface{}) ([]byte, error) {
 	data, _, err := c.do(http.MethodPut, path, body)
 	return data, err
 }
+
+func (c *apiClient) delete(path string) ([]byte, error) {
+	data, _, err := c.do(http.MethodDelete, path, nil)
+	return data, err
+}

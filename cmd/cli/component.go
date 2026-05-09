@@ -3,10 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"text/tabwriter"
 
-	"github.com/coffeenights/conure/pkg/api"
+	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
 )
 
@@ -18,35 +18,21 @@ var componentCmd = &cobra.Command{
 
 var componentListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List components of an application",
+	Short: "List components in the linked application",
 	RunE:  runComponentList,
 }
 
-var componentStatusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Get component status",
-	RunE:  runComponentStatus,
+var componentAddCmd = &cobra.Command{
+	Use:   "add",
+	Short: "Add a new component to the linked application",
+	Long: `Interactive prompt to add another component to the app this directory is
+linked to. Does not change the link — the linked component stays the same.`,
+	RunE: runComponentAdd,
 }
 
 func init() {
-	componentListCmd.Flags().String("org", "", "Organization ID")
-	componentListCmd.Flags().String("app", "", "Application ID")
-	componentListCmd.Flags().String("env", "", "Environment name")
-	componentListCmd.MarkFlagRequired("org")
-	componentListCmd.MarkFlagRequired("app")
-	componentListCmd.MarkFlagRequired("env")
-
-	componentStatusCmd.Flags().String("org", "", "Organization ID")
-	componentStatusCmd.Flags().String("app", "", "Application ID")
-	componentStatusCmd.Flags().String("env", "", "Environment name")
-	componentStatusCmd.Flags().String("component", "", "Component ID")
-	componentStatusCmd.MarkFlagRequired("org")
-	componentStatusCmd.MarkFlagRequired("app")
-	componentStatusCmd.MarkFlagRequired("env")
-	componentStatusCmd.MarkFlagRequired("component")
-
 	componentCmd.AddCommand(componentListCmd)
-	componentCmd.AddCommand(componentStatusCmd)
+	componentCmd.AddCommand(componentAddCmd)
 	rootCmd.AddCommand(componentCmd)
 }
 
@@ -55,106 +41,133 @@ func runComponentList(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	client := newClient(cfg)
-
-	orgID, _ := cmd.Flags().GetString("org")
-	appID, _ := cmd.Flags().GetString("app")
-	env, _ := cmd.Flags().GetString("env")
-
-	data, err := client.get(fmt.Sprintf("/organizations/%s/a/%s/e/%s/c", orgID, appID, env))
+	link, err := requireLink()
 	if err != nil {
 		return err
 	}
-
+	client := newClient(cfg)
+	comps, err := listAppComponents(client, link.OrgID, link.AppID)
+	if err != nil {
+		return err
+	}
 	if outputFlag == "json" {
-		fmt.Println(string(data))
+		out, _ := json.MarshalIndent(comps, "", "  ")
+		fmt.Println(string(out))
 		return nil
 	}
-
-	var resp api.ComponentListResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-
-	if len(resp.Components) == 0 {
+	if len(comps) == 0 {
 		info.Println("No components found")
 		return nil
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
-	header.Fprintln(w, "ID\tNAME\tTYPE")
-	for _, c := range resp.Components {
-		fmt.Fprintf(w, "%s\t%s\t%s\n", c.ID, c.Name, c.Type)
+	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")).Padding(0, 1)
+	cellStyle := lipgloss.NewStyle().Padding(0, 1)
+	t := table.New().
+		Border(lipgloss.RoundedBorder()).
+		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
+		Headers("ID", "NAME", "TYPE", "ENVS").
+		StyleFunc(func(row, col int) lipgloss.Style {
+			if row == table.HeaderRow {
+				return headerStyle
+			}
+			return cellStyle
+		})
+	for _, c := range comps {
+		envSummary := "-"
+		if len(c.Environments) > 0 {
+			parts := make([]string, len(c.Environments))
+			for i, e := range c.Environments {
+				flags := ""
+				if e.HasDraft {
+					flags += "*"
+				}
+				if e.Drifted {
+					flags += "!"
+				}
+				parts[i] = fmt.Sprintf("%s%s", e.EnvironmentName, flags)
+			}
+			envSummary = ""
+			for i, p := range parts {
+				if i > 0 {
+					envSummary += ", "
+				}
+				envSummary += p
+			}
+		}
+		t.Row(c.ID, c.Name, c.Type, envSummary)
 	}
-	return w.Flush()
+	fmt.Println(t)
+	return nil
 }
 
-func runComponentStatus(cmd *cobra.Command, args []string) error {
+func runComponentAdd(cmd *cobra.Command, args []string) error {
 	cfg, err := requireAuth()
+	if err != nil {
+		return err
+	}
+	link, err := requireLink()
 	if err != nil {
 		return err
 	}
 	client := newClient(cfg)
 
-	orgID, _ := cmd.Flags().GetString("org")
-	appID, _ := cmd.Flags().GetString("app")
-	env, _ := cmd.Flags().GetString("env")
-	compID, _ := cmd.Flags().GetString("component")
-
-	data, err := client.get(fmt.Sprintf("/organizations/%s/a/%s/e/%s/c/%s/status", orgID, appID, env, compID))
+	app, err := getApp(client, link.OrgID, link.AppID)
 	if err != nil {
 		return err
 	}
 
-	if outputFlag == "json" {
-		fmt.Println(string(data))
-		return nil
-	}
-
-	var resp api.ComponentStatusResponse
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return fmt.Errorf("parsing response: %w", err)
-	}
-
-	header.Println("Component Status")
-	fmt.Println()
-
-	if resp.Properties.Source != nil {
-		header.Println("  Source")
-		fmt.Printf("    Image:   %s\n", resp.Properties.Source.ContainerImage)
-		fmt.Printf("    Command: %s\n", resp.Properties.Source.Command)
-		fmt.Println()
-	}
-
-	if resp.Properties.Resources != nil {
-		header.Println("  Resources")
-		fmt.Printf("    Replicas: %d\n", resp.Properties.Resources.Replicas)
-		fmt.Printf("    CPU:      %s\n", resp.Properties.Resources.CPU)
-		fmt.Printf("    Memory:   %s\n", resp.Properties.Resources.Memory)
-		fmt.Println()
-	}
-
-	if resp.Properties.Network != nil {
-		header.Println("  Network")
-		fmt.Printf("    IP:          %s\n", resp.Properties.Network.IP)
-		fmt.Printf("    External IP: %s\n", resp.Properties.Network.ExternalIP)
-		if len(resp.Properties.Network.Ports) > 0 {
-			fmt.Printf("    Ports:       %v\n", resp.Properties.Network.Ports)
+	envName := link.Environment
+	if len(app.Environments) > 1 {
+		envOpts := make([]huh.Option[string], len(app.Environments))
+		for i, e := range app.Environments {
+			envOpts[i] = huh.NewOption(e.Name, e.Name)
 		}
-		fmt.Println()
-	}
-
-	if resp.Properties.Health != nil {
-		header.Println("  Health")
-		if resp.Properties.Health.Healthy {
-			success.Printf("    Healthy: %v\n", resp.Properties.Health.Healthy)
-		} else {
-			errC.Printf("    Healthy: %v\n", resp.Properties.Health.Healthy)
-		}
-		if resp.Properties.Health.Message != "" {
-			fmt.Printf("    Message: %s\n", resp.Properties.Health.Message)
+		if err := huh.NewSelect[string]().
+			Title("Environment for first draft").
+			Options(envOpts...).
+			Value(&envName).
+			Run(); err != nil {
+			return err
 		}
 	}
 
+	name := detectComponentName()
+	if err := huh.NewInput().
+		Title("Component name").
+		Value(&name).
+		Run(); err != nil {
+		return err
+	}
+
+	defs, err := listComponentDefinitions(client, link.OrgID)
+	if err != nil {
+		return err
+	}
+	if len(defs) == 0 {
+		return fmt.Errorf("no component definitions registered for this org")
+	}
+	compType := defs[0].Type
+	typeOpts := make([]huh.Option[string], len(defs))
+	for i, d := range defs {
+		label := d.Name
+		if label == "" {
+			label = d.Type
+		}
+		typeOpts[i] = huh.NewOption(label, d.Type)
+	}
+	if err := huh.NewSelect[string]().
+		Title("Component type").
+		Options(typeOpts...).
+		Value(&compType).
+		Run(); err != nil {
+		return err
+	}
+
+	created, err := createComponent(client, link.OrgID, link.AppID, name, compType, envName)
+	if err != nil {
+		return err
+	}
+	success.Printf("✓ Created component `%s` (%s) in env `%s`\n", created.Component.Name, compType, envName)
+	info.Println("  This directory's link is unchanged. Use the UI or another repo to manage this component.")
 	return nil
 }

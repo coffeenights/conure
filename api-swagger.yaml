@@ -166,6 +166,30 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  # Component definitions --------------------------------------------------
+  /organizations/{organizationID}/component-definitions:
+    get:
+      tags: [Components]
+      summary: List component definitions (templates) available in this org
+      description: |
+        Returns the `ComponentTypeSpec` rows for the organization. Used by the
+        CLI wizard to populate the type picker when creating a new component.
+      parameters:
+        - $ref: '#/components/parameters/OrganizationID'
+      responses:
+        '200':
+          description: List of component definitions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentDefinitionListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
   # Applications -----------------------------------------------------------
   /organizations/{organizationID}/a:
     get:
@@ -1255,6 +1279,37 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ComponentResponse'
+
+    ComponentDefinition:
+      type: object
+      description: A registered component template (e.g. webservice).
+      properties:
+        id:
+          type: string
+          pattern: '^[0-9a-fA-F]{24}$'
+        name:
+          type: string
+          example: "Web Service"
+        type:
+          type: string
+          example: "webservice"
+        description:
+          type: string
+        oci_repository:
+          type: string
+        oci_tag:
+          type: string
+        icon_url:
+          type: string
+          nullable: true
+
+    ComponentDefinitionListResponse:
+      type: object
+      properties:
+        definitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/ComponentDefinition'
 
     ComponentInEnvResponse:
       type: object
