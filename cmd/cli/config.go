@@ -7,9 +7,12 @@ import (
 	"path/filepath"
 )
 
+// Config is the global, machine-local CLI config: auth + active org context.
+// Persisted at ~/.conure/config.json.
 type Config struct {
-	Server string `json:"server"`
-	Token  string `json:"token"`
+	Server    string `json:"server"`
+	Token     string `json:"token"`
+	ActiveOrg string `json:"active_org,omitempty"` // org ID
 }
 
 func configDir() (string, error) {
@@ -70,6 +73,19 @@ func requireAuth() (*Config, error) {
 	}
 	if serverFlag != "" {
 		cfg.Server = serverFlag
+	}
+	return cfg, nil
+}
+
+// requireActiveOrg returns the auth config and asserts an active org is set.
+// Used by commands that operate at org scope without a project link.
+func requireActiveOrg() (*Config, error) {
+	cfg, err := requireAuth()
+	if err != nil {
+		return nil, err
+	}
+	if cfg.ActiveOrg == "" {
+		return nil, fmt.Errorf("no active organization — run 'conure switch org <name>' first")
 	}
 	return cfg, nil
 }
