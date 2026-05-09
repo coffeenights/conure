@@ -164,16 +164,15 @@ func (o *Organization) SoftDelete(mongo *database.MongoDB) error {
 }
 
 type Application struct {
-	ID             primitive.ObjectID    `json:"id,omitempty" bson:"_id,omitempty"`
-	OrganizationID primitive.ObjectID    `json:"organization_id" bson:"organizationID"`
-	Name           string                `json:"name" bson:"name"`
-	Description    string                `json:"description,omitempty" bson:"description,omitempty"`
-	CreatedBy      primitive.ObjectID    `json:"created_by" bson:"createdBy"`
-	AccountID      primitive.ObjectID    `json:"account_id" bson:"accountID"`
-	Revisions      []ApplicationRevision `json:"revisions,omitempty" bson:"revisions,omitempty"`
-	CreatedAt      time.Time             `json:"created_at" bson:"createdAt"`
-	DeletedAt      time.Time             `json:"-" bson:"deletedAt,omitempty"`
-	Environments   []Environment         `json:"environments,omitempty" bson:"environments,omitempty"`
+	ID             primitive.ObjectID `json:"id,omitempty" bson:"_id,omitempty"`
+	OrganizationID primitive.ObjectID `json:"organization_id" bson:"organizationID"`
+	Name           string             `json:"name" bson:"name"`
+	Description    string             `json:"description,omitempty" bson:"description,omitempty"`
+	CreatedBy      primitive.ObjectID `json:"created_by" bson:"createdBy"`
+	AccountID      primitive.ObjectID `json:"account_id" bson:"accountID"`
+	CreatedAt      time.Time          `json:"created_at" bson:"createdAt"`
+	DeletedAt      time.Time          `json:"-" bson:"deletedAt,omitempty"`
+	Environments   []Environment      `json:"environments,omitempty" bson:"environments,omitempty"`
 }
 
 func NewApplication(organizationID string, name string, createdBy string) *Application {
@@ -189,14 +188,8 @@ func NewApplication(organizationID string, name string, createdBy string) *Appli
 	return &Application{
 		OrganizationID: oID,
 		Name:           name,
-		Revisions: []ApplicationRevision{
-			{
-				RevisionNumber: 0,
-				CreatedAt:      time.Now(),
-			},
-		},
-		CreatedBy: createdByoID,
-		AccountID: createdByoID,
+		CreatedBy:      createdByoID,
+		AccountID:      createdByoID,
 	}
 }
 
@@ -482,11 +475,10 @@ func (c *ComponentTypeSpec) GetByType(ctx context.Context, db *database.MongoDB,
 
 type Component struct {
 	Model         `bson:",inline"`
-	Name          string                 `json:"name" bson:"name"`
-	Type          string                 `json:"type" bson:"type"`
-	Description   string                 `json:"description" bson:"description"`
-	ApplicationID primitive.ObjectID     `json:"application_id" bson:"applicationID"`
-	Values        map[string]interface{} `json:"values" bson:"values"`
+	Name          string             `json:"name" bson:"name"`
+	Type          string             `json:"type" bson:"type"`
+	Description   string             `json:"description" bson:"description"`
+	ApplicationID primitive.ObjectID `json:"application_id" bson:"applicationID"`
 }
 
 func (c *Component) GetCollectionName() string {
@@ -513,10 +505,21 @@ func (c *Component) Update(db *database.MongoDB) error {
 	return err
 }
 
-type ApplicationRevision struct {
-	RevisionNumber int       `json:"revision_number" bson:"revisionNumber"`
-	CreatedAt      time.Time `json:"created_at" bson:"createdAt"`
-	DeletedAt      time.Time `json:"-" bson:"deletedAt,omitempty"`
+// GetByApplicationAndName looks up a component by (applicationID, name). Used
+// by the lazy auto-import path to find an existing identity row before
+// creating one for an orphan CRD. Returns ErrObjectNotFound if no row exists.
+func (c *Component) GetByApplicationAndName(ctx context.Context, db *database.MongoDB, applicationID primitive.ObjectID, name string) error {
+	collection := db.Client.Database(db.DBName).Collection(ComponentCollection)
+	filter := bson.M{
+		"applicationID": applicationID,
+		"name":          name,
+		"deletedAt":     bson.M{"$exists": false},
+	}
+	err := collection.FindOne(ctx, filter).Decode(c)
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return conureerrors.ErrObjectNotFound
+	}
+	return err
 }
 
 type Environment struct {

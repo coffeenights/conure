@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 
 	"github.com/coffeenights/conure/cmd/api-server/auth"
+	migratecli "github.com/coffeenights/conure/cmd/api-server/cli"
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/routes"
@@ -52,6 +54,29 @@ func createSecretKey() {
 	log.Println("Secret key created")
 }
 
+func migrateComponents(dryRun bool) {
+	conf := config.LoadConfig(apiConfig.Config{})
+	mongo, err := database.ConnectToMongoDB(conf.MongoDBURI, conf.MongoDBName)
+	if err != nil {
+		log.Fatalf("connect to MongoDB: %v", err)
+	}
+	counters, err := migratecli.RunMigrateComponents(context.Background(), mongo, migratecli.MigrateComponentsConfig{DryRun: dryRun})
+	if counters != nil {
+		log.Printf("migration summary: apps=%d envs=%d crds=%d identities_created=%d revisions_written=%d revisions_skipped=%d unbound_crds=%d verification_errors=%d",
+			counters.Apps, counters.Envs, counters.CRDsObserved, counters.IdentitiesCreated,
+			counters.RevisionsWritten, counters.RevisionsSkipped, counters.UnboundCRDs, len(counters.VerificationErrors))
+		for _, e := range counters.VerificationErrors {
+			log.Printf("  verification: %s", e)
+		}
+	}
+	if err != nil {
+		log.Fatalf("migrate-components: %v", err)
+	}
+	if counters != nil && len(counters.VerificationErrors) > 0 && !dryRun {
+		log.Fatalf("migration completed with %d verification errors; see log above", len(counters.VerificationErrors))
+	}
+}
+
 func resetSuperUserPassword(email, password string) {
 	conf := config.LoadConfig(apiConfig.Config{})
 	log.Println("Connecting to MongoDB")
@@ -70,6 +95,7 @@ func main() {
 		runserverCmd              = flag.NewFlagSet("runserver", flag.ExitOnError)
 		createsuperuserCmd        = flag.NewFlagSet("createsuperuser", flag.ExitOnError)
 		resetSuperUserPasswordCmd = flag.NewFlagSet("resetsuperuserpassword", flag.ExitOnError)
+		migrateComponentsCmd      = flag.NewFlagSet("migrate-components", flag.ExitOnError)
 		subcommand                string
 	)
 
@@ -79,6 +105,7 @@ func main() {
 	passwordSuperuser := createsuperuserCmd.String("password", "", "The password of the superuser (random if empty)")
 	emailSuperuserReset := resetSuperUserPasswordCmd.String("email", "", "The email of the superuser")
 	passwordSuperuserReset := resetSuperUserPasswordCmd.String("password", "", "The new password (random if empty)")
+	migrateDryRun := migrateComponentsCmd.Bool("dry-run", false, "Plan the migration without writing")
 
 	flag.Usage = func() {
 		fmt.Printf("Usage: \n")
@@ -88,6 +115,7 @@ func main() {
 		fmt.Printf("\tcreatesuperuser  Create the super user for your account\n")
 		fmt.Printf("\tresetsuperuserpassword  Reset the super user password\n")
 		fmt.Printf("\tcreatesecretkey  Create the secret key for your account\n")
+		fmt.Printf("\tmigrate-components  Promote K8s to source of truth and seed component_revisions\n")
 	}
 	if len(os.Args) >= 2 {
 		subcommand = os.Args[1]
@@ -124,6 +152,11 @@ func main() {
 			os.Exit(1)
 		}
 		resetSuperUserPassword(*emailSuperuserReset, *passwordSuperuserReset)
+	case "migrate-components":
+		if err := migrateComponentsCmd.Parse(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		migrateComponents(*migrateDryRun)
 	default:
 		flag.Usage()
 	}

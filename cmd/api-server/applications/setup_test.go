@@ -49,7 +49,7 @@ func setupRouter() (*gin.Engine, *ApiHandler) {
 	if err != nil {
 		log.Panic(err)
 	}
-	app := NewApiHandler(appConfig, db, nil)
+	app := NewApiHandler(appConfig, db, nil, nil)
 	GenerateRoutes("/organizations", router, app)
 	return router, app
 }

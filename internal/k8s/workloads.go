@@ -2,10 +2,7 @@ package k8s
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"github.com/coffeenights/conure/apis/vela"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"strings"
 
 	k8sV1 "k8s.io/api/apps/v1"
@@ -78,35 +75,6 @@ func GetServicesByLabels(clientset *GenericClientset, namespace string, labels m
 	}
 
 	return services.Items, nil
-}
-
-func GetApplicationByLabels(clientset *GenericClientset, namespace string, labels map[string]string) (*vela.Application, error) {
-	var labelSelector []string
-	for key, value := range labels {
-		labelSelector = append(labelSelector, fmt.Sprintf("%s=%s", key, value))
-	}
-	listOptions := metav1.ListOptions{
-		LabelSelector: strings.Join(labelSelector, ","),
-	}
-	appRes := schema.GroupVersionResource{Group: "core.oam.dev", Version: "v1beta1", Resource: "applications"}
-	applications, err := clientset.Dynamic.Resource(appRes).Namespace(namespace).List(context.Background(), listOptions)
-	if err != nil {
-		return nil, err
-	}
-	if len(applications.Items) == 0 {
-		return nil, ErrApplicationNotFound
-	}
-
-	appJson, err := json.Marshal(applications.Items[0].Object)
-	if err != nil {
-		return nil, err
-	}
-	var app vela.Application
-	if err = json.Unmarshal(appJson, &app); err != nil {
-		return nil, err
-	}
-
-	return &app, nil
 }
 
 func CreateSecret(clientset *GenericClientset, namespace string, secret *corev1.Secret) error {

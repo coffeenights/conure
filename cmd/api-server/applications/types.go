@@ -2,9 +2,6 @@ package applications
 
 import (
 	"github.com/coffeenights/conure/cmd/api-server/models"
-	"github.com/coffeenights/conure/cmd/api-server/providers"
-	k8sV1 "k8s.io/api/apps/v1"
-	"time"
 )
 
 // ApplicationStatus Indicate the current condition of the overall application
@@ -28,10 +25,6 @@ type ApplicationResponse struct {
 	TotalComponents int64 `json:"total_components"`
 }
 
-type ApplicationStatusResponse struct {
-	Status ApplicationStatus `json:"status"`
-}
-
 type ApplicationListResponse struct {
 	Organization OrganizationResponse  `json:"organization"`
 	Applications []ApplicationResponse `json:"applications"`
@@ -42,62 +35,97 @@ type CreateApplicationRequest struct {
 	Description string `json:"description"`
 }
 
-type ServiceComponentStatusResponse struct {
-	UpdatedReplicas      int32     `json:"updated_replicas"`
-	ReadyReplicas        int32     `json:"ready_replicas"`
-	AvailableReplicas    int32     `json:"available_replicas"`
-	ConditionAvailable   string    `json:"condition_available"`
-	ConditionProgressing string    `json:"condition_progressing"`
-	Created              time.Time `json:"created"`
-	Updated              time.Time `json:"updated"`
+// EnvironmentPresence summarizes whether a component is active in a given
+// environment, what its last-deployed revision is, whether a draft is
+// outstanding, and whether live state has drifted from the last deploy.
+type EnvironmentPresence struct {
+	EnvironmentID         string `json:"environment_id"`
+	EnvironmentName       string `json:"environment_name"`
+	Active                bool   `json:"active"`
+	HasDraft              bool   `json:"has_draft"`
+	LatestDraftVersion    int    `json:"latest_draft_version,omitempty"`
+	LatestDeployedVersion int    `json:"latest_deployed_version,omitempty"`
+	Drifted               bool   `json:"drifted"`
 }
 
-func (r *ServiceComponentStatusResponse) FromClientsetToResponse(deployment k8sV1.Deployment) {
-	r.UpdatedReplicas = deployment.Status.UpdatedReplicas
-	r.ReadyReplicas = deployment.Status.ReadyReplicas
-	r.AvailableReplicas = deployment.Status.AvailableReplicas
-	r.Created = deployment.ObjectMeta.CreationTimestamp.UTC()
-	r.Updated = deployment.ObjectMeta.CreationTimestamp.UTC()
-
-	for _, condition := range deployment.Status.Conditions {
-		if condition.Type == "Available" {
-			r.ConditionAvailable = string(condition.Status)
-		} else if condition.Type == "Progressing" {
-			r.ConditionProgressing = string(condition.Status)
-		}
-	}
-}
-
+// ComponentResponse is the app-wide identity view, with optional per-env
+// presence rollup.
 type ComponentResponse struct {
 	*models.Component
+	Environments []EnvironmentPresence `json:"environments,omitempty"`
 }
 
 type ComponentListResponse struct {
 	Components []ComponentResponse `json:"components"`
 }
 
-type ComponentProperties struct {
-	NetworkProperties   *providers.NetworkProperties     `json:"network"`
-	ResourcesProperties *providers.ResourcesProperties   `json:"resources"`
-	StorageProperties   *providers.StorageProperties     `json:"storage"`
-	SourceProperties    *providers.SourceProperties      `json:"source"`
-	Health              *providers.ComponentStatusHealth `json:"health"`
+// ComponentRevisionResponse is the JSON shape returned for any single revision.
+type ComponentRevisionResponse struct {
+	*models.ComponentRevision
 }
 
-type ComponentStatusResponse struct {
-	Component  ComponentResponse   `json:"component"`
-	Properties ComponentProperties `json:"properties"`
+type ComponentRevisionListResponse struct {
+	Revisions []models.ComponentRevision `json:"revisions"`
+}
+
+// ComponentInEnvResponse is the env-scoped detail view: live K8s values, the
+// last-deployed revision snapshot, and a structured drift diff.
+type ComponentInEnvResponse struct {
+	ComponentID      string                    `json:"component_id"`
+	Name             string                    `json:"name"`
+	EnvironmentID    string                    `json:"environment_id"`
+	EnvironmentName  string                    `json:"environment_name"`
+	LiveValues       map[string]interface{}    `json:"live_values,omitempty"`
+	DeployedRevision *models.ComponentRevision `json:"deployed_revision,omitempty"`
+	LatestDraft      *models.ComponentRevision `json:"latest_draft,omitempty"`
+	Drifted          bool                      `json:"drifted"`
+	Diff             []DriftEntry              `json:"diff,omitempty"`
+	HealthCondition  string                    `json:"health_condition,omitempty"`
+	HealthStatus     string                    `json:"health_status,omitempty"`
+	HealthMessage    string                    `json:"health_message,omitempty"`
+}
+
+// ComponentInEnvListResponse is the env-scoped list shape returned by
+// `GET /e/:env/c`. Each entry mirrors what the detail call returns.
+type ComponentInEnvListResponse struct {
+	Components []ComponentInEnvResponse `json:"components"`
 }
 
 type CreateComponentRequest struct {
-	Name        string                 `json:"name" binding:"required"`
-	Type        string                 `json:"type" binding:"required"`
-	Description string                 `json:"description"`
+	Name        string `json:"name" binding:"required"`
+	Type        string `json:"type" binding:"required"`
+	Description string `json:"description"`
+	// Environment is the target env for the first draft revision created
+	// alongside the new component identity.
+	Environment string                 `json:"environment" binding:"required"`
 	Values      map[string]interface{} `json:"values"`
 }
 
-type ComponentPodsResponse struct {
-	Pods []providers.Pod `json:"pods"`
+type CreateRevisionRequest struct {
+	Values map[string]interface{} `json:"values"`
+}
+
+type UpdateRevisionRequest struct {
+	Values map[string]interface{} `json:"values"`
+}
+
+type PromoteRequest struct {
+	From string `json:"from" binding:"required"`
+	To   string `json:"to" binding:"required"`
+}
+
+// DeployBatchEntry reports the per-component outcome of a bulk deploy.
+type DeployBatchEntry struct {
+	ComponentID   string `json:"component_id"`
+	ComponentName string `json:"component_name"`
+	RevisionID    string `json:"revision_id,omitempty"`
+	Version       int    `json:"version,omitempty"`
+	Error         string `json:"error,omitempty"`
+}
+
+type DeployBatchResponse struct {
+	Deployed []DeployBatchEntry `json:"deployed"`
+	Failed   []DeployBatchEntry `json:"failed"`
 }
 
 type CreateOrganizationRequest struct {

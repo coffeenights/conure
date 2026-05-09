@@ -2,6 +2,7 @@ package applications
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -12,397 +13,378 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
-func TestListComponents(t *testing.T) {
-	// Create test organization
-	org := models.Organization{
+// orgWithApp seeds an org + app + (optionally) one environment, returning
+// everything tests need to drive HTTP requests.
+func orgWithApp(t *testing.T, name, envName string) (*models.Organization, *models.Application, *models.Environment) {
+	t.Helper()
+	org := &models.Organization{
 		Status:    models.OrgActive,
 		AccountID: testConf.authUser.ID,
-		Name:      "Test Organization for ListComponents",
+		Name:      "Org for " + name,
 	}
-	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
+	if _, err := org.Create(testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = org.Delete(testConf.app.MongoDB) })
+
+	app, err := models.NewApplication(org.ID.Hex(), name, testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer org.Delete(testConf.app.MongoDB)
+	t.Cleanup(func() { _ = app.Delete(testConf.app.MongoDB) })
 
-	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
+	if envName == "" {
+		return org, app, nil
+	}
+	env, err := app.CreateEnvironment(testConf.app.MongoDB, envName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer application.Delete(testConf.app.MongoDB)
-
-	_, err = application.CreateEnvironment(testConf.app.MongoDB, "staging")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	comp1 := models.ComponentTemplate(application.ID, "test-component-list")
-	err = comp1.Create(testConf.app.MongoDB)
-	if err != nil {
-		t.Errorf("Failed to create component: %v", err)
-	}
-	defer comp1.Delete(testConf.app.MongoDB)
-
-	comp2 := models.ComponentTemplate(application.ID, "test-component2-list")
-	err = comp2.Create(testConf.app.MongoDB)
-	if err != nil {
-		t.Errorf("Failed to create component: %v", err)
-	}
-	defer comp2.Delete(testConf.app.MongoDB)
-
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c"
-	req, _ := http.NewRequest("GET", url, nil)
-	req.AddCookie(testConf.generateCookie())
-	resp := httptest.NewRecorder()
-	testConf.router.ServeHTTP(resp, req)
-
-	// Assert
-	if resp.Code != http.StatusOK {
-		t.Errorf("Expected response code 200, got: %v", resp.Code)
-	}
-	var response ComponentListResponse
-	err = json.Unmarshal(resp.Body.Bytes(), &response)
-	if err != nil {
-		t.Errorf("Failed to unmarshal response: %v", err)
-	}
-	if len(response.Components) != 2 {
-		t.Errorf("Expected 2 component, got: %v", len(response.Components))
-	}
-	if response.Components[0].Name != "test-component-list" {
-		t.Errorf("Expected component name to be test-component-list, got: %v", response.Components[0].Name)
-	}
-	if response.Components[1].Name != "test-component2-list" {
-		t.Errorf("Expected component name to be test-component2-list, got: %v", response.Components[1].Name)
-	}
-	if response.Components[0].ID.Hex() != comp1.ID.Hex() {
-		t.Errorf("Expected component ID to be %v, got: %v", comp1.ID.Hex(), response.Components[0].ID.Hex())
-	}
+	return org, app, env
 }
 
-func TestListComponents_NotExist(t *testing.T) {
-
-	// Create test organization
-	org := models.Organization{
-		Status:    models.OrgActive,
-		AccountID: testConf.authUser.ID,
-		Name:      "Test Organization for ListApplications",
-	}
-	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer org.Delete(testConf.app.MongoDB)
-
-	url := "/organizations/" + oID + "/a/" + primitive.NewObjectID().Hex() + "/e/test-env/c"
-	req, _ := http.NewRequest("GET", url, nil)
-	req.AddCookie(testConf.generateCookie())
-	resp := httptest.NewRecorder()
-	testConf.router.ServeHTTP(resp, req)
-
-	// Assert
-	if resp.Code != http.StatusNotFound {
-		t.Errorf("Expected response code 404, got: %v", resp.Code)
-	}
+func cleanupComponent(t *testing.T, comp *models.Component) {
+	t.Helper()
+	t.Cleanup(func() {
+		_, _ = models.DeleteAllRevisionsForComponent(context.Background(), testConf.app.MongoDB, comp.ID)
+		_ = comp.Delete(testConf.app.MongoDB)
+	})
 }
 
-func TestListComponents_Empty(t *testing.T) {
-
-	// Create test organization
-	org := models.Organization{
-		Status:    models.OrgActive,
-		AccountID: testConf.authUser.ID,
-		Name:      "Test Organization for ListApplications",
+func doJSON(t *testing.T, method, url string, body interface{}) *httptest.ResponseRecorder {
+	t.Helper()
+	var reader *bytes.Buffer
+	if body != nil {
+		payload, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		reader = bytes.NewBuffer(payload)
+	} else {
+		reader = bytes.NewBuffer(nil)
 	}
-	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer org.Delete(testConf.app.MongoDB)
-
-	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer application.Delete(testConf.app.MongoDB)
-
-	_, err = application.CreateEnvironment(testConf.app.MongoDB, "staging")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + application.Environments[0].Name + "/c"
-	req, _ := http.NewRequest("GET", url, nil)
-	req.AddCookie(testConf.generateCookie())
-	resp := httptest.NewRecorder()
-	testConf.router.ServeHTTP(resp, req)
-
-	// Assert
-	if resp.Code != http.StatusOK {
-		t.Errorf("Expected response code 200, got: %v", resp.Code)
-	}
-	var response ComponentListResponse
-	err = json.Unmarshal(resp.Body.Bytes(), &response)
-	if err != nil {
-		t.Errorf("Failed to unmarshal response: %v", err)
-	}
-	if len(response.Components) != 0 {
-		t.Errorf("Expected 0 component, got: %v", len(response.Components))
-	}
-}
-
-func TestCreateComponent(t *testing.T) {
-	// Create test organization
-	org := models.Organization{
-		Status:    models.OrgActive,
-		AccountID: testConf.authUser.ID,
-		Name:      "Test Organization for ListApplications",
-	}
-	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer org.Delete(testConf.app.MongoDB)
-
-	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer application.Delete(testConf.app.MongoDB)
-
-	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c"
-	body := map[string]interface{}{
-		"type":        "service",
-		"name":        "test-component",
-		"description": "Test component description",
-	}
-	payload, err := json.Marshal(body)
-	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(payload))
+	req, _ := http.NewRequest(method, url, reader)
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
 	testConf.router.ServeHTTP(resp, req)
+	return resp
+}
 
-	// Assert
+func TestCreateComponent_AppWide(t *testing.T) {
+	org, app, env := orgWithApp(t, "TestCreateComponent_AppWide", "staging")
+
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
+	body := map[string]interface{}{
+		"name":        "test-component",
+		"type":        "service",
+		"description": "Test component description",
+		"environment": env.Name,
+		"values":      models.ComponentRevisionValuesTemplate(),
+	}
+	resp := doJSON(t, "POST", url, body)
 	if resp.Code != http.StatusCreated {
-		t.Errorf("Expected response code 201, got: %v", resp.Code)
-		t.FailNow()
+		t.Fatalf("expected 201, got %d (%s)", resp.Code, resp.Body.String())
 	}
-	var response ComponentResponse
-	err = json.Unmarshal(resp.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
+
+	var raw struct {
+		Component *models.Component         `json:"component"`
+		Revision  *models.ComponentRevision `json:"revision"`
 	}
-	if response.Component.Name != "test-component" {
-		t.Errorf("Expected component name to be test-component, got: %v", response.Component.Name)
+	if err := json.Unmarshal(resp.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("decoding response: %v", err)
 	}
-	// Clean up Component
-	comp := models.Component{
-		Model: models.Model{
-			ID: response.ID,
-		},
+	if raw.Component == nil || raw.Component.Name != "test-component" {
+		t.Fatalf("unexpected component: %+v", raw.Component)
 	}
-	_ = comp.Delete(testConf.app.MongoDB)
+	if raw.Revision == nil || raw.Revision.Status != models.RevisionStatusDraft || raw.Revision.Version != 1 {
+		t.Fatalf("expected v1 draft, got %+v", raw.Revision)
+	}
+	cleanupComponent(t, raw.Component)
 }
 
-func TestDetailComponent(t *testing.T) {
-	// Create test organization
-	org := models.Organization{
-		Status:    models.OrgActive,
-		AccountID: testConf.authUser.ID,
-		Name:      "Test Organization for ListApplications",
-	}
-	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer org.Delete(testConf.app.MongoDB)
+func TestListComponents_AppWide(t *testing.T) {
+	org, app, env := orgWithApp(t, "TestListComponents_AppWide", "staging")
 
-	// Create test application
-	application, err := models.NewApplication(oID, "TestListComponents", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer application.Delete(testConf.app.MongoDB)
-
-	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
-	if err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"comp-a", "comp-b"} {
+		url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
+		resp := doJSON(t, "POST", url, map[string]interface{}{
+			"name":        name,
+			"type":        "service",
+			"environment": env.Name,
+			"values":      map[string]interface{}{},
+		})
+		if resp.Code != http.StatusCreated {
+			t.Fatalf("seeding %s: expected 201, got %d", name, resp.Code)
+		}
+		var raw struct {
+			Component *models.Component `json:"component"`
+		}
+		_ = json.Unmarshal(resp.Body.Bytes(), &raw)
+		cleanupComponent(t, raw.Component)
 	}
 
-	comp := models.Component{
-		ApplicationID: application.ID,
-		Name:          "test-detail-component",
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
+	resp := doJSON(t, "GET", url, nil)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+	var listResp ComponentListResponse
+	if err := json.Unmarshal(resp.Body.Bytes(), &listResp); err != nil {
+		t.Fatal(err)
+	}
+	if len(listResp.Components) != 2 {
+		t.Fatalf("expected 2 components, got %d", len(listResp.Components))
+	}
+	for _, c := range listResp.Components {
+		if len(c.Environments) == 0 {
+			t.Errorf("component %s missing environment presence rollup", c.Name)
+		}
+	}
+}
+
+func TestGetComponent_AppWide(t *testing.T) {
+	org, app, env := orgWithApp(t, "TestGetComponent_AppWide", "staging")
+
+	createURL := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
+	resp := doJSON(t, "POST", createURL, map[string]interface{}{
+		"name":        "the-component",
+		"type":        "service",
+		"environment": env.Name,
+		"values":      map[string]interface{}{"foo": "bar"},
+	})
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create: expected 201, got %d", resp.Code)
+	}
+	var created struct {
+		Component *models.Component `json:"component"`
+	}
+	if err := json.Unmarshal(resp.Body.Bytes(), &created); err != nil {
+		t.Fatal(err)
+	}
+	cleanupComponent(t, created.Component)
+
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c/" + created.Component.ID.Hex()
+	resp = doJSON(t, "GET", url, nil)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+	var got ComponentResponse
+	if err := json.Unmarshal(resp.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Component == nil || got.Component.Name != "the-component" {
+		t.Fatalf("unexpected component %+v", got.Component)
+	}
+	if len(got.Environments) != 1 {
+		t.Fatalf("expected 1 env presence, got %d", len(got.Environments))
+	}
+	if !got.Environments[0].HasDraft || got.Environments[0].LatestDraftVersion != 1 {
+		t.Errorf("expected v1 draft presence, got %+v", got.Environments[0])
+	}
+}
+
+func TestGetComponent_NotInApp(t *testing.T) {
+	org, app, _ := orgWithApp(t, "TestGetComponent_NotInApp", "staging")
+
+	other := &models.Component{
+		Name:          "other-comp",
 		Type:          "service",
+		ApplicationID: primitive.NewObjectID(),
 	}
-	err = comp.Create(testConf.app.MongoDB)
-	if err != nil {
-		t.Errorf("Failed to create component: %v", err)
-	}
-	defer comp.Delete(testConf.app.MongoDB)
-
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID.Hex()
-	req, _ := http.NewRequest("GET", url, nil)
-	req.AddCookie(testConf.generateCookie())
-	resp := httptest.NewRecorder()
-	testConf.router.ServeHTTP(resp, req)
-
-	// Assert
-	if resp.Code != http.StatusOK {
-		t.Errorf("Expected response code 200, got: %v", resp.Code)
-	}
-	var response ComponentResponse
-	err = json.Unmarshal(resp.Body.Bytes(), &response)
-	if err != nil {
-		t.Fatalf("Failed to unmarshal response: %v", err)
-	}
-	if response.Name != "test-detail-component" {
-		t.Errorf("Expected component name to be test-detail-component, got: %v", response.Name)
-	}
-}
-
-func TestDetailComponent_NotFound(t *testing.T) {
-	// Create test organization
-	org := models.Organization{
-		Status:    models.OrgActive,
-		AccountID: testConf.authUser.ID,
-		Name:      "Test Organization for ListApplications",
-	}
-	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
-	if err != nil {
+	if err := other.Create(testConf.app.MongoDB); err != nil {
 		t.Fatal(err)
 	}
-	defer org.Delete(testConf.app.MongoDB)
+	cleanupComponent(t, other)
 
-	// Create test application
-	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer application.Delete(testConf.app.MongoDB)
-
-	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/asdasd"
-	req, _ := http.NewRequest("GET", url, nil)
-	req.AddCookie(testConf.generateCookie())
-	resp := httptest.NewRecorder()
-	testConf.router.ServeHTTP(resp, req)
-
-	// Assert
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c/" + other.ID.Hex()
+	resp := doJSON(t, "GET", url, nil)
 	if resp.Code != http.StatusNotFound {
-		t.Errorf("Expected response code 404, got: %v", resp.Code)
+		t.Fatalf("expected 404, got %d", resp.Code)
 	}
 }
 
-func TestUpdateComponent(t *testing.T) {
-	// Create test organization
-	org := models.Organization{
-		Status:    models.OrgActive,
-		AccountID: testConf.authUser.ID,
-		Name:      "Test Organization for ListApplications",
-	}
-	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer org.Delete(testConf.app.MongoDB)
-
-	// Create test application
-	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer application.Delete(testConf.app.MongoDB)
-
-	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
+func TestPromoteComponent(t *testing.T) {
+	org, app, staging := orgWithApp(t, "TestPromoteComponent", "staging")
+	prod, err := app.CreateEnvironment(testConf.app.MongoDB, "production")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	comp := models.ComponentTemplate(application.ID, "test-update-component")
-	err = comp.Create(testConf.app.MongoDB)
+	// Seed identity + a deployed v1 in staging.
+	component := &models.Component{
+		Name:          "promoted",
+		Type:          "service",
+		ApplicationID: app.ID,
+	}
+	if err := component.Create(testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
+	cleanupComponent(t, component)
+	deployed := &models.ComponentRevision{
+		ComponentID:   component.ID,
+		EnvironmentID: staging.ID,
+		Values:        map[string]interface{}{"replicas": float64(2)},
+	}
+	if err := deployed.CreateDeployed(context.Background(), testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
+
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c/" + component.ID.Hex() + "/promote"
+	resp := doJSON(t, "POST", url, map[string]string{"from": staging.Name, "to": prod.Name})
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d (%s)", resp.Code, resp.Body.String())
+	}
+	var rev models.ComponentRevision
+	if err := json.Unmarshal(resp.Body.Bytes(), &rev); err != nil {
+		t.Fatal(err)
+	}
+	if rev.EnvironmentID != prod.ID || rev.Status != models.RevisionStatusDraft || rev.Version != 1 {
+		t.Fatalf("unexpected promoted rev: %+v", rev)
+	}
+	if got, ok := rev.Values["replicas"].(float64); !ok || got != 2 {
+		t.Errorf("promoted values not copied: %+v", rev.Values)
+	}
+}
+
+func TestPromoteComponent_NoDeployedSource(t *testing.T) {
+	org, app, staging := orgWithApp(t, "TestPromote_NoSource", "staging")
+	prod, err := app.CreateEnvironment(testConf.app.MongoDB, "production")
 	if err != nil {
-		t.Errorf("Failed to create component: %v", err)
+		t.Fatal(err)
 	}
-	defer comp.Delete(testConf.app.MongoDB)
 
-	// Modify a property
-	comp.Values["resources"] = map[string]interface{}{
-		"replicas": 1,
-		"cpu":      "1000m",
-		"memory":   "200Mi",
+	component := &models.Component{
+		Name:          "no-source",
+		Type:          "service",
+		ApplicationID: app.ID,
 	}
-	payload, err := json.Marshal(comp)
+	if err := component.Create(testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
+	cleanupComponent(t, component)
+	// Only a draft exists in staging; promote should refuse it (deployed-only).
+	draft := &models.ComponentRevision{
+		ComponentID:   component.ID,
+		EnvironmentID: staging.ID,
+	}
+	if err := draft.CreateDraft(context.Background(), testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
 
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID.Hex()
-	req, _ := http.NewRequest("PUT", url, bytes.NewBuffer(payload))
-	req.AddCookie(testConf.generateCookie())
-	resp := httptest.NewRecorder()
-	testConf.router.ServeHTTP(resp, req)
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c/" + component.ID.Hex() + "/promote"
+	resp := doJSON(t, "POST", url, map[string]string{"from": staging.Name, "to": prod.Name})
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", resp.Code)
+	}
+}
 
-	// Assert
+func TestCreateAndUpdateDraftRevision(t *testing.T) {
+	org, app, env := orgWithApp(t, "TestCreateUpdateDraftRev", "staging")
+
+	component := &models.Component{
+		Name:          "rev-target",
+		Type:          "service",
+		ApplicationID: app.ID,
+	}
+	if err := component.Create(testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
+	cleanupComponent(t, component)
+
+	createURL := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/e/" + env.Name + "/c/" + component.ID.Hex() + "/revisions"
+	resp := doJSON(t, "POST", createURL, CreateRevisionRequest{Values: map[string]interface{}{"image": "v1"}})
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create rev: expected 201, got %d (%s)", resp.Code, resp.Body.String())
+	}
+	var rev models.ComponentRevision
+	if err := json.Unmarshal(resp.Body.Bytes(), &rev); err != nil {
+		t.Fatal(err)
+	}
+	if rev.Version != 1 || rev.Status != models.RevisionStatusDraft {
+		t.Fatalf("unexpected rev: %+v", rev)
+	}
+
+	updateURL := createURL + "/" + rev.ID.Hex()
+	resp = doJSON(t, "PUT", updateURL, UpdateRevisionRequest{Values: map[string]interface{}{"image": "v2"}})
 	if resp.Code != http.StatusOK {
-		t.Errorf("Expected response code 200, got: %v", resp.Code)
+		t.Fatalf("update rev: expected 200, got %d (%s)", resp.Code, resp.Body.String())
 	}
-
-	resources, _ := comp.Values["resources"].(map[string]interface{})
-	if resources["cpu"] != "1000m" {
-		t.Errorf("Expected CPU to be 1000m, got: %v", resources["cpu"])
+	var updated models.ComponentRevision
+	if err := json.Unmarshal(resp.Body.Bytes(), &updated); err != nil {
+		t.Fatal(err)
 	}
-
+	if got := updated.Values["image"]; got != "v2" {
+		t.Errorf("expected image=v2 after update, got %v", got)
+	}
 }
 
-func TestDeleteComponent(t *testing.T) {
-	// Create test organization
-	org := models.Organization{
-		Status:    models.OrgActive,
-		AccountID: testConf.authUser.ID,
-		Name:      "Test Organization for ListApplications",
+func TestUpdateDraftRevision_RejectsDeployed(t *testing.T) {
+	org, app, env := orgWithApp(t, "TestUpdateDraft_RejectsDeployed", "staging")
+
+	component := &models.Component{
+		Name:          "immutable",
+		Type:          "service",
+		ApplicationID: app.ID,
 	}
-	oID, err := org.Create(testConf.app.MongoDB) // lint:ignore
-	if err != nil {
+	if err := component.Create(testConf.app.MongoDB); err != nil {
 		t.Fatal(err)
 	}
-	defer org.Delete(testConf.app.MongoDB)
+	cleanupComponent(t, component)
 
-	// Create test application
-	application, err := models.NewApplication(oID, "TestDetailComponents_NotFound", testConf.authUser.ID.Hex()).Create(testConf.app.MongoDB)
-	if err != nil {
-		t.Fatal(err)
+	deployed := &models.ComponentRevision{
+		ComponentID:   component.ID,
+		EnvironmentID: env.ID,
+		Values:        map[string]interface{}{"image": "v1"},
 	}
-	defer application.Delete(testConf.app.MongoDB)
-
-	env, err := application.CreateEnvironment(testConf.app.MongoDB, "staging")
-	if err != nil {
+	if err := deployed.CreateDeployed(context.Background(), testConf.app.MongoDB); err != nil {
 		t.Fatal(err)
 	}
 
-	comp := models.ComponentTemplate(application.ID, "test-delete-component")
-	err = comp.Create(testConf.app.MongoDB)
-	if err != nil {
-		t.Errorf("Failed to create component: %v", err)
-		t.FailNow()
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/e/" + env.Name + "/c/" + component.ID.Hex() + "/revisions/" + deployed.ID.Hex()
+	resp := doJSON(t, "PUT", url, UpdateRevisionRequest{Values: map[string]interface{}{"image": "v2"}})
+	if resp.Code != http.StatusForbidden && resp.Code != http.StatusNotFound {
+		t.Fatalf("expected 403 or 404, got %d", resp.Code)
+	}
+}
+
+func TestListRevisions(t *testing.T) {
+	org, app, env := orgWithApp(t, "TestListRevisions", "staging")
+
+	component := &models.Component{
+		Name:          "lister",
+		Type:          "service",
+		ApplicationID: app.ID,
+	}
+	if err := component.Create(testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
+	cleanupComponent(t, component)
+
+	for i := 0; i < 3; i++ {
+		rev := &models.ComponentRevision{
+			ComponentID:   component.ID,
+			EnvironmentID: env.ID,
+			Values:        map[string]interface{}{"v": i},
+		}
+		if err := rev.CreateDeployed(context.Background(), testConf.app.MongoDB); err != nil {
+			t.Fatal(err)
+		}
 	}
 
-	url := "/organizations/" + oID + "/a/" + application.ID.Hex() + "/e/" + env.Name + "/c/" + comp.ID.Hex()
-	req, _ := http.NewRequest("DELETE", url, nil)
-	req.AddCookie(testConf.generateCookie())
-	resp := httptest.NewRecorder()
-	testConf.router.ServeHTTP(resp, req)
-
-	// Assert
-	if resp.Code != http.StatusNoContent {
-		t.Errorf("Expected response code 204, got: %v", resp.Code)
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/e/" + env.Name + "/c/" + component.ID.Hex() + "/revisions"
+	resp := doJSON(t, "GET", url, nil)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.Code)
+	}
+	var listResp ComponentRevisionListResponse
+	if err := json.Unmarshal(resp.Body.Bytes(), &listResp); err != nil {
+		t.Fatal(err)
+	}
+	if len(listResp.Revisions) != 3 {
+		t.Fatalf("expected 3 revisions, got %d", len(listResp.Revisions))
+	}
+	if listResp.Revisions[0].Version != 3 {
+		t.Errorf("expected newest first (v3), got %d", listResp.Revisions[0].Version)
 	}
 }

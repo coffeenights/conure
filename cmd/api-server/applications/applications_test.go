@@ -102,7 +102,7 @@ func TestDetailApplication(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := "/organizations/" + oID + "/a/" + app1.ID.Hex() + "/e/" + envName
+	url := "/organizations/" + oID + "/a/" + app1.ID.Hex()
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
@@ -127,7 +127,7 @@ func TestDetailApplication_NotFound(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	url := "/organizations/" + oID + "/a/" + primitive.NewObjectID().Hex() + "/e/test-detail-application"
+	url := "/organizations/" + oID + "/a/" + primitive.NewObjectID().Hex()
 	req, _ := http.NewRequest("GET", url, nil)
 	req.AddCookie(testConf.generateCookie())
 	resp := httptest.NewRecorder()
