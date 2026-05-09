@@ -29,7 +29,6 @@ require (
 require (
 	github.com/briandowns/spinner v1.23.2
 	github.com/charmbracelet/lipgloss v1.1.0
-	github.com/google/go-containerregistry v0.21.5
 	k8s.io/utils v0.0.0-20260507154919-ff6756f316d2
 )
 
@@ -109,6 +108,7 @@ require (
 	github.com/google/btree v1.1.3 // indirect
 	github.com/google/cel-go v0.26.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
+	github.com/google/go-containerregistry v0.21.5 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.7 // indirect
 	github.com/homeport/dyff v1.10.5 // indirect

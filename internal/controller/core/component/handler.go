@@ -131,7 +131,6 @@ func (c *ComponentHandler) renderComponent() error {
 	sets, err := c.componentTemplate.GetApplySets()
 	if err != nil {
 		c.Logger.Error(err, "failed to get apply sets")
-		logRegistryPullFailure(c.Ctx, c.Logger, compDef.Spec.OCIRepository, compDef.Spec.OCITag, creds)
 		return err
 	}
 

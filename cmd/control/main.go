@@ -23,7 +23,6 @@ import (
 
 	"github.com/coffeenights/conure/internal/controller/core"
 	"github.com/coffeenights/conure/internal/controller/core/component"
-	"github.com/google/go-containerregistry/pkg/logs"
 	"go.uber.org/zap/zapcore"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -82,11 +81,6 @@ func main() {
 		"Namespace where ComponentDefinition pull secrets are looked up. Defaults to POD_NAMESPACE.")
 	flag.Parse()
 	component.RegistrySecretNamespace = registrySecretNamespace
-
-	// Pipe go-containerregistry's debug logger to stderr so every OCI HTTP
-	// request and response (incl. redirects) is captured. Same mechanism
-	// crane CLI's --verbose flag uses.
-	logs.Debug.SetOutput(os.Stderr)
 	opts := zap.Options{
 		Development: enableDevelopment,
 		Level:       zapcore.Level(-logLevel),
