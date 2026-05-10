@@ -57,6 +57,20 @@ func seedComponentInEnv(t *testing.T, app *models.Application, env *models.Envir
 // makePod is a tiny builder that fills in the kubectl-relevant fields the
 // handler rolls up. Container statuses default to one ready container.
 func makePod(namespace, name, componentName string, ready bool, restarts int32) *corev1.Pod {
+	return makePodWithContainers(namespace, name, componentName, ready, restarts, "app")
+}
+
+func makePodWithContainers(namespace, name, componentName string, ready bool, restarts int32, containers ...string) *corev1.Pod {
+	containerSpecs := make([]corev1.Container, len(containers))
+	containerStatuses := make([]corev1.ContainerStatus, len(containers))
+	for i, c := range containers {
+		containerSpecs[i] = corev1.Container{Name: c}
+		containerStatuses[i] = corev1.ContainerStatus{
+			Name:         c,
+			Ready:        ready,
+			RestartCount: restarts,
+		}
+	}
 	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -66,15 +80,11 @@ func makePod(namespace, name, componentName string, ready bool, restarts int32) 
 			},
 		},
 		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{{Name: "app"}},
+			Containers: containerSpecs,
 		},
 		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-			ContainerStatuses: []corev1.ContainerStatus{{
-				Name:         "app",
-				Ready:        ready,
-				RestartCount: restarts,
-			}},
+			Phase:             corev1.PodRunning,
+			ContainerStatuses: containerStatuses,
 			Conditions: []corev1.PodCondition{{
 				Type:   corev1.PodReady,
 				Status: corev1.ConditionTrue,
@@ -156,53 +166,74 @@ func TestListComponentPods_UnknownComponent404(t *testing.T) {
 	}
 }
 
-func TestResolveLogPods(t *testing.T) {
+func TestResolveLogTargets(t *testing.T) {
 	const ns = "abc12345-staging"
 	clientset := &k8sUtils.GenericClientset{
 		K8s: fake.NewSimpleClientset(
-			makePod(ns, "web-1", "web", true, 0),
-			makePod(ns, "web-2", "web", true, 0),
+			makePodWithContainers(ns, "web-1", "web", true, 0, "app", "sidecar"),
+			makePodWithContainers(ns, "web-2", "web", true, 0, "app"),
 			makePod(ns, "other-1", "other", true, 0),
 		),
 	}
 	ctx := context.Background()
 
-	// Empty query → every pod matching the component label.
-	got, err := resolveLogPods(ctx, clientset, ns, "web", "")
+	// Empty pods + empty container ⇒ every container of every pod for the
+	// component. web-1 has 2 containers, web-2 has 1 ⇒ 3 targets total.
+	got, err := resolveLogTargets(ctx, clientset, ns, "web", "", "")
 	if err != nil {
-		t.Fatalf("empty query: %v", err)
+		t.Fatalf("bare: %v", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("empty query: expected 2 pods, got %v", got)
+	if len(got) != 3 {
+		t.Fatalf("bare: expected 3 targets, got %d: %+v", len(got), got)
 	}
 
-	// Valid subset.
-	got, err = resolveLogPods(ctx, clientset, ns, "web", "web-1")
+	// Pod filter alone.
+	got, err = resolveLogTargets(ctx, clientset, ns, "web", "web-2", "")
 	if err != nil {
-		t.Fatalf("valid subset: %v", err)
+		t.Fatalf("pod filter: %v", err)
 	}
-	if len(got) != 1 || got[0] != "web-1" {
-		t.Fatalf("valid subset: got %v", got)
+	if len(got) != 1 || got[0].pod != "web-2" || got[0].container != "app" {
+		t.Fatalf("pod filter: got %+v", got)
 	}
 
-	// Whitespace + comma list.
-	got, err = resolveLogPods(ctx, clientset, ns, "web", " web-1 , web-2 ")
+	// Container filter — only pods that define it should appear; web-2
+	// (which has no `sidecar`) is silently skipped.
+	got, err = resolveLogTargets(ctx, clientset, ns, "web", "", "sidecar")
+	if err != nil {
+		t.Fatalf("container filter: %v", err)
+	}
+	if len(got) != 1 || got[0].pod != "web-1" || got[0].container != "sidecar" {
+		t.Fatalf("container filter: got %+v", got)
+	}
+
+	// Whitespace + comma list of pods.
+	got, err = resolveLogTargets(ctx, clientset, ns, "web", " web-1 , web-2 ", "app")
 	if err != nil {
 		t.Fatalf("comma list: %v", err)
 	}
 	if len(got) != 2 {
-		t.Fatalf("comma list: got %v", got)
+		t.Fatalf("comma list: expected 2 (one per pod), got %+v", got)
 	}
 
-	// Cross-component pod must be rejected — the user is asking for `other-1`
-	// while scoped to component `web`. This is the security-relevant case.
-	if _, err := resolveLogPods(ctx, clientset, ns, "web", "other-1"); !errors.Is(err, conureerrors.ErrPodNotFound) {
+	// Cross-component pod must be rejected — `other-1` is not owned by `web`.
+	// Security guard: callers can't tail unrelated pods by name.
+	if _, err := resolveLogTargets(ctx, clientset, ns, "web", "other-1", ""); !errors.Is(err, conureerrors.ErrPodNotFound) {
 		t.Fatalf("expected ErrPodNotFound for cross-component request, got %v", err)
 	}
 
 	// Unknown pod name.
-	if _, err := resolveLogPods(ctx, clientset, ns, "web", "ghost"); !errors.Is(err, conureerrors.ErrPodNotFound) {
+	if _, err := resolveLogTargets(ctx, clientset, ns, "web", "ghost", ""); !errors.Is(err, conureerrors.ErrPodNotFound) {
 		t.Fatalf("expected ErrPodNotFound for unknown pod, got %v", err)
+	}
+
+	// Container filter with no matching pods ⇒ empty (handler turns this
+	// into a 404; resolveLogTargets just returns nil).
+	got, err = resolveLogTargets(ctx, clientset, ns, "web", "", "missing")
+	if err != nil {
+		t.Fatalf("missing container: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("missing container: expected empty, got %+v", got)
 	}
 }
 

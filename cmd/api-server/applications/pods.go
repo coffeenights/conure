@@ -82,19 +82,19 @@ func (a *ApiHandler) StreamComponentLogs(c *gin.Context) {
 	}
 
 	namespace := env.GetNamespace()
-	pods, err := resolveLogPods(c.Request.Context(), clientset, namespace, component.Name, c.Query("pods"))
+	follow := boolQuery(c, "follow")
+	previous := boolQuery(c, "previous")
+	container := c.Query("container")
+
+	targets, err := resolveLogTargets(c.Request.Context(), clientset, namespace, component.Name, c.Query("pods"), container)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	if len(pods) == 0 {
+	if len(targets) == 0 {
 		conureerrors.AbortWithError(c, conureerrors.ErrPodNotFound)
 		return
 	}
-
-	follow := boolQuery(c, "follow")
-	previous := boolQuery(c, "previous")
-	container := c.Query("container")
 
 	var tailLines *int64
 	if v := c.Query("tail"); v != "" {
@@ -122,23 +122,26 @@ func (a *ApiHandler) StreamComponentLogs(c *gin.Context) {
 	c.Writer.WriteHeader(http.StatusOK)
 	c.Writer.Flush()
 
-	prefixLines := len(pods) > 1
+	// Prefix lines whenever we're multiplexing more than one stream — even
+	// if all targets share a pod, the per-container split is otherwise
+	// invisible.
+	prefixLines := len(targets) > 1
 
 	ctx, cancel := context.WithCancel(c.Request.Context())
 	defer cancel()
 
 	out := make(chan string, 256)
-	errCh := make(chan error, len(pods))
+	errCh := make(chan error, len(targets))
 	var wg sync.WaitGroup
 
-	for _, pod := range pods {
+	for _, t := range targets {
 		wg.Add(1)
-		go func(podName string) {
+		go func(podName, containerName string) {
 			defer wg.Done()
 			opts := corev1.PodLogOptions{
 				Follow:    follow,
 				Previous:  previous,
-				Container: container,
+				Container: containerName,
 			}
 			if tailLines != nil {
 				opts.TailLines = tailLines
@@ -150,7 +153,7 @@ func (a *ApiHandler) StreamComponentLogs(c *gin.Context) {
 			stream, err := req.Stream(ctx)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					errCh <- fmt.Errorf("%s: %w", podName, err)
+					errCh <- fmt.Errorf("%s/%s: %w", podName, containerName, err)
 				}
 				return
 			}
@@ -160,7 +163,7 @@ func (a *ApiHandler) StreamComponentLogs(c *gin.Context) {
 				line, err := r.ReadString('\n')
 				if line != "" {
 					if prefixLines {
-						line = fmt.Sprintf("[%s] %s", podName, line)
+						line = fmt.Sprintf("[%s/%s] %s", podName, containerName, line)
 					}
 					select {
 					case out <- line:
@@ -170,12 +173,12 @@ func (a *ApiHandler) StreamComponentLogs(c *gin.Context) {
 				}
 				if err != nil {
 					if !errors.Is(err, io.EOF) && !errors.Is(err, context.Canceled) {
-						errCh <- fmt.Errorf("%s: %w", podName, err)
+						errCh <- fmt.Errorf("%s/%s: %w", podName, containerName, err)
 					}
 					return
 				}
 			}
-		}(pod)
+		}(t.pod, t.container)
 	}
 
 	go func() {
@@ -223,11 +226,24 @@ func listPodsForComponent(ctx context.Context, clientset *k8sUtils.GenericClient
 	return list.Items, nil
 }
 
-// resolveLogPods picks which pods to stream from. Empty `query` ⇒ every pod
-// for the component. Otherwise the comma list is intersected with the
-// component's pods so callers can't tail an unrelated pod by guessing its
-// name.
-func resolveLogPods(ctx context.Context, clientset *k8sUtils.GenericClientset, namespace, componentName, query string) ([]string, error) {
+// logTarget is a single (pod, container) stream the handler will tail.
+// The container is always set explicitly — empty string would force K8s to
+// pick a "default" container, which fails on multi-container pods.
+type logTarget struct {
+	pod       string
+	container string
+}
+
+// resolveLogTargets selects which (pod, container) streams to follow.
+//
+//   - podsQuery="" + containerFilter="" ⇒ every container of every pod owned
+//     by the component (the bare `conure logs` case).
+//   - podsQuery="p1,p2"                  ⇒ restrict to those pods (must
+//     belong to the component, otherwise ErrPodNotFound — guards against
+//     callers tailing an unrelated pod by name).
+//   - containerFilter="c1"               ⇒ restrict to that container; pods
+//     that don't define it are silently skipped.
+func resolveLogTargets(ctx context.Context, clientset *k8sUtils.GenericClientset, namespace, componentName, podsQuery, containerFilter string) ([]logTarget, error) {
 	pods, err := listPodsForComponent(ctx, clientset, namespace, componentName)
 	if err != nil {
 		return nil, err
@@ -237,26 +253,50 @@ func resolveLogPods(ctx context.Context, clientset *k8sUtils.GenericClientset, n
 		allowed[pods[i].Name] = struct{}{}
 	}
 
-	if strings.TrimSpace(query) == "" {
-		out := make([]string, 0, len(pods))
-		for i := range pods {
-			out = append(out, pods[i].Name)
+	var podFilter map[string]struct{}
+	if q := strings.TrimSpace(podsQuery); q != "" {
+		podFilter = map[string]struct{}{}
+		for _, raw := range strings.Split(q, ",") {
+			name := strings.TrimSpace(raw)
+			if name == "" {
+				continue
+			}
+			if _, ok := allowed[name]; !ok {
+				return nil, conureerrors.ErrPodNotFound
+			}
+			podFilter[name] = struct{}{}
 		}
-		return out, nil
 	}
 
-	var out []string
-	for _, raw := range strings.Split(query, ",") {
-		name := strings.TrimSpace(raw)
-		if name == "" {
+	var out []logTarget
+	for i := range pods {
+		p := &pods[i]
+		if podFilter != nil {
+			if _, ok := podFilter[p.Name]; !ok {
+				continue
+			}
+		}
+		if containerFilter != "" {
+			if !podHasContainer(p, containerFilter) {
+				continue
+			}
+			out = append(out, logTarget{pod: p.Name, container: containerFilter})
 			continue
 		}
-		if _, ok := allowed[name]; !ok {
-			return nil, conureerrors.ErrPodNotFound
+		for _, c := range p.Spec.Containers {
+			out = append(out, logTarget{pod: p.Name, container: c.Name})
 		}
-		out = append(out, name)
 	}
 	return out, nil
+}
+
+func podHasContainer(p *corev1.Pod, name string) bool {
+	for _, c := range p.Spec.Containers {
+		if c.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 func podToResponse(p *corev1.Pod) PodResponse {
