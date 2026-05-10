@@ -269,6 +269,20 @@ func updateRevision(client *apiClient, orgID, appID, env, componentID, revID str
 	return &rev, nil
 }
 
+func listComponentPods(client *apiClient, orgID, appID, env, componentID string) ([]api.Pod, error) {
+	data, err := client.get(
+		fmt.Sprintf("/organizations/%s/a/%s/e/%s/c/%s/pods", orgID, appID, env, componentID),
+	)
+	if err != nil {
+		return nil, err
+	}
+	var resp api.ComponentPodsResponse
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return nil, err
+	}
+	return resp.Pods, nil
+}
+
 func promoteComponent(client *apiClient, orgID, appID, componentID, from, to string) (*api.ComponentRevision, error) {
 	data, err := client.post(
 		fmt.Sprintf("/organizations/%s/a/%s/c/%s/promote", orgID, appID, componentID),

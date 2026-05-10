@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -76,4 +78,31 @@ func (c *apiClient) put(path string, body interface{}) ([]byte, error) {
 func (c *apiClient) delete(path string) ([]byte, error) {
 	data, _, err := c.do(http.MethodDelete, path, nil)
 	return data, err
+}
+
+// stream issues a GET and hands the live response body back to the caller.
+// Caller MUST close the returned ReadCloser. The context cancels both the
+// in-flight request and the body read, so Ctrl-C in the CLI cleanly aborts
+// long-lived /logs streams.
+func (c *apiClient) stream(ctx context.Context, path string, query url.Values) (io.ReadCloser, error) {
+	u := c.baseURL + path
+	if len(query) > 0 {
+		u += "?" + query.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.AddCookie(&http.Cookie{Name: "auth", Value: c.token})
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return nil, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return resp.Body, nil
 }

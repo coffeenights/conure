@@ -170,6 +170,28 @@ type DeployBatchResponse struct {
 	Failed   []DeployBatchEntry `json:"failed"`
 }
 
+// ----- Pods & logs --------------------------------------------------------
+
+type PodCondition struct {
+	Type    string `json:"type"`
+	Status  string `json:"status"`
+	Reason  string `json:"reason,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+type Pod struct {
+	Name       string         `json:"name"`
+	Phase      string         `json:"phase"`
+	Ready      bool           `json:"ready"`
+	Restarts   int32          `json:"restarts"`
+	Containers []string       `json:"containers,omitempty"`
+	Conditions []PodCondition `json:"conditions,omitempty"`
+}
+
+type ComponentPodsResponse struct {
+	Pods []Pod `json:"pods"`
+}
+
 // ----- Component definitions (templates) ----------------------------------
 
 type ComponentDefinition struct {
