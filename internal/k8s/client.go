@@ -10,7 +10,7 @@ import (
 
 type GenericClientset struct {
 	Conure  *core_conure.Clientset
-	K8s     *kubernetes.Clientset
+	K8s     kubernetes.Interface
 	Dynamic *dynamic.DynamicClient
 	Config  *rest.Config
 }

@@ -157,3 +157,27 @@ type EnvironmentListResponse struct {
 type EnvironmentResponse struct {
 	*models.Environment
 }
+
+// PodConditionResponse mirrors the subset of corev1.PodCondition that's
+// useful to a UI/CLI consumer.
+type PodConditionResponse struct {
+	Type    string `json:"type"`
+	Status  string `json:"status"`
+	Reason  string `json:"reason,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// PodResponse is the shape returned by ListComponentPods. Phase/Ready/Restarts
+// are pre-computed kubectl-style so the CLI doesn't have to roll them up.
+type PodResponse struct {
+	Name       string                 `json:"name"`
+	Phase      string                 `json:"phase"`
+	Ready      bool                   `json:"ready"`
+	Restarts   int32                  `json:"restarts"`
+	Containers []string               `json:"containers,omitempty"`
+	Conditions []PodConditionResponse `json:"conditions,omitempty"`
+}
+
+type ComponentPodsResponse struct {
+	Pods []PodResponse `json:"pods"`
+}
