@@ -141,9 +141,15 @@ func (c *ComponentHandler) renderComponent() error {
 		}
 	}
 
-	// Add the spec hashes to every object and add them to the apply set
+	// Propagate conure identity labels onto every rendered child (and into pod
+	// templates of workload kinds), then add the spec hash. Labels must be
+	// applied before hashing so the hash reflects the final spec.
+	conureLabels := common.SelectConureLabels(c.Component.GetLabels())
 	for _, set := range sets {
 		for _, o := range set.Objects {
+			if err := common.PropagateLabelsToRendered(o, conureLabels); err != nil {
+				return fmt.Errorf("propagating conure labels to %s/%s: %w", o.GetKind(), o.GetName(), err)
+			}
 			hash := common.GetHashForSpec(o.Object["spec"].(map[string]interface{}))
 			labels := common.SetHashToLabels(o.GetLabels(), hash)
 			o.SetLabels(labels)
