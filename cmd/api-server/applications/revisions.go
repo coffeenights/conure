@@ -37,10 +37,29 @@ func liveComponent(ctx context.Context, a *ApiHandler, namespace, name string) (
 	return comp, nil
 }
 
+// liveComponentAndAbsorb is the canonical "read live state for a known
+// (component, env) pair" call. It fetches the CRD via liveComponent and,
+// when one exists, reconciles Mongo's last deployed revision against it via
+// absorbDriftIfAny. Every endpoint that reads live state for an existing
+// Mongo identity should go through this so out-of-band CRD edits are
+// recorded regardless of which endpoint observed them first.
+//
+// Returns (nil, nil) when the CRD is missing, matching liveComponent.
+func liveComponentAndAbsorb(ctx context.Context, a *ApiHandler, component *models.Component, env *models.Environment) (*conurev1alpha1.Component, error) {
+	live, err := liveComponent(ctx, a, env.GetNamespace(), component.Name)
+	if err != nil || live == nil {
+		return live, err
+	}
+	if err := absorbDriftIfAny(ctx, a, component, env, live); err != nil {
+		return nil, err
+	}
+	return live, nil
+}
+
 // ListComponentsInEnv lists every Component CRD present in the env namespace
-// for this application. CRDs without matching Mongo identity are auto-imported
-// and a v1 deployed revision is written so subsequent calls treat them as
-// normal components.
+// for this application. Orphan CRDs (no Mongo identity yet) get one created
+// via ensureComponentIdentity, and any drift between the live CRD and the
+// last deployed revision is absorbed via absorbDriftIfAny.
 //
 // Path: GET /:orgID/a/:appID/e/:env/c
 func (a *ApiHandler) ListComponentsInEnv(c *gin.Context) {
@@ -76,12 +95,16 @@ func (a *ApiHandler) ListComponentsInEnv(c *gin.Context) {
 		c.JSON(http.StatusOK, response)
 		return
 	}
-	uID := c.MustGet("currentUser").(models.User).ID
 	for i := range list.Items {
 		live := &list.Items[i]
-		identity, err := autoImport(ctx, a, handler.Model, env, live, uID)
+		identity, err := ensureComponentIdentity(ctx, a, handler.Model, live)
 		if err != nil {
-			log.Printf("Error auto-importing %s: %v\n", live.Name, err)
+			log.Printf("Error onboarding orphan CRD %s: %v\n", live.Name, err)
+			conureerrors.AbortWithError(c, err)
+			return
+		}
+		if err := absorbDriftIfAny(ctx, a, identity, env, live); err != nil {
+			log.Printf("Error absorbing drift for %s: %v\n", live.Name, err)
 			conureerrors.AbortWithError(c, err)
 			return
 		}
@@ -122,7 +145,7 @@ func (a *ApiHandler) GetComponentInEnv(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	live, err := liveComponent(ctx, a, env.GetNamespace(), component.Name)
+	live, err := liveComponentAndAbsorb(ctx, a, component, env)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
@@ -170,7 +193,8 @@ func (a *ApiHandler) CreateRevision(c *gin.Context) {
 }
 
 // ListRevisions returns every revision (draft and deployed) for the pair,
-// newest first.
+// newest first. Reads live state first so any out-of-band CRD edits surface
+// as a fresh auto-imported revision in the list.
 //
 // Path: GET /:orgID/a/:appID/e/:env/c/:componentID/revisions
 func (a *ApiHandler) ListRevisions(c *gin.Context) {
@@ -179,7 +203,12 @@ func (a *ApiHandler) ListRevisions(c *gin.Context) {
 		return
 	}
 
-	revisions, err := models.ListRevisions(c.Request.Context(), a.MongoDB, component.ID, env.ID)
+	ctx := c.Request.Context()
+	if _, err := liveComponentAndAbsorb(ctx, a, component, env); err != nil {
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+	revisions, err := models.ListRevisions(ctx, a.MongoDB, component.ID, env.ID)
 	if err != nil {
 		log.Printf("Error listing revisions: %v\n", err)
 		conureerrors.AbortWithError(c, err)
@@ -564,61 +593,81 @@ func readyCondition(comp *conurev1alpha1.Component) *metav1.Condition {
 	return nil
 }
 
-// autoImport ensures the (component, env) pair has a Mongo identity row plus
-// at least one revision matching the live CRD's values. Idempotent: a second
-// observation of unchanged values does not create a duplicate revision.
-func autoImport(ctx context.Context, a *ApiHandler, app *models.Application, env *models.Environment, live *conurev1alpha1.Component, importedBy primitive.ObjectID) (*models.Component, error) {
+// autoImportComment is stamped on every revision created by absorbDriftIfAny
+// so consumers can tell at a glance that the values came from the cluster,
+// not from an API deploy. Pairs with CreatedBy == primitive.NilObjectID.
+const autoImportComment = "auto-imported from cluster state"
+
+// ensureComponentIdentity returns the Mongo identity row for a live CRD,
+// creating one if no row matches (app.ID, live.Name). Used by the env-scoped
+// list path to onboard Component CRDs that exist in the cluster but have no
+// API-side record yet (e.g. someone kubectl-applied a Component directly).
+//
+// Idempotent under races: if Create loses to a concurrent caller, the row is
+// re-read instead of failing.
+func ensureComponentIdentity(ctx context.Context, a *ApiHandler, app *models.Application, live *conurev1alpha1.Component) (*models.Component, error) {
 	component := &models.Component{}
 	err := component.GetByApplicationAndName(ctx, a.MongoDB, app.ID, live.Name)
-	if errors.Is(err, conureerrors.ErrObjectNotFound) {
-		component = &models.Component{
-			Name:          live.Name,
-			Type:          live.Spec.ComponentType,
-			Description:   live.Annotations["conure.io/description"],
-			ApplicationID: app.ID,
-		}
-		if err := component.Create(a.MongoDB); err != nil {
-			if errors.Is(err, conureerrors.ErrObjectAlreadyExists) {
-				// Lost the race with another auto-import — re-read.
-				component = &models.Component{}
-				if err := component.GetByApplicationAndName(ctx, a.MongoDB, app.ID, live.Name); err != nil {
-					return nil, err
-				}
-			} else {
-				return nil, err
-			}
-		}
-	} else if err != nil {
+	if err == nil {
+		return component, nil
+	}
+	if !errors.Is(err, conureerrors.ErrObjectNotFound) {
 		return nil, err
 	}
-
-	liveValues, err := LiveValuesFromComponent(live)
-	if err != nil {
-		return nil, err
+	component = &models.Component{
+		Name:          live.Name,
+		Type:          live.Spec.ComponentType,
+		Description:   live.Annotations["conure.io/description"],
+		ApplicationID: app.ID,
 	}
-
-	deployed, err := models.LatestDeployed(ctx, a.MongoDB, component.ID, env.ID)
-	if err != nil && !errors.Is(err, conureerrors.ErrObjectNotFound) {
-		return nil, err
-	}
-	if deployed != nil {
-		report, err := ComputeDrift(liveValues, deployed.Values)
-		if err != nil {
+	if err := component.Create(a.MongoDB); err != nil {
+		if !errors.Is(err, conureerrors.ErrObjectAlreadyExists) {
 			return nil, err
 		}
-		if !report.Drifted {
-			return component, nil
+		// Lost the race with another caller — re-read.
+		component = &models.Component{}
+		if err := component.GetByApplicationAndName(ctx, a.MongoDB, app.ID, live.Name); err != nil {
+			return nil, err
 		}
 	}
+	return component, nil
+}
 
+// absorbDriftIfAny records a new deployed revision when the live CRD's
+// Spec.Values differs from the last deployed revision in Mongo. Keeps Mongo's
+// "latest deployed" honest about what's actually in the cluster, regardless
+// of how it got there (API deploy, kubectl edit, anything else).
+//
+// CreatedBy is NilObjectID and Comment is autoImportComment because the
+// caller of this endpoint is not who made the change — the change happened
+// out-of-band in k8s. No-op when the live CRD already matches the last
+// deployed revision, or when there is no prior deployed revision (callers
+// that need first-time onboarding should use ensureComponentIdentity).
+func absorbDriftIfAny(ctx context.Context, a *ApiHandler, component *models.Component, env *models.Environment, live *conurev1alpha1.Component) error {
+	liveValues, err := LiveValuesFromComponent(live)
+	if err != nil {
+		return err
+	}
+	deployed, err := models.LatestDeployed(ctx, a.MongoDB, component.ID, env.ID)
+	if errors.Is(err, conureerrors.ErrObjectNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	report, err := ComputeDrift(liveValues, deployed.Values)
+	if err != nil {
+		return err
+	}
+	if !report.Drifted {
+		return nil
+	}
 	rev := &models.ComponentRevision{
 		ComponentID:   component.ID,
 		EnvironmentID: env.ID,
 		Values:        liveValues,
-		CreatedBy:     importedBy,
+		Comment:       autoImportComment,
+		CreatedBy:     primitive.NilObjectID,
 	}
-	if err := rev.CreateDeployed(ctx, a.MongoDB); err != nil {
-		return nil, err
-	}
-	return component, nil
+	return rev.CreateDeployed(ctx, a.MongoDB)
 }

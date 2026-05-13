@@ -378,22 +378,18 @@ func buildPresenceForComponent(ctx context.Context, a *ApiHandler, component *mo
 			presence.LatestDraftVersion = draft.Version
 		}
 
-		live, err := liveComponent(ctx, a, env.GetNamespace(), component.Name)
+		live, err := liveComponentAndAbsorb(ctx, a, component, &env)
 		if err != nil {
 			return nil, err
 		}
 		if live != nil {
 			presence.Active = true
+			deployed, err = models.LatestDeployed(ctx, a.MongoDB, component.ID, env.ID)
+			if err != nil && !errors.Is(err, conureerrors.ErrObjectNotFound) {
+				return nil, err
+			}
 			if deployed != nil {
-				liveValues, err := LiveValuesFromComponent(live)
-				if err != nil {
-					return nil, err
-				}
-				report, err := ComputeDrift(liveValues, deployed.Values)
-				if err != nil {
-					return nil, err
-				}
-				presence.Drifted = report.Drifted
+				presence.LatestDeployedVersion = deployed.Version
 			}
 		}
 
