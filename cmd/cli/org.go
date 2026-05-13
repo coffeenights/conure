@@ -61,7 +61,7 @@ func init() {
 }
 
 func runOrgList(cmd *cobra.Command, _ []string) error {
-	cfg, client, err := requireAuthClient()
+	_, prof, client, err := requireAuthClient()
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func runOrgList(cmd *cobra.Command, _ []string) error {
 		rows := make([][]string, len(orgs))
 		for i, o := range orgs {
 			marker := ""
-			if o.ID == cfg.ActiveOrg {
+			if o.ID == prof.ActiveOrg {
 				marker = "*"
 			}
 			rows[i] = []string{marker, o.ID, o.Name}
@@ -98,7 +98,7 @@ func runOrgList(cmd *cobra.Command, _ []string) error {
 }
 
 func runOrgUse(cmd *cobra.Command, args []string) error {
-	cfg, client, err := requireAuthClient()
+	cfg, prof, client, err := requireAuthClient()
 	if err != nil {
 		return err
 	}
@@ -123,7 +123,7 @@ func runOrgUse(cmd *cobra.Command, args []string) error {
 		}
 		return fmt.Errorf("no match")
 	}
-	cfg.ActiveOrg = matchID
+	prof.ActiveOrg = matchID
 	if err := config.Save(cfg); err != nil {
 		return err
 	}
@@ -132,14 +132,14 @@ func runOrgUse(cmd *cobra.Command, args []string) error {
 }
 
 func runOrgCurrent(_ *cobra.Command, _ []string) error {
-	cfg, _, err := requireAuthClient()
+	_, prof, _, err := requireAuthClient()
 	if err != nil {
 		return err
 	}
-	if cfg.ActiveOrg == "" {
+	if prof.ActiveOrg == "" {
 		ui.InfoLn("No active organization — run `conure org use <name>`")
 		return nil
 	}
-	fmt.Println(cfg.ActiveOrg)
+	fmt.Println(prof.ActiveOrg)
 	return nil
 }

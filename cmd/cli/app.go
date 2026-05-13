@@ -27,11 +27,11 @@ func init() {
 }
 
 func runAppList(cmd *cobra.Command, _ []string) error {
-	cfg, client, err := requireActiveOrgClient()
+	_, prof, client, err := requireActiveOrgClient()
 	if err != nil {
 		return err
 	}
-	apps, err := client.ListApps(cmd.Context(), cfg.ActiveOrg)
+	apps, err := client.ListApps(cmd.Context(), prof.ActiveOrg)
 	if err != nil {
 		return err
 	}

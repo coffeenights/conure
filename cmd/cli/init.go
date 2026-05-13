@@ -38,14 +38,14 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("already linked")
 	}
 
-	cfg, err := config.RequireAuth(serverFlag)
+	cfg, prof, err := config.RequireAuth(serverFlag, profileFlag)
 	if err != nil {
 		return err
 	}
-	client := apiclient.New(cfg.Server, cfg.Token)
+	client := apiclient.New(prof.Server, prof.Token)
 	ctx := cmd.Context()
 
-	orgID, err := pickOrCreateOrgContext(ctx, client, cfg)
+	orgID, err := pickOrCreateOrgContext(ctx, client, cfg, prof)
 	if err != nil {
 		return err
 	}
@@ -77,12 +77,12 @@ func runInit(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-// pickOrCreateOrgContext returns the active org. If config already has one,
-// we trust it; otherwise we prompt and persist the choice so subsequent
-// commands inherit it.
-func pickOrCreateOrgContext(ctx context.Context, client *apiclient.Client, cfg *config.Config) (string, error) {
-	if cfg.ActiveOrg != "" {
-		return cfg.ActiveOrg, nil
+// pickOrCreateOrgContext returns the active org for this profile. If the
+// profile already has one, we trust it; otherwise we prompt and persist
+// the choice so subsequent commands inherit it.
+func pickOrCreateOrgContext(ctx context.Context, client *apiclient.Client, cfg *config.Config, prof *config.Profile) (string, error) {
+	if prof.ActiveOrg != "" {
+		return prof.ActiveOrg, nil
 	}
 	orgs, err := client.ListOrganizations(ctx)
 	if err != nil {
@@ -103,7 +103,7 @@ func pickOrCreateOrgContext(ctx context.Context, client *apiclient.Client, cfg *
 		Run(); err != nil {
 		return "", err
 	}
-	cfg.ActiveOrg = orgID
+	prof.ActiveOrg = orgID
 	if err := config.Save(cfg); err != nil {
 		return "", fmt.Errorf("saving config: %w", err)
 	}

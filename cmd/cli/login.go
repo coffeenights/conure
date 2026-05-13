@@ -14,19 +14,31 @@ import (
 	"github.com/coffeenights/conure/internal/cli/ui"
 )
 
+var (
+	logoutAll bool
+)
+
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Authenticate to a Conure server",
-	RunE:  runLogin,
+	Long: `Authenticate to a Conure server and store the token as a named profile.
+
+You can keep credentials for multiple servers side by side. Re-running
+login against a server you already have a profile for replaces that
+profile's token in place.`,
+	RunE: runLogin,
 }
 
 var logoutCmd = &cobra.Command{
 	Use:   "logout",
-	Short: "Clear stored credentials",
-	RunE:  runLogout,
+	Short: "Clear stored credentials for the active profile",
+	Long: `Clear the active profile so it can no longer authenticate. Other
+profiles remain in place. Use --all to wipe every profile from the file.`,
+	RunE: runLogout,
 }
 
 func init() {
+	logoutCmd.Flags().BoolVar(&logoutAll, "all", false, "Remove every profile, not just the active one")
 	rootCmd.AddCommand(loginCmd)
 	rootCmd.AddCommand(logoutCmd)
 }
@@ -34,10 +46,17 @@ func init() {
 func runLogin(cmd *cobra.Command, _ []string) error {
 	reader := bufio.NewReader(os.Stdin)
 
+	// Resolve a starting server hint: --server flag wins, otherwise the
+	// active profile's server (so re-logging-in defaults to the current
+	// server), otherwise prompt.
 	server := serverFlag
+	cfg, _ := config.Load()
+	if cfg == nil {
+		cfg = &config.Config{Profiles: map[string]*config.Profile{}}
+	}
 	if server == "" {
-		if cfg, err := config.Load(); err == nil {
-			server = cfg.Server
+		if active := cfg.GetActive(); active != nil {
+			server = active.Server
 		}
 	}
 	if server == "" {
@@ -65,17 +84,71 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if err := config.Save(&config.Config{Server: server, Token: token}); err != nil {
+	// Profile naming: if there's already a profile for this server, reuse
+	// its name (overwrite the token); otherwise prompt with a hostname
+	// default. --profile=<name> on the command line skips the prompt.
+	name := profileFlag
+	if name == "" {
+		if existingName, _ := cfg.FindByServer(server); existingName != "" {
+			name = existingName
+		} else {
+			name = config.DefaultProfileName(server)
+			fmt.Printf("Profile name [%s]: ", name)
+			input, _ := reader.ReadString('\n')
+			if t := strings.TrimSpace(input); t != "" {
+				name = t
+			}
+		}
+	}
+
+	// Preserve any existing ActiveOrg on overwrite so the user doesn't
+	// lose their org selection on a re-login.
+	var keepOrg string
+	if prev := cfg.Get(name); prev != nil {
+		keepOrg = prev.ActiveOrg
+	}
+	cfg.Upsert(name, &config.Profile{
+		Server:    server,
+		Token:     token,
+		ActiveOrg: keepOrg,
+	})
+	cfg.Active = name
+	if err := config.Save(cfg); err != nil {
 		return fmt.Errorf("saving config: %w", err)
 	}
-	ui.Success("✓ Logged in to %s\n", server)
+	ui.Success("✓ Logged in to %s as profile `%s`\n", server, name)
 	return nil
 }
 
 func runLogout(_ *cobra.Command, _ []string) error {
-	if err := config.Save(&config.Config{}); err != nil {
-		return fmt.Errorf("clearing config: %w", err)
+	if logoutAll {
+		if err := config.Save(&config.Config{Profiles: map[string]*config.Profile{}}); err != nil {
+			return fmt.Errorf("clearing config: %w", err)
+		}
+		ui.SuccessLn("✓ Cleared all profiles")
+		return nil
 	}
-	ui.SuccessLn("✓ Logged out")
+
+	cfg, err := config.Load()
+	if err != nil {
+		// File doesn't exist — already logged out.
+		ui.InfoLn("Already logged out")
+		return nil
+	}
+	if cfg.Active == "" {
+		ui.InfoLn("No active profile to log out of")
+		return nil
+	}
+	name := cfg.Active
+	if err := cfg.Remove(name); err != nil {
+		return err
+	}
+	if err := config.Save(cfg); err != nil {
+		return err
+	}
+	ui.Success("✓ Logged out of profile `%s`\n", name)
+	if len(cfg.Profiles) > 0 {
+		ui.InfoLn("  Other profiles remain. Use `conure profile use <name>` to activate one.")
+	}
 	return nil
 }

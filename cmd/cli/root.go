@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	serverFlag string
-	outputFlag string
+	serverFlag  string
+	outputFlag  string
+	profileFlag string
 )
 
 var rootCmd = &cobra.Command{
@@ -31,7 +32,8 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&serverFlag, "server", "", "API server URL (overrides config)")
+	rootCmd.PersistentFlags().StringVar(&serverFlag, "server", "", "API server URL (overrides the active profile's server for this command only)")
+	rootCmd.PersistentFlags().StringVar(&profileFlag, "profile", "", "Profile to use for this command (overrides the active profile)")
 	rootCmd.PersistentFlags().StringVarP(&outputFlag, "output", "o", "text", "Output format (text, json)")
 }
 
@@ -41,20 +43,21 @@ func addEnvFlag(cmd *cobra.Command) {
 	cmd.Flags().String("env", "", "Environment (overrides link)")
 }
 
-// linkedCtx bundles the four things every "act on the linked component"
-// command needs: config, link, resolved env, and a ready-to-go API client.
+// linkedCtx bundles the things every "act on the linked component"
+// command needs. Config is included so commands that mutate (e.g. saving
+// a changed ActiveOrg) can persist via config.Save.
 type linkedCtx struct {
-	Cfg    *config.Config
-	Link   *link.Link
-	Env    string
-	Client *apiclient.Client
+	Config  *config.Config
+	Profile *config.Profile
+	Link    *link.Link
+	Env     string
+	Client  *apiclient.Client
 }
 
-// requireLinked is the canonical preamble for linked-component commands.
-// It enforces auth, loads the link file, applies the --env override (if
-// the cobra command declared the flag), and returns a ready client.
+// requireLinked is the canonical preamble for linked-component commands:
+// auth + link + env-flag resolution + ready API client.
 func requireLinked(cmd *cobra.Command) (*linkedCtx, error) {
-	cfg, err := config.RequireAuth(serverFlag)
+	cfg, prof, err := config.RequireAuth(serverFlag, profileFlag)
 	if err != nil {
 		return nil, err
 	}
@@ -69,29 +72,30 @@ func requireLinked(cmd *cobra.Command) (*linkedCtx, error) {
 		}
 	}
 	return &linkedCtx{
-		Cfg:    cfg,
-		Link:   l,
-		Env:    env,
-		Client: apiclient.New(cfg.Server, cfg.Token),
+		Config:  cfg,
+		Profile: prof,
+		Link:    l,
+		Env:     env,
+		Client:  apiclient.New(prof.Server, prof.Token),
 	}, nil
 }
 
 // requireAuthClient is the lighter sibling of requireLinked: auth only,
 // no link file. Used by org/app/component commands that operate at org
 // scope.
-func requireAuthClient() (*config.Config, *apiclient.Client, error) {
-	cfg, err := config.RequireAuth(serverFlag)
+func requireAuthClient() (*config.Config, *config.Profile, *apiclient.Client, error) {
+	cfg, prof, err := config.RequireAuth(serverFlag, profileFlag)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return cfg, apiclient.New(cfg.Server, cfg.Token), nil
+	return cfg, prof, apiclient.New(prof.Server, prof.Token), nil
 }
 
 // requireActiveOrgClient enforces auth + active org and returns a client.
-func requireActiveOrgClient() (*config.Config, *apiclient.Client, error) {
-	cfg, err := config.RequireActiveOrg(serverFlag)
+func requireActiveOrgClient() (*config.Config, *config.Profile, *apiclient.Client, error) {
+	cfg, prof, err := config.RequireActiveOrg(serverFlag, profileFlag)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return cfg, apiclient.New(cfg.Server, cfg.Token), nil
+	return cfg, prof, apiclient.New(prof.Server, prof.Token), nil
 }
