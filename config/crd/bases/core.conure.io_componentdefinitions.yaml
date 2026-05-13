@@ -41,6 +41,43 @@ spec:
             properties:
               description:
                 type: string
+              engine:
+                description: Engine selects the rendering backend. Empty defaults
+                  to timoni.
+                enum:
+                - timoni
+                - helm
+                type: string
+              helm:
+                description: |-
+                  Helm carries engine-specific configuration when Engine=helm. Ignored
+                  otherwise. Helm charts do not have CUE-style schema validation, so
+                  values typing falls back to whatever values.schema.json the chart ships.
+                properties:
+                  apiVersions:
+                    description: |-
+                      APIVersions adds entries to .Capabilities.APIVersions. The controller's
+                      discovery client supplies the base set; entries here are appended.
+                    items:
+                      type: string
+                    type: array
+                  kubeVersion:
+                    description: |-
+                      KubeVersion overrides .Capabilities.KubeVersion (e.g. "v1.29.0"). When
+                      empty, the controller's discovery client supplies the live cluster
+                      version.
+                    type: string
+                  namespace:
+                    description: |-
+                      Namespace overrides .Release.Namespace. Defaults to the Component's
+                      namespace.
+                    type: string
+                  releaseName:
+                    description: |-
+                      ReleaseName overrides the value used for .Release.Name during template
+                      rendering. Defaults to the Component name.
+                    type: string
+                type: object
               ociDigest:
                 type: string
               ociRegistry:

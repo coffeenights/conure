@@ -124,6 +124,16 @@ type ComponentList struct {
 	Items           []Component `json:"items"`
 }
 
+// ComponentEngine selects which rendering backend handles a ComponentDefinition.
+// Empty defaults to EngineTimoni so existing ComponentDefinitions continue to
+// work without modification.
+type ComponentEngine string
+
+const (
+	EngineTimoni ComponentEngine = "timoni"
+	EngineHelm   ComponentEngine = "helm"
+)
+
 //+kubebuilder:object:root=true
 //+kubebuilder:resource:scope=Cluster
 //+genclient
@@ -139,14 +149,44 @@ type ComponentDefinition struct {
 type ComponentDefinitionSpec struct {
 	ComponentType string `json:"type"`
 	Description   string `json:"description"`
-	OCIRepository string `json:"ociRepository"`
-	OCITag        string `json:"ociTag"`
-	OCIDigest     string `json:"ociDigest"`
-	OCIRegistry   string `json:"ociRegistry,omitempty"`
+	// Engine selects the rendering backend. Empty defaults to timoni.
+	// +kubebuilder:validation:Enum=timoni;helm
+	// +optional
+	Engine        ComponentEngine `json:"engine,omitempty"`
+	OCIRepository string          `json:"ociRepository"`
+	OCITag        string          `json:"ociTag"`
+	OCIDigest     string          `json:"ociDigest"`
+	OCIRegistry   string          `json:"ociRegistry,omitempty"`
 	// RegistrySecretRef references a Secret of type kubernetes.io/dockerconfigjson
 	// in the controller's namespace, used to authenticate with the OCI registry
 	// when pulling the module artifact. Optional; omit for public registries.
 	RegistrySecretRef *corev1.LocalObjectReference `json:"registrySecretRef,omitempty"`
+	// Helm carries engine-specific configuration when Engine=helm. Ignored
+	// otherwise. Helm charts do not have CUE-style schema validation, so
+	// values typing falls back to whatever values.schema.json the chart ships.
+	// +optional
+	Helm *HelmEngineSpec `json:"helm,omitempty"`
+}
+
+// HelmEngineSpec carries Helm-specific render options. All fields are optional.
+type HelmEngineSpec struct {
+	// ReleaseName overrides the value used for .Release.Name during template
+	// rendering. Defaults to the Component name.
+	// +optional
+	ReleaseName string `json:"releaseName,omitempty"`
+	// Namespace overrides .Release.Namespace. Defaults to the Component's
+	// namespace.
+	// +optional
+	Namespace string `json:"namespace,omitempty"`
+	// KubeVersion overrides .Capabilities.KubeVersion (e.g. "v1.29.0"). When
+	// empty, the controller's discovery client supplies the live cluster
+	// version.
+	// +optional
+	KubeVersion string `json:"kubeVersion,omitempty"`
+	// APIVersions adds entries to .Capabilities.APIVersions. The controller's
+	// discovery client supplies the base set; entries here are appended.
+	// +optional
+	APIVersions []string `json:"apiVersions,omitempty"`
 }
 
 //+kubebuilder:object:root=true

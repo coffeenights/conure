@@ -11,13 +11,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strings"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/controller/core/common"
-	"github.com/coffeenights/conure/internal/timoni"
+	"github.com/coffeenights/conure/internal/render"
 	"github.com/go-logr/logr"
-	"github.com/stefanprodan/timoni/pkg/module"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,12 +26,15 @@ import (
 )
 
 type ComponentHandler struct {
-	Component         *conurev1alpha1.Component
-	Reconciler        *ComponentReconciler
-	Ctx               context.Context
-	Logger            logr.Logger
-	componentTemplate timoni.ModuleManager
-	applySet          []*unstructured.Unstructured
+	Component  *conurev1alpha1.Component
+	Reconciler *ComponentReconciler
+	Ctx        context.Context
+	Logger     logr.Logger
+	// engine is the render.Engine selected for this component instance. It is
+	// set by renderComponent (full render path) or ReconcileDeployedObjects
+	// (drift path) before applyResources is invoked.
+	engine   render.Engine
+	applySet []*unstructured.Unstructured
 }
 
 var orderMap = map[string]int{
@@ -80,38 +81,16 @@ func NewComponentHandler(ctx context.Context, component *conurev1alpha1.Componen
 }
 
 func (c *ComponentHandler) renderComponent() error {
-	// Look up the ComponentDefinition by the component's type
-	compDefList := &conurev1alpha1.ComponentDefinitionList{}
-	if err := c.Reconciler.List(c.Ctx, compDefList); err != nil {
-		return fmt.Errorf("failed to list component definitions: %w", err)
-	}
-
-	var compDef *conurev1alpha1.ComponentDefinition
-	for i := range compDefList.Items {
-		if compDefList.Items[i].Spec.ComponentType == c.Component.Spec.ComponentType {
-			compDef = &compDefList.Items[i]
-			break
-		}
-	}
-	if compDef == nil {
-		return fmt.Errorf("component definition not found for type %q", c.Component.Spec.ComponentType)
-	}
-
-	// Transform the values to a map
-	valuesJSON, err := json.Marshal(c.Component.Spec.Values)
+	compDef, err := c.lookupComponentDefinition()
 	if err != nil {
-		c.Logger.Error(err, "failed to marshal component values")
 		return err
 	}
-	values := timoni.Values{}
-	d := json.NewDecoder(strings.NewReader(string(valuesJSON)))
 
-	// Turn numbers into strings, otherwise the decoder will take ints and turn them into floats
-	d.UseNumber()
-	if err = d.Decode(&values); err != nil {
-		c.Logger.Error(err, "failed to decode component values")
+	builder, err := c.Reconciler.SelectBuilder(compDef)
+	if err != nil {
 		return err
 	}
+
 	creds, err := resolveRegistryCredentials(c.Ctx, c.Reconciler.Client, compDef.Spec.RegistrySecretRef, compDef.Spec.OCIRepository)
 	if err != nil {
 		c.Logger.Error(err, "failed to resolve registry credentials", "ociRepository", compDef.Spec.OCIRepository)
@@ -120,22 +99,22 @@ func (c *ComponentHandler) renderComponent() error {
 	if creds == "" {
 		c.Logger.V(1).Info("no registrySecretRef set on ComponentDefinition, attempting anonymous pull", "componentDefinition", compDef.Name, "ociRepository", compDef.Spec.OCIRepository)
 	}
-	mgr, err := module.NewManager(c.Ctx, c.Component.Name, "oci://"+compDef.Spec.OCIRepository, compDef.Spec.OCITag, c.Component.Namespace, creds, false, values.Get())
+
+	eng, err := builder.Build(c.Ctx, compDef, c.Component, creds)
 	if err != nil {
-		c.Logger.Error(err, "failed to initialize template manager", "ociRepository", compDef.Spec.OCIRepository, "ociTag", compDef.Spec.OCITag)
+		c.Logger.Error(err, "failed to initialize render engine", "engine", engineOf(compDef), "ociRepository", compDef.Spec.OCIRepository, "ociTag", compDef.Spec.OCITag)
 		return err
 	}
-	mgr.CacheDir = timoniCacheDir()
-	c.componentTemplate = mgr
-	sets, err := c.componentTemplate.GetApplySets()
+	c.engine = eng
+
+	sets, err := c.engine.Render(c.Ctx)
 	if err != nil {
-		c.Logger.Error(err, "failed to get apply sets")
+		c.Logger.Error(err, "failed to render apply sets")
 		return err
 	}
 
-	// Verify the OCI digest matches the expected value from the ComponentDefinition
 	if compDef.Spec.OCIDigest != "" {
-		resolvedDigest := c.componentTemplate.GetDigest()
+		resolvedDigest := c.engine.Digest()
 		if resolvedDigest != compDef.Spec.OCIDigest {
 			return fmt.Errorf("OCI digest mismatch for component type %q: expected %s, got %s", compDef.Spec.ComponentType, compDef.Spec.OCIDigest, resolvedDigest)
 		}
@@ -160,25 +139,55 @@ func (c *ComponentHandler) renderComponent() error {
 			c.applySet = append(c.applySet, o)
 		}
 	}
-	// Compress, encode and add the sets to the component annotations
-	setsJSON, err := c.componentTemplate.MarshalApplySets(sets)
+
+	if err := c.writeApplySetsAnnotation(engineOf(compDef), sets); err != nil {
+		return err
+	}
+	return nil
+}
+
+// lookupComponentDefinition finds the ComponentDefinition matching the
+// component's spec.type. Returns an error if no definition matches.
+func (c *ComponentHandler) lookupComponentDefinition() (*conurev1alpha1.ComponentDefinition, error) {
+	compDefList := &conurev1alpha1.ComponentDefinitionList{}
+	if err := c.Reconciler.List(c.Ctx, compDefList); err != nil {
+		return nil, fmt.Errorf("failed to list component definitions: %w", err)
+	}
+	for i := range compDefList.Items {
+		if compDefList.Items[i].Spec.ComponentType == c.Component.Spec.ComponentType {
+			return &compDefList.Items[i], nil
+		}
+	}
+	return nil, fmt.Errorf("component definition not found for type %q", c.Component.Spec.ComponentType)
+}
+
+// writeApplySetsAnnotation marshals the apply sets through the engine, wraps
+// them in the versioned envelope tagged with the engine identifier, compresses
+// and base64-encodes the result, and persists it under
+// ApplySetsAnnotation. The envelope lets the drift sweep dispatch
+// UnmarshalApplySets to the right adapter on the next reconcile.
+func (c *ComponentHandler) writeApplySetsAnnotation(engineName conurev1alpha1.ComponentEngine, sets []render.ResourceSet) error {
+	setsJSON, err := c.engine.MarshalApplySets(sets)
 	if err != nil {
 		c.Logger.Error(err, "failed to marshal apply sets")
 		return err
 	}
+	envelope, err := render.WrapEnvelope(engineName, setsJSON)
+	if err != nil {
+		c.Logger.Error(err, "failed to wrap apply-set envelope")
+		return err
+	}
 	var buf bytes.Buffer
 	gzipWriter := gzip.NewWriter(&buf)
-	_, err = gzipWriter.Write(setsJSON)
-	if err != nil {
+	if _, err := gzipWriter.Write(envelope); err != nil {
 		c.Logger.Error(err, "failed to compress apply sets")
 		return err
 	}
-	if err = gzipWriter.Close(); err != nil {
+	if err := gzipWriter.Close(); err != nil {
 		c.Logger.Error(err, "failed to close gzip writer")
 		return err
 	}
-	compressedData := buf.Bytes()
-	setsBase64 := base64.StdEncoding.EncodeToString(compressedData)
+	setsBase64 := base64.StdEncoding.EncodeToString(buf.Bytes())
 	if c.Component.Annotations == nil {
 		c.Component.Annotations = make(map[string]string)
 	}
@@ -193,7 +202,7 @@ func (c *ComponentHandler) renderComponent() error {
 		c.Logger.Error(err, "failed to marshal annotation patch")
 		return err
 	}
-	if err = c.Reconciler.Patch(c.Ctx, c.Component, client.RawPatch(types.MergePatchType, patchBytes)); err != nil {
+	if err := c.Reconciler.Patch(c.Ctx, c.Component, client.RawPatch(types.MergePatchType, patchBytes)); err != nil {
 		c.Logger.Error(err, "failed to patch component annotations")
 		return err
 	}
@@ -300,7 +309,7 @@ func (c *ComponentHandler) applyResources() error {
 
 	for _, resource := range c.applySet {
 		resource.SetOwnerReferences([]metav1.OwnerReference{ownerRef})
-		if _, err := c.componentTemplate.ApplyObject(resource, false); err != nil {
+		if _, err := c.engine.ApplyObject(c.Ctx, resource, false); err != nil {
 			c.Logger.Error(err, "failed to apply resource", "kind", resource.GetKind(), "name", resource.GetName(), "namespace", resource.GetNamespace())
 			return fmt.Errorf("failed to apply %s/%s: %w", resource.GetKind(), resource.GetName(), err)
 		}
@@ -311,42 +320,60 @@ func (c *ComponentHandler) applyResources() error {
 }
 
 func (c *ComponentHandler) ReconcileDeployedObjects() error {
-	if c.componentTemplate == nil {
-		manager, err := module.NewManager(c.Ctx, c.Component.Name, "", "", c.Component.Namespace, "", true, map[string]interface{}{})
-		if err != nil {
-			c.Logger.Error(err, "failed to initialize template manager for reconciliation")
-			return err
-		}
-		c.componentTemplate = manager
+	annotations := c.Component.GetAnnotations()
+	rawAnn := annotations[conurev1alpha1.ApplySetsAnnotation]
+	if rawAnn == "" {
+		return nil
 	}
 
-	annotations := c.Component.GetAnnotations()
-	if annotations[conurev1alpha1.ApplySetsAnnotation] != "" {
-		decoded, err := base64.StdEncoding.DecodeString(annotations[conurev1alpha1.ApplySetsAnnotation])
-		if err != nil {
-			c.Logger.Error(err, "failed to decode apply sets annotation")
-			return err
-		}
-		reader, err := gzip.NewReader(bytes.NewReader(decoded))
-		if err != nil {
-			c.Logger.Error(err, "failed to decompress apply sets")
-			return err
-		}
-		defer reader.Close()
+	decoded, err := base64.StdEncoding.DecodeString(rawAnn)
+	if err != nil {
+		c.Logger.Error(err, "failed to decode apply sets annotation")
+		return err
+	}
+	reader, err := gzip.NewReader(bytes.NewReader(decoded))
+	if err != nil {
+		c.Logger.Error(err, "failed to decompress apply sets")
+		return err
+	}
+	defer reader.Close()
 
-		setsJSON, err := io.ReadAll(reader)
+	envelopeBytes, err := io.ReadAll(reader)
+	if err != nil {
+		c.Logger.Error(err, "failed to read decompressed apply sets")
+		return err
+	}
+
+	engineName, payload, err := render.ParseEnvelope(envelopeBytes)
+	if err != nil {
+		c.Logger.Error(err, "failed to parse apply-set envelope")
+		return err
+	}
+
+	// The engine field on the handler may already be set (tests pre-populate
+	// it to inject a mock). When not set, dispatch on the envelope-declared
+	// engine so the drift sweep applies through the same adapter that
+	// originally rendered the cached set.
+	if c.engine == nil {
+		builder, err := c.Reconciler.SelectBuilderByEngine(engineName)
 		if err != nil {
-			c.Logger.Error(err, "failed to read decompressed apply sets")
 			return err
 		}
-		sets, err := c.componentTemplate.UnmarshalApplySets(setsJSON)
+		eng, err := builder.BuildForApply(c.Ctx, c.Component)
 		if err != nil {
-			c.Logger.Error(err, "failed to unmarshal apply sets")
+			c.Logger.Error(err, "failed to initialize engine for drift sweep", "engine", engineName)
 			return err
 		}
-		for _, set := range sets {
-			c.applySet = append(c.applySet, set.Objects...)
-		}
+		c.engine = eng
+	}
+
+	sets, err := c.engine.UnmarshalApplySets(payload)
+	if err != nil {
+		c.Logger.Error(err, "failed to unmarshal apply sets")
+		return err
+	}
+	for _, set := range sets {
+		c.applySet = append(c.applySet, set.Objects...)
 	}
 	if c.applySet == nil {
 		return nil

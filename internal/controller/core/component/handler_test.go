@@ -10,9 +10,8 @@ import (
 	"testing"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
-	"github.com/coffeenights/conure/internal/timoni"
+	"github.com/coffeenights/conure/internal/render"
 	"github.com/fluxcd/pkg/ssa"
-	"github.com/stefanprodan/timoni/pkg/module"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,9 +41,10 @@ func newFakeClientWithStatusUpdateCounter(counter *int, objs ...client.Object) c
 		Build()
 }
 
-// mockModuleManager implements timoni.ModuleManager for testing.
-type mockModuleManager struct {
-	applySets    []module.ResourceSet
+// mockEngine implements render.Engine for testing the handler in isolation
+// from any OCI pull / template rendering / SSA apply.
+type mockEngine struct {
+	applySets    []render.ResourceSet
 	applyErr     error
 	marshalErr   error
 	unmarshalErr error
@@ -53,31 +53,33 @@ type mockModuleManager struct {
 	digest       string
 }
 
-func (m *mockModuleManager) GetApplySets() ([]module.ResourceSet, error) {
+func (m *mockEngine) Render(ctx context.Context) ([]render.ResourceSet, error) {
 	return m.applySets, m.applyErr
 }
 
-func (m *mockModuleManager) GetDigest() string {
+func (m *mockEngine) Digest() string {
 	return m.digest
 }
 
-func (m *mockModuleManager) MarshalApplySets(sets []module.ResourceSet) ([]byte, error) {
+func (m *mockEngine) MarshalApplySets(sets []render.ResourceSet) ([]byte, error) {
 	if m.marshalErr != nil {
 		return nil, m.marshalErr
 	}
 	return json.Marshal(sets)
 }
 
-func (m *mockModuleManager) UnmarshalApplySets(data []byte) ([]module.ResourceSet, error) {
+func (m *mockEngine) UnmarshalApplySets(data []byte) ([]render.ResourceSet, error) {
 	if m.unmarshalErr != nil {
 		return nil, m.unmarshalErr
 	}
-	var sets []module.ResourceSet
-	err := json.Unmarshal(data, &sets)
-	return sets, err
+	var sets []render.ResourceSet
+	if err := json.Unmarshal(data, &sets); err != nil {
+		return nil, err
+	}
+	return sets, nil
 }
 
-func (m *mockModuleManager) ApplyObject(resource *unstructured.Unstructured, force bool) (*ssa.ChangeSetEntry, error) {
+func (m *mockEngine) ApplyObject(ctx context.Context, resource *unstructured.Unstructured, force bool) (*ssa.ChangeSetEntry, error) {
 	if m.applyObjErr != nil {
 		return nil, m.applyObjErr
 	}
@@ -314,8 +316,8 @@ func TestApplyResources_OrdersByKind(t *testing.T) {
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
 
-	mock := &mockModuleManager{}
-	handler.componentTemplate = mock
+	mock := &mockEngine{}
+	handler.engine = mock
 
 	// Add resources in wrong order
 	deployment := &unstructured.Unstructured{}
@@ -363,8 +365,8 @@ func TestApplyResources_ReturnsErrorWithoutSettingCondition(t *testing.T) {
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
 
-	mock := &mockModuleManager{applyObjErr: fmt.Errorf("apply failed")}
-	handler.componentTemplate = mock
+	mock := &mockEngine{applyObjErr: fmt.Errorf("apply failed")}
+	handler.engine = mock
 
 	obj := &unstructured.Unstructured{}
 	obj.SetKind("Deployment")
@@ -383,7 +385,7 @@ func TestApplyResources_ReturnsErrorWithoutSettingCondition(t *testing.T) {
 }
 
 // helper: compress and base64-encode apply sets for annotation
-func encodeApplySets(t *testing.T, sets []module.ResourceSet) string {
+func encodeApplySets(t *testing.T, sets []render.ResourceSet) string {
 	t.Helper()
 	data, err := json.Marshal(sets)
 	if err != nil {
@@ -431,16 +433,16 @@ func TestReconcileDeployedObjects_ReAppliesCachedResources(t *testing.T) {
 			"spec": map[string]interface{}{},
 		},
 	}
-	encoded := encodeApplySets(t, []module.ResourceSet{
+	encoded := encodeApplySets(t, []render.ResourceSet{
 		{Name: "main", Objects: []*unstructured.Unstructured{deploy, svc}},
 	})
 
 	comp := newTestComponent("web", "default", "webservice")
 	comp.Annotations = map[string]string{conurev1alpha1.ApplySetsAnnotation: encoded}
 
-	mock := &mockModuleManager{}
+	mock := &mockEngine{}
 	handler := newTestHandler(ctx, newFakeClient(comp), comp)
-	handler.componentTemplate = mock
+	handler.engine = mock
 
 	if err := handler.ReconcileDeployedObjects(); err != nil {
 		t.Fatalf("ReconcileDeployedObjects failed: %v", err)
@@ -471,7 +473,7 @@ func TestReconcileDeployedObjects_DriftFailureFlipsDeployedCondition(t *testing.
 			"spec":       map[string]interface{}{},
 		},
 	}
-	encoded := encodeApplySets(t, []module.ResourceSet{
+	encoded := encodeApplySets(t, []render.ResourceSet{
 		{Name: "main", Objects: []*unstructured.Unstructured{obj}},
 	})
 
@@ -486,9 +488,9 @@ func TestReconcileDeployedObjects_DriftFailureFlipsDeployedCondition(t *testing.
 		},
 	}
 
-	mock := &mockModuleManager{applyObjErr: fmt.Errorf("apiserver said no")}
+	mock := &mockEngine{applyObjErr: fmt.Errorf("apiserver said no")}
 	handler := newTestHandler(ctx, newFakeClient(comp), comp)
-	handler.componentTemplate = mock
+	handler.engine = mock
 
 	if err := handler.ReconcileDeployedObjects(); err == nil {
 		t.Fatal("expected ReconcileDeployedObjects to surface the apply error")
@@ -513,7 +515,7 @@ func TestReconcileDeployedObjects_NoAnnotation(t *testing.T) {
 	comp := newTestComponent("web", "default", "webservice")
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
-	handler.componentTemplate = &mockModuleManager{}
+	handler.engine = &mockEngine{}
 
 	err := handler.ReconcileDeployedObjects()
 	if err != nil {
@@ -539,7 +541,7 @@ func TestReconcileDeployedObjects_DecodesAndApplies(t *testing.T) {
 			"spec": map[string]interface{}{},
 		},
 	}
-	sets := []module.ResourceSet{
+	sets := []render.ResourceSet{
 		{Name: "main", Objects: []*unstructured.Unstructured{obj}},
 	}
 	encoded := encodeApplySets(t, sets)
@@ -549,12 +551,12 @@ func TestReconcileDeployedObjects_DecodesAndApplies(t *testing.T) {
 		conurev1alpha1.ApplySetsAnnotation: encoded,
 	}
 
-	mock := &mockModuleManager{}
+	mock := &mockEngine{}
 	// ReconcileDeployedObjects calls module.NewManager internally for the real apply,
 	// but we can test the decode path by pre-setting componentTemplate
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
-	handler.componentTemplate = mock
+	handler.engine = mock
 
 	// The method will decode the annotation, unmarshal via mock, then try to create
 	// a new module.Manager for applying. Since we can't mock that call, we verify
@@ -598,8 +600,8 @@ func TestApplyResources_SetsOwnerReferences(t *testing.T) {
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
 
-	mock := &mockModuleManager{}
-	handler.componentTemplate = mock
+	mock := &mockEngine{}
+	handler.engine = mock
 
 	deployment := &unstructured.Unstructured{}
 	deployment.SetKind("Deployment")
@@ -645,4 +647,4 @@ func TestApplyResources_SetsOwnerReferences(t *testing.T) {
 }
 
 // Verify the interface is satisfied by the mock at compile time.
-var _ timoni.ModuleManager = (*mockModuleManager)(nil)
+var _ render.Engine = (*mockEngine)(nil)

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
-	"github.com/stefanprodan/timoni/pkg/module"
+	"github.com/coffeenights/conure/internal/render"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -136,7 +136,7 @@ func TestReconcile_DoesWorkWhenGenerationDrifts(t *testing.T) {
 // resources. Only the expensive OCI pull + render path stays gated by the
 // steady-state guard.
 //
-// We prove this by injecting a mock componentTemplate that records every
+// We prove this by injecting a mock engine that records every
 // ApplyObject call and seeding the Component with a cached apply-set in
 // its annotation. After Reconcile, the cached resources should have been
 // re-applied; meanwhile the steady-state Ready=True condition must remain
@@ -154,7 +154,7 @@ func TestReconcile_RunsDriftDetectionInSteadyState(t *testing.T) {
 			"spec":       map[string]interface{}{},
 		},
 	}
-	encoded := encodeApplySets(t, []module.ResourceSet{
+	encoded := encodeApplySets(t, []render.ResourceSet{
 		{Name: "main", Objects: []*unstructured.Unstructured{deploy}},
 	})
 
@@ -163,13 +163,13 @@ func TestReconcile_RunsDriftDetectionInSteadyState(t *testing.T) {
 	comp.Annotations = map[string]string{conurev1alpha1.ApplySetsAnnotation: encoded}
 
 	c := newFakeClient(comp)
-	mock := &mockModuleManager{}
+	mock := &mockEngine{}
 	r := &ComponentReconciler{
 		Client: c,
 		Scheme: newTestScheme(),
 		newHandler: func(ctx context.Context, comp *conurev1alpha1.Component, recon *ComponentReconciler) *ComponentHandler {
 			h := NewComponentHandler(ctx, comp, recon)
-			h.componentTemplate = mock
+			h.engine = mock
 			return h
 		},
 	}
