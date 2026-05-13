@@ -134,6 +134,8 @@ func init() {
 	revisionPromoteCmd.Flags().String("to", "", "Target environment (required)")
 	_ = revisionPromoteCmd.MarkFlagRequired("to")
 	addEnvFlag(revisionDraftEditCmd)
+	revisionDraftEditCmd.Flags().StringP("comment", "m", "",
+		"Optional note attached to the draft (shown in `revision list`)")
 	addEnvFlag(revisionShowCmd)
 	revisionShowCmd.Flags().Bool("values-only", false,
 		"Print just the values map (drops metadata like id, version, status)")
@@ -142,6 +144,8 @@ func init() {
 		"Path to a JSON or YAML values file (use - for stdin)")
 	revisionCreateCmd.Flags().String("format", "",
 		"Override format detection: json or yaml (default: by extension, yaml for stdin)")
+	revisionCreateCmd.Flags().StringP("comment", "m", "",
+		"Optional note attached to the draft (shown in `revision list`)")
 	_ = revisionCreateCmd.MarkFlagRequired("file")
 
 	revisionDraftCmd.AddCommand(revisionDraftEditCmd)
@@ -161,6 +165,8 @@ func init() {
 	promoteAliasCmd.Flags().String("to", "", "Target environment (required)")
 	_ = promoteAliasCmd.MarkFlagRequired("to")
 	addEnvFlag(draftEditAliasCmd)
+	draftEditAliasCmd.Flags().StringP("comment", "m", "",
+		"Optional note attached to the draft (shown in `revision list`)")
 	draftAliasCmd.AddCommand(draftEditAliasCmd)
 	rootCmd.AddCommand(historyAliasCmd)
 	rootCmd.AddCommand(rollbackAliasCmd)
@@ -188,9 +194,13 @@ func runRevisionList(cmd *cobra.Command, _ []string) error {
 			if r.DeployedAt != nil {
 				deployedAt = r.DeployedAt.Format("2006-01-02 15:04:05")
 			}
-			rows[i] = []string{fmt.Sprintf("v%d", r.Version), r.Status, deployedAt, r.ID}
+			comment := r.Comment
+			if comment == "" {
+				comment = "-"
+			}
+			rows[i] = []string{fmt.Sprintf("v%d", r.Version), r.Status, deployedAt, r.ID, comment}
 		}
-		ui.RenderTable([]string{"VERSION", "STATUS", "DEPLOYED AT", "REVISION ID"}, rows, nil)
+		ui.RenderTable([]string{"VERSION", "STATUS", "DEPLOYED AT", "REVISION ID", "COMMENT"}, rows, nil)
 		return nil
 	})
 }
@@ -312,14 +322,15 @@ func runRevisionDraftEdit(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("edited file is not valid JSON: %w", err)
 	}
 
+	comment, _ := cmd.Flags().GetString("comment")
 	if draftRevID != "" {
-		rev, err := lc.Client.UpdateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, draftRevID, newValues)
+		rev, err := lc.Client.UpdateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, draftRevID, newValues, comment)
 		if err != nil {
 			return err
 		}
 		ui.Success("✓ Updated draft v%d\n", rev.Version)
 	} else {
-		rev, err := lc.Client.CreateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, newValues)
+		rev, err := lc.Client.CreateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, newValues, comment)
 		if err != nil {
 			return err
 		}
@@ -410,6 +421,7 @@ func runRevisionCreate(cmd *cobra.Command, _ []string) error {
 	}
 	path, _ := cmd.Flags().GetString("file")
 	formatOverride, _ := cmd.Flags().GetString("format")
+	comment, _ := cmd.Flags().GetString("comment")
 
 	values, err := loadValuesFile(path, formatOverride)
 	if err != nil {
@@ -417,7 +429,7 @@ func runRevisionCreate(cmd *cobra.Command, _ []string) error {
 	}
 
 	sp := ui.StartSpinner("Creating draft…")
-	rev, err := lc.Client.CreateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, values)
+	rev, err := lc.Client.CreateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, values, comment)
 	ui.StopSpinner(sp)
 	if err != nil {
 		return err

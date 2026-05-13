@@ -10,6 +10,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
@@ -38,10 +39,14 @@ func (r *ComponentReconciler) handlerFor(ctx context.Context, c *conurev1alpha1.
 //+kubebuilder:rbac:groups=core.conure.io,resources=applications/finalizers,verbs=update
 
 // isReconciledUpToDate returns true when the component's spec.generation has
-// already been observed and the Ready rollup is True. When this returns true,
-// the reconciler can skip rendering and applying.
+// already been observed, the restart annotation matches the last observed
+// value, and the Ready rollup is True. When this returns true, the reconciler
+// can skip rendering and applying.
 func isReconciledUpToDate(c *conurev1alpha1.Component) bool {
 	if c.Status.ObservedGeneration != c.Generation {
+		return false
+	}
+	if c.Status.ObservedRestartedAt != c.GetAnnotations()[conurev1alpha1.RestartedAtAnnotation] {
 		return false
 	}
 	idx, ok := common.ContainsCondition(c.Status.Conditions, conurev1alpha1.ComponentConditionTypeReady.String())
@@ -85,13 +90,34 @@ func (r *ComponentReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	return ctrl.Result{RequeueAfter: RequeueAfter}, nil
 }
 
+// restartAnnotationChangedPredicate fires only when the restart annotation
+// value differs between old and new. Combined with GenerationChangedPredicate,
+// it lets a metadata-only restart wake the reconciler without also reacting
+// to every other annotation write (e.g. the controller's own ApplySets patch).
+type restartAnnotationChangedPredicate struct {
+	predicate.Funcs
+}
+
+func (restartAnnotationChangedPredicate) Update(e event.UpdateEvent) bool {
+	if e.ObjectOld == nil || e.ObjectNew == nil {
+		return false
+	}
+	return e.ObjectOld.GetAnnotations()[conurev1alpha1.RestartedAtAnnotation] !=
+		e.ObjectNew.GetAnnotations()[conurev1alpha1.RestartedAtAnnotation]
+}
+
 // SetupWithManager sets up the controller with the Manager. Status-only
 // updates are filtered via GenerationChangedPredicate so that the reconciler's
-// own status patches don't trigger fresh reconciles.
+// own status patches don't trigger fresh reconciles. Restart-annotation
+// changes are admitted through a sibling predicate so a metadata-only restart
+// still wakes the reconciler.
 func (r *ComponentReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&conurev1alpha1.Component{}).
-		WithEventFilter(predicate.GenerationChangedPredicate{}).
+		WithEventFilter(predicate.Or(
+			predicate.GenerationChangedPredicate{},
+			restartAnnotationChangedPredicate{},
+		)).
 		Complete(r)
 }
 

@@ -239,10 +239,10 @@ func TestClient_Endpoints(t *testing.T) {
 			bodyReturn:  `{"id":"r2","version":2,"status":"draft"}`,
 			wantMethod:  http.MethodPost,
 			wantPath:    "/organizations/o1/a/a1/e/production/c/c1/revisions",
-			wantReqBody: `{"values":{"replicas":3}}`,
+			wantReqBody: `{"values":{"replicas":3},"comment":"bump replicas"}`,
 			run: func(c *Client) error {
 				_, err := c.CreateRevision(context.Background(), "o1", "a1", "production", "c1",
-					map[string]interface{}{"replicas": 3})
+					map[string]interface{}{"replicas": 3}, "bump replicas")
 				return err
 			},
 		},
@@ -254,7 +254,17 @@ func TestClient_Endpoints(t *testing.T) {
 			wantReqBody: `{"values":{"replicas":4}}`,
 			run: func(c *Client) error {
 				_, err := c.UpdateRevision(context.Background(), "o1", "a1", "production", "c1", "r2",
-					map[string]interface{}{"replicas": 4})
+					map[string]interface{}{"replicas": 4}, "")
+				return err
+			},
+		},
+		{
+			name:       "RestartComponent",
+			bodyReturn: `{"id":"r9","version":9,"status":"deployed","comment":"Restart at 2026-05-13T12:00:00Z"}`,
+			wantMethod: http.MethodPost,
+			wantPath:   "/organizations/o1/a/a1/e/production/c/c1/restart",
+			run: func(c *Client) error {
+				_, err := c.RestartComponent(context.Background(), "o1", "a1", "production", "c1")
 				return err
 			},
 		},

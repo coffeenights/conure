@@ -145,10 +145,14 @@ func (c *ComponentHandler) renderComponent() error {
 	// templates of workload kinds), then add the spec hash. Labels must be
 	// applied before hashing so the hash reflects the final spec.
 	conureLabels := common.SelectConureLabels(c.Component.GetLabels())
+	restartAnnotations := common.SelectRestartAnnotations(c.Component.GetAnnotations())
 	for _, set := range sets {
 		for _, o := range set.Objects {
 			if err := common.PropagateLabelsToRendered(o, conureLabels); err != nil {
 				return fmt.Errorf("propagating conure labels to %s/%s: %w", o.GetKind(), o.GetName(), err)
+			}
+			if err := common.PropagateAnnotationsToPodTemplate(o, restartAnnotations); err != nil {
+				return fmt.Errorf("propagating restart annotations to %s/%s: %w", o.GetKind(), o.GetName(), err)
 			}
 			hash := common.GetHashForSpec(o.Object["spec"].(map[string]interface{}))
 			labels := common.SetHashToLabels(o.GetLabels(), hash)
@@ -270,6 +274,7 @@ func (c *ComponentHandler) RenderComponent() error {
 	_ = c.bufferCondition(conurev1alpha1.ComponentConditionTypeDeployed, metav1.ConditionTrue, conurev1alpha1.ComponentReasonSucceeded, "Component deployed successfully")
 	c.rollupReady()
 	c.Component.Status.ObservedGeneration = c.Component.Generation
+	c.Component.Status.ObservedRestartedAt = c.Component.GetAnnotations()[conurev1alpha1.RestartedAtAnnotation]
 	return c.flushStatus()
 }
 

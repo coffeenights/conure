@@ -99,7 +99,7 @@ func TestComponentRevision_MarkDeployedIsImmutable(t *testing.T) {
 		t.Errorf("expected ErrObjectNotFound on second MarkDeployed, got %v", err)
 	}
 	// UpdateDraft on a deployed rev must be rejected.
-	err = rev.UpdateDraft(ctx, db, map[string]interface{}{"x": 1})
+	err = rev.UpdateDraft(ctx, db, map[string]interface{}{"x": 1}, "")
 	if !errors.Is(err, conureerrors.ErrNotAllowed) {
 		t.Errorf("expected ErrNotAllowed on UpdateDraft of deployed, got %v", err)
 	}

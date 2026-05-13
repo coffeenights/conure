@@ -9,6 +9,11 @@ import (
 const ComponentKind = "Component"
 const (
 	ApplySetsAnnotation = "conure.io/apply-sets"
+	// RestartedAtAnnotation, when set on a Component, is propagated into the
+	// pod-template annotations of every rendered workload (Deployment,
+	// StatefulSet, etc.). Bumping it triggers a rolling restart of pods —
+	// component types without a pod template simply ignore it.
+	RestartedAtAnnotation = "conure.io/restartedAt"
 )
 
 type ComponentConditionType string
@@ -77,6 +82,12 @@ type ComponentStatus struct {
 	// metadata.generation matches this value and the component is in a
 	// terminal-success condition.
 	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// ObservedRestartedAt is the value of the conure.io/restartedAt
+	// annotation at the time of the last successful render. A restart is a
+	// metadata-only change (no spec/generation bump), so the reconciler
+	// uses this field to detect that the annotation has moved and a fresh
+	// render is needed to propagate it into pod templates.
+	ObservedRestartedAt string `json:"observedRestartedAt,omitempty"`
 }
 
 //+kubebuilder:object:root=true

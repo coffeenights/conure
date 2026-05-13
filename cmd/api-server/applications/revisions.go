@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -292,6 +293,58 @@ func (a *ApiHandler) DeployRevisionByID(c *gin.Context) {
 	c.JSON(http.StatusOK, newRev)
 }
 
+// RestartComponent triggers a rolling restart of the component's workload by
+// stamping a fresh conure.io/restartedAt annotation on the Component CRD,
+// re-applying the latest deployed values, and recording a new deployed
+// revision (auto-commented "Restart at <ts>") so the action shows up in
+// history.
+//
+// Component types without a pod template are a silent no-op: the annotation
+// lands on the Component but the rendered manifests have nowhere to put it.
+//
+// Path: POST /:orgID/a/:appID/e/:env/c/:componentID/restart
+func (a *ApiHandler) RestartComponent(c *gin.Context) {
+	handler, component, env, ok := loadComponentEnv(c, a)
+	if !ok {
+		return
+	}
+
+	ctx := c.Request.Context()
+	deployed, err := models.LatestDeployed(ctx, a.MongoDB, component.ID, env.ID)
+	if err != nil {
+		if errors.Is(err, conureerrors.ErrObjectNotFound) {
+			conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+			return
+		}
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	restartedAt := time.Now().UTC().Format(time.RFC3339)
+	if err := applyRevisionToK8sWithAnnotations(ctx, a, handler.Model, env, component, deployed.Values, map[string]string{
+		conurev1alpha1.RestartedAtAnnotation: restartedAt,
+	}); err != nil {
+		log.Printf("Error applying restart to K8s: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
+	uID := c.MustGet("currentUser").(models.User).ID
+	newRev := &models.ComponentRevision{
+		ComponentID:   component.ID,
+		EnvironmentID: env.ID,
+		Values:        deployed.Values,
+		Comment:       fmt.Sprintf("Restart at %s", restartedAt),
+		CreatedBy:     uID,
+	}
+	if err := newRev.CreateDeployed(ctx, a.MongoDB); err != nil {
+		log.Printf("Error inserting restart revision: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, newRev)
+}
+
 // UninstallFromEnv deletes the live Component CRD plus its variables
 // ConfigMap/Secret in the env namespace and purges all draft revisions for
 // the pair. Deployed history is retained.
@@ -414,6 +467,14 @@ func loadComponentEnv(c *gin.Context, a *ApiHandler) (*ApplicationHandler, *mode
 // applies it through the conure provider. Shared by DeployRevision,
 // DeployRevisionByID, and the bulk deploy.
 func applyRevisionToK8s(ctx context.Context, a *ApiHandler, application *models.Application, env *models.Environment, component *models.Component, values map[string]interface{}) error {
+	return applyRevisionToK8sWithAnnotations(ctx, a, application, env, component, values, nil)
+}
+
+// applyRevisionToK8sWithAnnotations is the same as applyRevisionToK8s but
+// merges extra annotations onto the Component CRD's metadata before apply.
+// Used by RestartComponent to stamp conure.io/restartedAt; could be reused
+// later for any one-shot annotation-driven trigger.
+func applyRevisionToK8sWithAnnotations(ctx context.Context, a *ApiHandler, application *models.Application, env *models.Environment, component *models.Component, values map[string]interface{}, extraAnnotations map[string]string) error {
 	cv, err := gatherVariables(a.MongoDB, application, env, component, a.KeyStorage)
 	if err != nil {
 		return err
@@ -422,6 +483,14 @@ func applyRevisionToK8s(ctx context.Context, a *ApiHandler, application *models.
 	componentCRD, err := BuildComponentCRD(application, env, component, values)
 	if err != nil {
 		return err
+	}
+	if len(extraAnnotations) > 0 {
+		if componentCRD.Annotations == nil {
+			componentCRD.Annotations = map[string]string{}
+		}
+		for k, v := range extraAnnotations {
+			componentCRD.Annotations[k] = v
+		}
 	}
 	provider := newConureProvider(application, env)
 	return provider.ApplyComponent(ctx, app, componentCRD, cv)

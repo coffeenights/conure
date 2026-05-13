@@ -29,9 +29,22 @@ linked to. Does not change the link — the linked component stays the same.`,
 	RunE: runComponentAdd,
 }
 
+var componentRestartCmd = &cobra.Command{
+	Use:   "restart",
+	Short: "Trigger a rolling restart of the linked component in this env",
+	Long: `Stamps a fresh conure.io/restartedAt annotation on the Component CRD,
+re-applies the latest deployed revision, and records a new deployed
+revision in history (auto-commented "Restart at <ts>"). Component types
+without a pod template (e.g. pure config) are a silent no-op.`,
+	RunE: runComponentRestart,
+}
+
 func init() {
+	addEnvFlag(componentRestartCmd)
+	componentRestartCmd.Flags().Bool("approve", false, "Skip the confirmation prompt")
 	componentCmd.AddCommand(componentListCmd)
 	componentCmd.AddCommand(componentAddCmd)
+	componentCmd.AddCommand(componentRestartCmd)
 	rootCmd.AddCommand(componentCmd)
 }
 
@@ -106,5 +119,39 @@ func runComponentAdd(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	ui.InfoLn("  This directory's link is unchanged. Use the UI or another repo to manage this component.")
+	return nil
+}
+
+func runComponentRestart(cmd *cobra.Command, _ []string) error {
+	lc, err := requireLinked(cmd)
+	if err != nil {
+		return err
+	}
+	approve, _ := cmd.Flags().GetBool("approve")
+	if !approve {
+		ui.Error("This will roll pods of `%s` in `%s` — in-flight requests on existing pods may be interrupted.\n", lc.Link.ComponentName, lc.Env)
+		var ok bool
+		if err := huh.NewConfirm().
+			Title(fmt.Sprintf("Restart %s in %s?", lc.Link.ComponentName, lc.Env)).
+			Affirmative("Restart").
+			Negative("Cancel").
+			Value(&ok).
+			Run(); err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("aborted")
+		}
+	}
+	sp := ui.StartSpinner(fmt.Sprintf("Restarting `%s` in `%s`…", lc.Link.ComponentName, lc.Env))
+	rev, err := lc.Client.RestartComponent(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
+	ui.StopSpinner(sp)
+	if err != nil {
+		return err
+	}
+	ui.Success("✓ Restart recorded as v%d (%s)\n", rev.Version, rev.ID)
+	if rev.Comment != "" {
+		ui.InfoLn("  " + rev.Comment)
+	}
 	return nil
 }

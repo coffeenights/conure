@@ -41,6 +41,7 @@ func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *ApiHandler) 
 		applications.POST("/:organizationID/a/:applicationID/e/:environment/c/:componentID/deploy", appHandler.DeployRevision)
 		applications.POST("/:organizationID/a/:applicationID/e/:environment/c/:componentID/revisions/:revID/deploy", appHandler.DeployRevisionByID)
 		applications.POST("/:organizationID/a/:applicationID/e/:environment/c/:componentID/uninstall", appHandler.UninstallFromEnv)
+		applications.POST("/:organizationID/a/:applicationID/e/:environment/c/:componentID/restart", appHandler.RestartComponent)
 
 		// Pod-level reads --------------------------------------------------
 		applications.GET("/:organizationID/a/:applicationID/e/:environment/c/:componentID/pods", appHandler.ListComponentPods)

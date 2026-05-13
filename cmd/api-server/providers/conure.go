@@ -115,12 +115,39 @@ func (p *ProviderDispatcherConure) ApplyComponent(ctx context.Context, app *conu
 		return err
 	}
 	component.ResourceVersion = existing.ResourceVersion
+	preserveAnnotations(existing, component)
 	_, err = components.Update(ctx, component, metav1.UpdateOptions{})
 	if err != nil {
 		return err
 	}
 	log.Printf("Updated component %q in %s\n", component.Name, p.Namespace)
 	return nil
+}
+
+// preserveAnnotations copies conure-managed annotations that the API server
+// doesn't recompute each deploy from the existing Component onto the new
+// one. Without this, a normal deploy would wipe the restart trigger and the
+// next reconcile would silently drop the restartedAt annotation from the
+// rendered pod templates. The restart endpoint sets the annotation on
+// `component` itself, so the explicit value always wins over the carried one.
+func preserveAnnotations(existing, component *conurev1alpha1.Component) {
+	src := existing.GetAnnotations()
+	if len(src) == 0 {
+		return
+	}
+	for _, key := range []string{conurev1alpha1.RestartedAtAnnotation} {
+		val, ok := src[key]
+		if !ok || val == "" {
+			continue
+		}
+		if component.Annotations == nil {
+			component.Annotations = map[string]string{}
+		}
+		if _, alreadySet := component.Annotations[key]; alreadySet {
+			continue
+		}
+		component.Annotations[key] = val
+	}
 }
 
 // DeleteComponentCRD removes the Component CRD in the env namespace, plus
