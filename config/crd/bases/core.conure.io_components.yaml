@@ -114,6 +114,14 @@ spec:
                   terminal-success condition.
                 format: int64
                 type: integer
+              observedRestartedAt:
+                description: |-
+                  ObservedRestartedAt is the value of the conure.io/restartedAt
+                  annotation at the time of the last successful render. A restart is a
+                  metadata-only change (no spec/generation bump), so the reconciler
+                  uses this field to detect that the annotation has moved and a fresh
+                  render is needed to propagate it into pod templates.
+                type: string
             required:
             - conditions
             type: object
