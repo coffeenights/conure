@@ -17,7 +17,7 @@ type Model struct {
 	ID        primitive.ObjectID `bson:"_id" json:"id"`
 	CreatedAt time.Time          `bson:"createdAt,omitempty" json:"created_at"`
 	UpdatedAt time.Time          `bson:"updatedAt,omitempty" json:"updated_at"`
-	DeleteAt  time.Time          `bson:"deletedAt,omitempty" json:"-"`
+	DeletedAt time.Time          `bson:"deletedAt,omitempty" json:"-"`
 }
 
 func (c *Model) SetCreatedAt(t time.Time) {
