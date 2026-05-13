@@ -15,6 +15,61 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
+// resolveComponentEngine determines which rendering engine should own a new
+// Component. It mirrors the controller-side lookup so the API rejects
+// ambiguous or unsupported requests up-front:
+//
+//   - requested engine pinned + matches a definition for the type → use it.
+//   - requested engine pinned + no matching definition → ErrUnsupportedComponentEngine.
+//   - engine unset + exactly one definition matches the type → use its engine.
+//   - engine unset + multiple definitions match → ErrAmbiguousComponentEngine.
+//   - no definition at all for the type → return "" so the controller writes
+//     a useful Rendered=Failed condition (the Mongo path has no ComponentDefinition
+//     registry of its own to consult beyond this list).
+func resolveComponentEngine(ctx context.Context, db *database.MongoDB, organizationID, compType, requested string) (string, error) {
+	specs, err := models.ComponentTypeSpecList(ctx, db, organizationID)
+	if err != nil {
+		return "", conureerrors.ErrInternalError
+	}
+	var matches []*models.ComponentTypeSpec
+	for _, s := range specs {
+		if s.Type != compType {
+			continue
+		}
+		if requested != "" && s.Engine != "" && s.Engine != requested {
+			continue
+		}
+		matches = append(matches, s)
+	}
+	if requested != "" {
+		// Caller pinned the engine. Accept it even if no definition is
+		// known locally (admins might register definitions only on the
+		// cluster side), but if we DO have local definitions for the type
+		// and none match, reject.
+		hasAnyForType := false
+		for _, s := range specs {
+			if s.Type == compType {
+				hasAnyForType = true
+				break
+			}
+		}
+		if hasAnyForType && len(matches) == 0 {
+			return "", conureerrors.ErrUnsupportedComponentEngine
+		}
+		return requested, nil
+	}
+	switch len(matches) {
+	case 0:
+		// No matching definition known to the API; pass through and let
+		// the controller report the missing definition.
+		return "", nil
+	case 1:
+		return matches[0].Engine, nil
+	default:
+		return "", conureerrors.ErrAmbiguousComponentEngine
+	}
+}
+
 func getComponentFromRoute(c *gin.Context, db *database.MongoDB) (*models.Component, error) {
 	component := &models.Component{}
 	if err := component.GetByID(db, c.Param("componentID")); err != nil {
@@ -122,9 +177,19 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		return
 	}
 
+	// Resolve which engine renders this component. The CRD lookup will run
+	// the same (type, engine) match later; we resolve here so the choice is
+	// persisted on the Component identity and reused across deploys.
+	engine, err := resolveComponentEngine(c.Request.Context(), a.MongoDB, handler.Model.OrganizationID.Hex(), request.Type, request.Engine)
+	if err != nil {
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+
 	component := &models.Component{
 		Name:          request.Name,
 		Type:          request.Type,
+		Engine:        engine,
 		Description:   request.Description,
 		ApplicationID: handler.Model.ID,
 	}

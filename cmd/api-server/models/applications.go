@@ -269,9 +269,12 @@ type ComponentTypeSpec struct {
 	Name           string             `json:"name" bson:"name"`
 	Description    string             `json:"description" bson:"description"`
 	Type           string             `json:"type" bson:"type"`
-	OCIRepository  string             `json:"oci_repository" bson:"ociRepository"`
-	OCITag         string             `json:"oci_tag" bson:"ociTag"`
-	IconURL        *string            `json:"icon_url" bson:"iconURL"`
+	// Engine is the rendering backend (timoni or helm). Empty for legacy specs
+	// stored before multi-engine support; the CLI treats those as timoni.
+	Engine        string  `json:"engine" bson:"engine,omitempty"`
+	OCIRepository string  `json:"oci_repository" bson:"ociRepository"`
+	OCITag        string  `json:"oci_tag" bson:"ociTag"`
+	IconURL       *string `json:"icon_url" bson:"iconURL"`
 }
 
 func ComponentTypeSpecList(ctx context.Context, db *database.MongoDB, organizationID string) ([]*ComponentTypeSpec, error) {
@@ -334,9 +337,14 @@ func (c *ComponentTypeSpec) GetByType(ctx context.Context, db *database.MongoDB,
 }
 
 type Component struct {
-	Model         `bson:",inline"`
-	Name          string             `json:"name" bson:"name"`
-	Type          string             `json:"type" bson:"type"`
+	Model `bson:",inline"`
+	Name  string `json:"name" bson:"name"`
+	Type  string `json:"type" bson:"type"`
+	// Engine is the rendering backend (timoni or helm) selected when the
+	// component was created. Persisted so subsequent deploys reproduce the
+	// same engine choice. Empty for components created before multi-engine
+	// support — the controller treats those as timoni.
+	Engine        string             `json:"engine" bson:"engine,omitempty"`
 	Description   string             `json:"description" bson:"description"`
 	ApplicationID primitive.ObjectID `json:"application_id" bson:"applicationID"`
 }

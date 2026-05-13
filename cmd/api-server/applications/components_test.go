@@ -71,6 +71,27 @@ func doJSON(t *testing.T, method, url string, body interface{}) *httptest.Respon
 	return resp
 }
 
+// seedComponentTypeSpec inserts a ComponentTypeSpec for the given org and
+// engine, returning the row so the caller can clean it up. Used by the
+// engine-resolution tests to put multiple definitions behind the same type.
+func seedComponentTypeSpec(t *testing.T, orgID primitive.ObjectID, name, compType, engine string) *models.ComponentTypeSpec {
+	t.Helper()
+	spec := &models.ComponentTypeSpec{
+		OrganizationID: orgID,
+		Name:           name,
+		Description:    "seeded by test",
+		Type:           compType,
+		Engine:         engine,
+		OCIRepository:  "example.test/" + name,
+		OCITag:         "0.1.0",
+	}
+	if err := spec.Create(context.Background(), testConf.app.MongoDB); err != nil {
+		t.Fatalf("seeding component type spec: %v", err)
+	}
+	t.Cleanup(func() { _ = spec.Delete(context.Background(), testConf.app.MongoDB) })
+	return spec
+}
+
 func TestCreateComponent_AppWide(t *testing.T) {
 	org, app, env := orgWithApp(t, "TestCreateComponent_AppWide", "staging")
 
@@ -101,6 +122,118 @@ func TestCreateComponent_AppWide(t *testing.T) {
 		t.Fatalf("expected v1 draft, got %+v", raw.Revision)
 	}
 	cleanupComponent(t, raw.Component)
+}
+
+// TestCreateComponent_ResolvesEngineFromSingleDef confirms that when exactly
+// one ComponentDefinition matches the requested type, the API persists that
+// definition's engine on the Component identity even though the request
+// didn't pin one. This is the common "user just picks a type" path.
+func TestCreateComponent_ResolvesEngineFromSingleDef(t *testing.T) {
+	org, app, env := orgWithApp(t, "TestCreateComponent_ResolvesEngineFromSingleDef", "staging")
+	seedComponentTypeSpec(t, org.ID, "webservice-timoni", "webservice", "timoni")
+
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
+	resp := doJSON(t, "POST", url, map[string]interface{}{
+		"name":        "infer-engine",
+		"type":        "webservice",
+		"environment": env.Name,
+		"values":      map[string]interface{}{},
+	})
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d (%s)", resp.Code, resp.Body.String())
+	}
+	var raw struct {
+		Component *models.Component `json:"component"`
+	}
+	_ = json.Unmarshal(resp.Body.Bytes(), &raw)
+	if raw.Component == nil || raw.Component.Engine != "timoni" {
+		t.Fatalf("expected Engine=timoni, got %+v", raw.Component)
+	}
+	cleanupComponent(t, raw.Component)
+}
+
+// TestCreateComponent_AmbiguousEngineIsRejected covers the multi-engine
+// failure path: two definitions for the same type with no engine on the
+// request must return ErrAmbiguousComponentEngine, not silently pick one.
+func TestCreateComponent_AmbiguousEngineIsRejected(t *testing.T) {
+	org, app, env := orgWithApp(t, "TestCreateComponent_AmbiguousEngineIsRejected", "staging")
+	seedComponentTypeSpec(t, org.ID, "webservice-timoni", "webservice", "timoni")
+	seedComponentTypeSpec(t, org.ID, "webservice-helm", "webservice", "helm")
+
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
+	resp := doJSON(t, "POST", url, map[string]interface{}{
+		"name":        "ambiguous",
+		"type":        "webservice",
+		"environment": env.Name,
+		"values":      map[string]interface{}{},
+	})
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d (%s)", resp.Code, resp.Body.String())
+	}
+	// The API surfaces the conureerrors code, not the message — the CLI
+	// translates to a user-friendly string. Just check the code.
+	var body struct {
+		Code string `json:"code"`
+	}
+	_ = json.Unmarshal(resp.Body.Bytes(), &body)
+	if body.Code != "4006" {
+		t.Fatalf("expected error code 4006, got %q (full=%s)", body.Code, resp.Body.String())
+	}
+}
+
+// TestCreateComponent_PinnedEnginePicksMatch verifies that when the request
+// pins an engine and two definitions exist, the persisted Component is
+// tagged with the requested engine — proving the disambiguation knob works.
+func TestCreateComponent_PinnedEnginePicksMatch(t *testing.T) {
+	org, app, env := orgWithApp(t, "TestCreateComponent_PinnedEnginePicksMatch", "staging")
+	seedComponentTypeSpec(t, org.ID, "webservice-timoni", "webservice", "timoni")
+	seedComponentTypeSpec(t, org.ID, "webservice-helm", "webservice", "helm")
+
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
+	resp := doJSON(t, "POST", url, map[string]interface{}{
+		"name":        "pinned-helm",
+		"type":        "webservice",
+		"engine":      "helm",
+		"environment": env.Name,
+		"values":      map[string]interface{}{},
+	})
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d (%s)", resp.Code, resp.Body.String())
+	}
+	var raw struct {
+		Component *models.Component `json:"component"`
+	}
+	_ = json.Unmarshal(resp.Body.Bytes(), &raw)
+	if raw.Component == nil || raw.Component.Engine != "helm" {
+		t.Fatalf("expected Engine=helm, got %+v", raw.Component)
+	}
+	cleanupComponent(t, raw.Component)
+}
+
+// TestCreateComponent_PinnedEngineWithoutMatchingDef rejects requests that
+// pin an engine no registered definition implements for the type.
+func TestCreateComponent_PinnedEngineWithoutMatchingDef(t *testing.T) {
+	org, app, env := orgWithApp(t, "TestCreateComponent_PinnedEngineWithoutMatchingDef", "staging")
+	seedComponentTypeSpec(t, org.ID, "webservice-timoni", "webservice", "timoni")
+
+	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
+	resp := doJSON(t, "POST", url, map[string]interface{}{
+		"name":        "no-such-engine",
+		"type":        "webservice",
+		"engine":      "helm",
+		"environment": env.Name,
+		"values":      map[string]interface{}{},
+	})
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d (%s)", resp.Code, resp.Body.String())
+	}
+	var body struct {
+		Code string `json:"code"`
+	}
+	_ = json.Unmarshal(resp.Body.Bytes(), &body)
+	if body.Code != "4007" {
+		t.Fatalf("expected error code 4007, got %q (full=%s)", body.Code, resp.Body.String())
+	}
 }
 
 func TestListComponents_AppWide(t *testing.T) {

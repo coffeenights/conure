@@ -69,6 +69,7 @@ func BuildComponentCRD(application *models.Application, environment *models.Envi
 		},
 		Spec: conurev1alpha1.ComponentSpec{
 			ComponentType: component.Type,
+			Engine:        conurev1alpha1.ComponentEngine(component.Engine),
 			Values:        &runtime.RawExtension{Raw: valuesJSON},
 		},
 	}, nil

@@ -48,6 +48,15 @@ var (
 	ErrApplicationExists      = &ConureError{Code: "4003", Message: "application_already_exists", StatusCode: http.StatusConflict}
 	ErrApplicationNotDeployed = &ConureError{Code: "4004", Message: "application_not_deployed", StatusCode: http.StatusNotFound}
 	ErrPodNotFound            = &ConureError{Code: "4005", Message: "pod_not_found", StatusCode: http.StatusNotFound}
+	// ErrAmbiguousComponentEngine is returned when more than one
+	// ComponentDefinition matches the requested type and the caller did not
+	// pin spec.engine. Mirrors the controller-side error so the API rejects
+	// such requests up-front instead of writing a Component that the
+	// controller would then fail to render.
+	ErrAmbiguousComponentEngine = &ConureError{Code: "4006", Message: "ambiguous_component_engine", StatusCode: http.StatusBadRequest}
+	// ErrUnsupportedComponentEngine is returned when the request pins an
+	// engine that no ComponentDefinition implements for the requested type.
+	ErrUnsupportedComponentEngine = &ConureError{Code: "4007", Message: "unsupported_component_engine", StatusCode: http.StatusBadRequest}
 )
 
 func AbortWithError(c *gin.Context, err error) {

@@ -92,8 +92,12 @@ type ComponentInEnvListResponse struct {
 }
 
 type CreateComponentRequest struct {
-	Name        string `json:"name" binding:"required"`
-	Type        string `json:"type" binding:"required"`
+	Name string `json:"name" binding:"required"`
+	Type string `json:"type" binding:"required"`
+	// Engine selects the rendering backend (timoni or helm). Required when
+	// more than one ComponentDefinition shares the same type; otherwise the
+	// single matching definition's engine is used.
+	Engine      string `json:"engine"`
 	Description string `json:"description"`
 	// Environment is the target env for the first draft revision created
 	// alongside the new component identity.
