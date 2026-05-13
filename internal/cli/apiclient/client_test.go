@@ -280,6 +280,68 @@ func TestClient_Endpoints(t *testing.T) {
 				return err
 			},
 		},
+		{
+			name:       "ListVariables_org",
+			bodyReturn: `[{"id":"v1","name":"FOO","value":"bar","type":"organization","is_encrypted":false}]`,
+			wantMethod: http.MethodGet,
+			wantPath:   "/variables/o1",
+			run: func(c *Client) error {
+				vars, err := c.ListVariables(context.Background(), VariableScope{OrgID: "o1"})
+				if err != nil {
+					return err
+				}
+				if len(vars) != 1 || vars[0].Name != "FOO" {
+					t.Errorf("ListVariables result = %+v", vars)
+				}
+				return nil
+			},
+		},
+		{
+			name:       "ListVariables_env",
+			bodyReturn: `[]`,
+			wantMethod: http.MethodGet,
+			wantPath:   "/variables/o1/a1/e/production",
+			run: func(c *Client) error {
+				_, err := c.ListVariables(context.Background(), VariableScope{
+					OrgID: "o1", ApplicationID: "a1", EnvironmentID: "production",
+				})
+				return err
+			},
+		},
+		{
+			name:       "ListVariables_component",
+			bodyReturn: `[]`,
+			wantMethod: http.MethodGet,
+			wantPath:   "/variables/o1/a1/e/production/c/c1",
+			run: func(c *Client) error {
+				_, err := c.ListVariables(context.Background(), VariableScope{
+					OrgID: "o1", ApplicationID: "a1", EnvironmentID: "production", ComponentID: "c1",
+				})
+				return err
+			},
+		},
+		{
+			name:        "CreateVariable_secret",
+			bodyReturn:  `{"id":"v1","name":"DB_PASSWORD","value":"hunter2","is_encrypted":true}`,
+			wantMethod:  http.MethodPost,
+			wantPath:    "/variables/o1/a1/e/production/c/c1",
+			wantReqBody: `{"name":"DB_PASSWORD","value":"hunter2","is_encrypted":true}`,
+			run: func(c *Client) error {
+				_, err := c.CreateVariable(context.Background(), VariableScope{
+					OrgID: "o1", ApplicationID: "a1", EnvironmentID: "production", ComponentID: "c1",
+				}, "DB_PASSWORD", "hunter2", true)
+				return err
+			},
+		},
+		{
+			name:       "DeleteVariable",
+			bodyReturn: ``,
+			wantMethod: http.MethodDelete,
+			wantPath:   "/variables/o1/v1",
+			run: func(c *Client) error {
+				return c.DeleteVariable(context.Background(), "o1", "v1")
+			},
+		},
 	}
 
 	for _, tc := range cases {

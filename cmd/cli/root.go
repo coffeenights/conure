@@ -26,15 +26,14 @@ var rootCmd = &cobra.Command{
 	// server or network problem, not a usage problem.
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
-		ui.SetJSONMode(outputFlag == "json")
-		return nil
+		return ui.SetOutputMode(outputFlag)
 	},
 }
 
 func init() {
 	rootCmd.PersistentFlags().StringVar(&serverFlag, "server", "", "API server URL (overrides the active profile's server for this command only)")
 	rootCmd.PersistentFlags().StringVar(&profileFlag, "profile", "", "Profile to use for this command (overrides the active profile)")
-	rootCmd.PersistentFlags().StringVarP(&outputFlag, "output", "o", "text", "Output format (text, json)")
+	rootCmd.PersistentFlags().StringVarP(&outputFlag, "output", "o", "text", "Output format (text, json, yaml)")
 }
 
 // addEnvFlag standardizes the --env flag used by every linked-component

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,8 +11,10 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"sigs.k8s.io/yaml"
 
 	"github.com/coffeenights/conure/internal/cli/ui"
+	"github.com/coffeenights/conure/pkg/api"
 )
 
 // Canonical command group: `conure revision <verb>` (alias: `rev`).
@@ -50,6 +53,37 @@ var revisionDraftEditCmd = &cobra.Command{
 	Use:   "edit",
 	Short: "Open the latest draft (or last deployed) values in $EDITOR; saves as a new draft",
 	RunE:  runRevisionDraftEdit,
+}
+
+var revisionShowCmd = &cobra.Command{
+	Use:   "show [version]",
+	Short: "Print a revision (defaults to latest draft, falls back to deployed)",
+	Long: `Print a single revision in the current --output format (text, json, yaml).
+
+With no positional argument, shows the latest draft for this component+env,
+falling back to the latest deployed revision when no draft exists. Pass a
+version number (or v<number>) to target a historical revision.
+
+Examples:
+  conure revision show -o yaml
+  conure revision show 3 -o json
+  conure revision show v5 --values-only -o yaml > values.yaml`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: runRevisionShow,
+}
+
+var revisionCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create a new draft revision from a values file (.json, .yaml, .yml)",
+	Long: `Read values from a file and create a new draft revision for this
+component+env. The file may be JSON or YAML; the format is detected by
+extension, or with --format.
+
+Examples:
+  conure revision create -f values.yaml
+  conure revision create -f -            # read from stdin (default YAML)
+  conure revision create -f patch.json`,
+	RunE: runRevisionCreate,
 }
 
 // ---- back-compat hidden aliases at the top level ------------------------
@@ -100,12 +134,23 @@ func init() {
 	revisionPromoteCmd.Flags().String("to", "", "Target environment (required)")
 	_ = revisionPromoteCmd.MarkFlagRequired("to")
 	addEnvFlag(revisionDraftEditCmd)
+	addEnvFlag(revisionShowCmd)
+	revisionShowCmd.Flags().Bool("values-only", false,
+		"Print just the values map (drops metadata like id, version, status)")
+	addEnvFlag(revisionCreateCmd)
+	revisionCreateCmd.Flags().StringP("file", "f", "",
+		"Path to a JSON or YAML values file (use - for stdin)")
+	revisionCreateCmd.Flags().String("format", "",
+		"Override format detection: json or yaml (default: by extension, yaml for stdin)")
+	_ = revisionCreateCmd.MarkFlagRequired("file")
 
 	revisionDraftCmd.AddCommand(revisionDraftEditCmd)
 	revisionCmd.AddCommand(revisionListCmd)
 	revisionCmd.AddCommand(revisionRollbackCmd)
 	revisionCmd.AddCommand(revisionPromoteCmd)
 	revisionCmd.AddCommand(revisionDraftCmd)
+	revisionCmd.AddCommand(revisionShowCmd)
+	revisionCmd.AddCommand(revisionCreateCmd)
 	rootCmd.AddCommand(revisionCmd)
 
 	// Mirror the same flag declarations on the hidden aliases so back-compat
@@ -282,4 +327,155 @@ func runRevisionDraftEdit(cmd *cobra.Command, _ []string) error {
 	}
 	ui.InfoLn("  Run `conure deploy` to apply.")
 	return nil
+}
+
+func runRevisionShow(cmd *cobra.Command, args []string) error {
+	lc, err := requireLinked(cmd)
+	if err != nil {
+		return err
+	}
+
+	rev, err := pickRevision(cmd, lc, args)
+	if err != nil {
+		return err
+	}
+
+	valuesOnly, _ := cmd.Flags().GetBool("values-only")
+
+	// Pick the payload up front so JSON/YAML and text branches stay in sync.
+	var payload any = rev
+	if valuesOnly {
+		payload = rev.Values
+	}
+
+	return ui.Render(payload, func() error {
+		// In text mode the JSON form is the most useful default — values
+		// are arbitrary nested maps and a flat table would lose structure.
+		// The user picked text by not passing -o; print pretty JSON
+		// preceded by a one-line header so it's still scannable.
+		deployedAt := "-"
+		if rev.DeployedAt != nil {
+			deployedAt = rev.DeployedAt.Format("2006-01-02 15:04:05")
+		}
+		ui.HeaderLn(fmt.Sprintf("v%d  [%s]  %s  (%s)", rev.Version, rev.Status, deployedAt, rev.ID))
+		body, err := json.MarshalIndent(payload, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Println(string(body))
+		return nil
+	})
+}
+
+// pickRevision resolves which revision the user wants to print. With a
+// positional version arg we look it up in the list; without one we fall
+// back to the env-scoped view's latest draft (or, lacking that, the
+// deployed revision). Returns an actionable error when nothing matches.
+func pickRevision(cmd *cobra.Command, lc *linkedCtx, args []string) (*api.ComponentRevision, error) {
+	if len(args) == 1 {
+		versionArg := strings.TrimPrefix(args[0], "v")
+		version, err := strconv.Atoi(versionArg)
+		if err != nil {
+			return nil, fmt.Errorf("invalid version %q (expected number, optionally prefixed with 'v')", args[0])
+		}
+		revs, err := lc.Client.ListRevisions(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
+		if err != nil {
+			return nil, err
+		}
+		for i, r := range revs {
+			if r.Version == version {
+				return &revs[i], nil
+			}
+		}
+		return nil, fmt.Errorf("no revision v%d found in env %s", version, lc.Env)
+	}
+
+	resp, err := lc.Client.GetComponentInEnv(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
+	if err != nil {
+		return nil, err
+	}
+	if resp.LatestDraft != nil {
+		return resp.LatestDraft, nil
+	}
+	if resp.DeployedRevision != nil {
+		return resp.DeployedRevision, nil
+	}
+	return nil, fmt.Errorf("no revisions yet for component %s in env %s — pass a version", lc.Link.ComponentName, lc.Env)
+}
+
+func runRevisionCreate(cmd *cobra.Command, _ []string) error {
+	lc, err := requireLinked(cmd)
+	if err != nil {
+		return err
+	}
+	path, _ := cmd.Flags().GetString("file")
+	formatOverride, _ := cmd.Flags().GetString("format")
+
+	values, err := loadValuesFile(path, formatOverride)
+	if err != nil {
+		return err
+	}
+
+	sp := ui.StartSpinner("Creating draft…")
+	rev, err := lc.Client.CreateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, values)
+	ui.StopSpinner(sp)
+	if err != nil {
+		return err
+	}
+	return ui.Render(rev, func() error {
+		ui.Success("✓ Created draft v%d\n", rev.Version)
+		ui.InfoLn("  Run `conure deploy` to apply.")
+		return nil
+	})
+}
+
+// loadValuesFile reads JSON or YAML from path (or stdin when path is "-")
+// and returns a values map. Format is decided by --format if set, else by
+// file extension, else YAML (a strict superset of JSON for sigs.k8s.io/yaml,
+// so JSON-on-stdin still parses correctly).
+func loadValuesFile(path, formatOverride string) (map[string]interface{}, error) {
+	var raw []byte
+	var err error
+	if path == "-" {
+		raw, err = io.ReadAll(os.Stdin)
+	} else {
+		raw, err = os.ReadFile(path)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("reading values: %w", err)
+	}
+
+	format := strings.ToLower(strings.TrimSpace(formatOverride))
+	if format == "" {
+		ext := strings.ToLower(filepath.Ext(path))
+		switch ext {
+		case ".json":
+			format = "json"
+		case ".yaml", ".yml":
+			format = "yaml"
+		default:
+			format = "yaml"
+		}
+	}
+
+	var values map[string]interface{}
+	switch format {
+	case "json":
+		if err := json.Unmarshal(raw, &values); err != nil {
+			return nil, fmt.Errorf("parsing JSON values: %w", err)
+		}
+	case "yaml", "yml":
+		// sigs.k8s.io/yaml goes via JSON, so it also accepts pure-JSON
+		// input. That's why "yaml" is a safe default when format is
+		// ambiguous (e.g. stdin with no extension).
+		if err := yaml.Unmarshal(raw, &values); err != nil {
+			return nil, fmt.Errorf("parsing YAML values: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unknown --format %q (expected: json or yaml)", format)
+	}
+	if values == nil {
+		return nil, fmt.Errorf("values file is empty or not an object")
+	}
+	return values, nil
 }

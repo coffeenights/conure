@@ -207,3 +207,30 @@ type ComponentDefinition struct {
 type ComponentDefinitionListResponse struct {
 	Definitions []ComponentDefinition `json:"definitions"`
 }
+
+// ----- Variables (and secrets) -------------------------------------------
+//
+// The server stores all variables in one collection, distinguished by Type
+// ("organization" | "environment" | "component") and the path-scoped IDs.
+// IsEncrypted=true is what the UI/CLI surfaces as a "secret"; the value is
+// AES-encrypted at rest by the API server but returned decrypted on read.
+
+type Variable struct {
+	ID             string    `json:"id"`
+	Name           string    `json:"name"`
+	Value          string    `json:"value"`
+	Type           string    `json:"type"`
+	OrganizationID string    `json:"organization_id,omitempty"`
+	ApplicationID  string    `json:"application_id,omitempty"`
+	EnvironmentID  string    `json:"environment_id,omitempty"`
+	ComponentID    string    `json:"component_id,omitempty"`
+	IsEncrypted    bool      `json:"is_encrypted"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+type CreateVariableRequest struct {
+	Name        string `json:"name" binding:"required"`
+	Value       string `json:"value" binding:"required"`
+	IsEncrypted bool   `json:"is_encrypted"`
+}

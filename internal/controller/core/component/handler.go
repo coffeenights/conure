@@ -118,7 +118,7 @@ func (c *ComponentHandler) renderComponent() error {
 		return err
 	}
 	if creds == "" {
-		c.Logger.Info("no registrySecretRef set on ComponentDefinition, attempting anonymous pull", "componentDefinition", compDef.Name, "ociRepository", compDef.Spec.OCIRepository)
+		c.Logger.V(1).Info("no registrySecretRef set on ComponentDefinition, attempting anonymous pull", "componentDefinition", compDef.Name, "ociRepository", compDef.Spec.OCIRepository)
 	}
 	mgr, err := module.NewManager(c.Ctx, c.Component.Name, "oci://"+compDef.Spec.OCIRepository, compDef.Spec.OCITag, c.Component.Namespace, creds, false, values.Get())
 	if err != nil {
