@@ -1,13 +1,12 @@
 package main
 
 import (
-	"os"
-	"time"
-
-	"github.com/briandowns/spinner"
-	"github.com/fatih/color"
 	"github.com/spf13/cobra"
-	"golang.org/x/term"
+
+	"github.com/coffeenights/conure/internal/cli/apiclient"
+	"github.com/coffeenights/conure/internal/cli/config"
+	"github.com/coffeenights/conure/internal/cli/link"
+	"github.com/coffeenights/conure/internal/cli/ui"
 )
 
 var (
@@ -15,44 +14,18 @@ var (
 	outputFlag string
 )
 
-var (
-	success = color.New(color.FgGreen, color.Bold)
-	errC    = color.New(color.FgRed, color.Bold)
-	info    = color.New(color.FgCyan)
-	header  = color.New(color.FgWhite, color.Bold)
-	dim     = color.New(color.FgHiBlack)
-)
-
-// startSpinner returns a started spinner, or nil when output is non-TTY or
-// json so we don't smear escape codes into pipes and CI logs. Callers should
-// always defer stopSpinner(s) — it tolerates a nil receiver.
-func startSpinner(suffix string) *spinner.Spinner {
-	if outputFlag == "json" || !term.IsTerminal(int(os.Stdout.Fd())) {
-		return nil
-	}
-	s := spinner.New(spinner.CharSets[14], 100*time.Millisecond)
-	s.Suffix = "  " + suffix
-	s.Start()
-	return s
-}
-
-func stopSpinner(s *spinner.Spinner) {
-	if s != nil {
-		s.Stop()
-	}
-}
-
 var rootCmd = &cobra.Command{
 	Use:   "conure",
 	Short: "Conure CLI - manage application deployments",
 	Long:  `Conure CLI is a command-line tool for interacting with the Conure platform to create and manage application deployments.`,
 	// Separate usage errors from runtime errors. PersistentPreRunE runs only
-	// after flag/arg parsing succeeds, so flipping SilenceUsage here keeps the
-	// help dump for genuine CLI misuse (unknown command, missing flag) while
-	// hiding it when RunE returns — at that point the failure is a server or
-	// network problem, not a usage problem.
+	// after flag/arg parsing succeeds, so flipping SilenceUsage here keeps
+	// the help dump for genuine CLI misuse (unknown command, missing flag)
+	// while hiding it when RunE returns — at that point the failure is a
+	// server or network problem, not a usage problem.
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		cmd.SilenceUsage = true
+		ui.SetJSONMode(outputFlag == "json")
 		return nil
 	},
 }
@@ -62,13 +35,63 @@ func init() {
 	rootCmd.PersistentFlags().StringVarP(&outputFlag, "output", "o", "text", "Output format (text, json)")
 }
 
-func getServerURL() string {
-	if serverFlag != "" {
-		return serverFlag
-	}
-	cfg, err := loadConfig()
+// addEnvFlag standardizes the --env flag used by every linked-component
+// command. Centralized so the help text stays in sync.
+func addEnvFlag(cmd *cobra.Command) {
+	cmd.Flags().String("env", "", "Environment (overrides link)")
+}
+
+// linkedCtx bundles the four things every "act on the linked component"
+// command needs: config, link, resolved env, and a ready-to-go API client.
+type linkedCtx struct {
+	Cfg    *config.Config
+	Link   *link.Link
+	Env    string
+	Client *apiclient.Client
+}
+
+// requireLinked is the canonical preamble for linked-component commands.
+// It enforces auth, loads the link file, applies the --env override (if
+// the cobra command declared the flag), and returns a ready client.
+func requireLinked(cmd *cobra.Command) (*linkedCtx, error) {
+	cfg, err := config.RequireAuth(serverFlag)
 	if err != nil {
-		return ""
+		return nil, err
 	}
-	return cfg.Server
+	l, err := link.Load()
+	if err != nil {
+		return nil, err
+	}
+	env := l.Environment
+	if cmd != nil && cmd.Flags().Lookup("env") != nil {
+		if v, _ := cmd.Flags().GetString("env"); v != "" {
+			env = v
+		}
+	}
+	return &linkedCtx{
+		Cfg:    cfg,
+		Link:   l,
+		Env:    env,
+		Client: apiclient.New(cfg.Server, cfg.Token),
+	}, nil
+}
+
+// requireAuthClient is the lighter sibling of requireLinked: auth only,
+// no link file. Used by org/app/component commands that operate at org
+// scope.
+func requireAuthClient() (*config.Config, *apiclient.Client, error) {
+	cfg, err := config.RequireAuth(serverFlag)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cfg, apiclient.New(cfg.Server, cfg.Token), nil
+}
+
+// requireActiveOrgClient enforces auth + active org and returns a client.
+func requireActiveOrgClient() (*config.Config, *apiclient.Client, error) {
+	cfg, err := config.RequireActiveOrg(serverFlag)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cfg, apiclient.New(cfg.Server, cfg.Token), nil
 }

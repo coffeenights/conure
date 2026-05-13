@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+
+	"github.com/coffeenights/conure/internal/cli/ui"
 )
 
 var deployCmd = &cobra.Command{
@@ -13,32 +15,21 @@ var deployCmd = &cobra.Command{
 }
 
 func init() {
-	deployCmd.Flags().String("env", "", "Environment to deploy to (overrides link)")
+	addEnvFlag(deployCmd)
 	rootCmd.AddCommand(deployCmd)
 }
 
-func runDeploy(cmd *cobra.Command, args []string) error {
-	cfg, err := requireAuth()
+func runDeploy(cmd *cobra.Command, _ []string) error {
+	lc, err := requireLinked(cmd)
 	if err != nil {
 		return err
 	}
-	link, err := requireLink()
+	sp := ui.StartSpinner(fmt.Sprintf("Deploying `%s` to `%s`…", lc.Link.ComponentName, lc.Env))
+	rev, err := lc.Client.DeployLatestDraft(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
+	ui.StopSpinner(sp)
 	if err != nil {
 		return err
 	}
-	env := link.Environment
-	if v, _ := cmd.Flags().GetString("env"); v != "" {
-		env = v
-	}
-
-	client := newClient(cfg)
-	sp := startSpinner(fmt.Sprintf("Deploying `%s` to `%s`…", link.ComponentName, env))
-	rev, err := deployLatestDraft(client, link.OrgID, link.AppID, env, link.ComponentID)
-	stopSpinner(sp)
-	if err != nil {
-		errC.Printf("✗ Deploy failed: %v\n", err)
-		return err
-	}
-	success.Printf("✓ Deployed v%d (%s) to %s\n", rev.Version, rev.ID, env)
+	ui.Success("✓ Deployed v%d (%s) to %s\n", rev.Version, rev.ID, lc.Env)
 	return nil
 }

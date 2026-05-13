@@ -1,13 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
+
+	"github.com/coffeenights/conure/internal/cli/ui"
 )
 
 var podsCmd = &cobra.Command{
@@ -17,66 +16,39 @@ var podsCmd = &cobra.Command{
 }
 
 func init() {
-	podsCmd.Flags().String("env", "", "Environment (overrides link)")
+	addEnvFlag(podsCmd)
 	rootCmd.AddCommand(podsCmd)
 }
 
-func runPods(cmd *cobra.Command, args []string) error {
-	cfg, err := requireAuth()
+func runPods(cmd *cobra.Command, _ []string) error {
+	lc, err := requireLinked(cmd)
 	if err != nil {
 		return err
 	}
-	link, err := requireLink()
+	pods, err := lc.Client.ListComponentPods(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
 	if err != nil {
 		return err
 	}
-	env := link.Environment
-	if v, _ := cmd.Flags().GetString("env"); v != "" {
-		env = v
-	}
-	client := newClient(cfg)
-
-	pods, err := listComponentPods(client, link.OrgID, link.AppID, env, link.ComponentID)
-	if err != nil {
-		return err
-	}
-
-	if outputFlag == "json" {
-		out, _ := json.MarshalIndent(pods, "", "  ")
-		fmt.Println(string(out))
-		return nil
-	}
-
-	if len(pods) == 0 {
-		info.Printf("No pods found for `%s` in env `%s`\n", link.ComponentName, env)
-		return nil
-	}
-
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")).Padding(0, 1)
-	cellStyle := lipgloss.NewStyle().Padding(0, 1)
-	t := table.New().
-		Border(lipgloss.RoundedBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		Headers("NAME", "READY", "PHASE", "RESTARTS", "CONTAINERS").
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return headerStyle
-			}
-			return cellStyle
-		})
-	for _, p := range pods {
-		ready := "false"
-		if p.Ready {
-			ready = "true"
+	return ui.Render(pods, func() error {
+		if len(pods) == 0 {
+			ui.Info("No pods found for `%s` in env `%s`\n", lc.Link.ComponentName, lc.Env)
+			return nil
 		}
-		t.Row(
-			p.Name,
-			ready,
-			p.Phase,
-			fmt.Sprintf("%d", p.Restarts),
-			strings.Join(p.Containers, ", "),
-		)
-	}
-	fmt.Println(t)
-	return nil
+		rows := make([][]string, len(pods))
+		for i, p := range pods {
+			ready := "false"
+			if p.Ready {
+				ready = "true"
+			}
+			rows[i] = []string{
+				p.Name,
+				ready,
+				p.Phase,
+				fmt.Sprintf("%d", p.Restarts),
+				strings.Join(p.Containers, ", "),
+			}
+		}
+		ui.RenderTable([]string{"NAME", "READY", "PHASE", "RESTARTS", "CONTAINERS"}, rows, nil)
+		return nil
+	})
 }

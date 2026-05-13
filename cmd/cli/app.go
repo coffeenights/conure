@@ -1,13 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/lipgloss/table"
 	"github.com/spf13/cobra"
+
+	"github.com/coffeenights/conure/internal/cli/ui"
+	"github.com/coffeenights/conure/pkg/api"
 )
 
 var appCmd = &cobra.Command{
@@ -26,49 +26,36 @@ func init() {
 	rootCmd.AddCommand(appCmd)
 }
 
-func runAppList(cmd *cobra.Command, args []string) error {
-	cfg, err := requireActiveOrg()
+func runAppList(cmd *cobra.Command, _ []string) error {
+	cfg, client, err := requireActiveOrgClient()
 	if err != nil {
 		return err
 	}
-	client := newClient(cfg)
-	apps, err := listApps(client, cfg.ActiveOrg)
+	apps, err := client.ListApps(cmd.Context(), cfg.ActiveOrg)
 	if err != nil {
 		return err
 	}
-	if outputFlag == "json" {
-		out, _ := json.MarshalIndent(apps, "", "  ")
-		fmt.Println(string(out))
-		return nil
-	}
-	if len(apps) == 0 {
-		info.Println("No applications found")
-		return nil
-	}
-
-	headerStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212")).Padding(0, 1)
-	cellStyle := lipgloss.NewStyle().Padding(0, 1)
-	t := table.New().
-		Border(lipgloss.RoundedBorder()).
-		BorderStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("240"))).
-		Headers("ID", "NAME", "ENVIRONMENTS", "COMPONENTS").
-		StyleFunc(func(row, col int) lipgloss.Style {
-			if row == table.HeaderRow {
-				return headerStyle
-			}
-			return cellStyle
-		})
-	for _, a := range apps {
-		envStr := "-"
-		if len(a.Environments) > 0 {
-			names := make([]string, len(a.Environments))
-			for i, e := range a.Environments {
-				names[i] = e.Name
-			}
-			envStr = strings.Join(names, ", ")
+	return ui.Render(apps, func() error {
+		if len(apps) == 0 {
+			ui.InfoLn("No applications found")
+			return nil
 		}
-		t.Row(a.ID, a.Name, envStr, fmt.Sprintf("%d", a.TotalComponents))
+		rows := make([][]string, len(apps))
+		for i, a := range apps {
+			rows[i] = []string{a.ID, a.Name, summarizeEnvs(a.Environments), fmt.Sprintf("%d", a.TotalComponents)}
+		}
+		ui.RenderTable([]string{"ID", "NAME", "ENVIRONMENTS", "COMPONENTS"}, rows, nil)
+		return nil
+	})
+}
+
+func summarizeEnvs(envs []api.Environment) string {
+	if len(envs) == 0 {
+		return "-"
 	}
-	fmt.Println(t)
-	return nil
+	names := make([]string, len(envs))
+	for i, e := range envs {
+		names[i] = e.Name
+	}
+	return strings.Join(names, ", ")
 }

@@ -26,7 +26,7 @@ tail forever; Ctrl-C ends the stream.`,
 }
 
 func init() {
-	logsCmd.Flags().String("env", "", "Environment (overrides link)")
+	addEnvFlag(logsCmd)
 	logsCmd.Flags().StringSliceP("pod", "p", nil, "Restrict to one or more pod names (repeatable, or comma-separated)")
 	logsCmd.Flags().StringP("container", "c", "", "Container name (when a pod has more than one)")
 	logsCmd.Flags().BoolP("follow", "f", false, "Tail logs continuously")
@@ -36,18 +36,10 @@ func init() {
 	rootCmd.AddCommand(logsCmd)
 }
 
-func runLogs(cmd *cobra.Command, args []string) error {
-	cfg, err := requireAuth()
+func runLogs(cmd *cobra.Command, _ []string) error {
+	lc, err := requireLinked(cmd)
 	if err != nil {
 		return err
-	}
-	link, err := requireLink()
-	if err != nil {
-		return err
-	}
-	env := link.Environment
-	if v, _ := cmd.Flags().GetString("env"); v != "" {
-		env = v
 	}
 
 	pods, _ := cmd.Flags().GetStringSlice("pod")
@@ -90,9 +82,8 @@ func runLogs(cmd *cobra.Command, args []string) error {
 	}()
 	defer signal.Stop(sigCh)
 
-	client := newClient(cfg)
-	path := fmt.Sprintf("/organizations/%s/a/%s/e/%s/c/%s/logs", link.OrgID, link.AppID, env, link.ComponentID)
-	body, err := client.stream(ctx, path, q)
+	path := fmt.Sprintf("/organizations/%s/a/%s/e/%s/c/%s/logs", lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
+	body, err := lc.Client.Stream(ctx, path, q)
 	if err != nil {
 		return err
 	}
