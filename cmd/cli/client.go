@@ -11,6 +11,37 @@ import (
 	"strings"
 )
 
+// parseServerError extracts a human-readable message from a Conure API error
+// response. The server returns JSON shaped like
+// `{"code":"1004","error":"invalid_credentials"}` (sometimes "message"
+// instead of "error"); falling back to the raw body keeps non-JSON
+// responses (proxy 502s, blank bodies) from disappearing.
+func parseServerError(body []byte) string {
+	trimmed := strings.TrimSpace(string(body))
+	if trimmed == "" {
+		return "(empty response body)"
+	}
+	var payload struct {
+		Code    string `json:"code"`
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return trimmed
+	}
+	msg := payload.Error
+	if msg == "" {
+		msg = payload.Message
+	}
+	if msg == "" {
+		return trimmed
+	}
+	if payload.Code != "" {
+		return fmt.Sprintf("%s (code %s)", msg, payload.Code)
+	}
+	return msg
+}
+
 type apiClient struct {
 	baseURL string
 	token   string
@@ -54,7 +85,7 @@ func (c *apiClient) do(method, path string, body interface{}) ([]byte, int, erro
 	}
 
 	if resp.StatusCode >= 400 {
-		return respBody, resp.StatusCode, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
+		return respBody, resp.StatusCode, fmt.Errorf("server returned HTTP %d: %s", resp.StatusCode, parseServerError(respBody))
 	}
 
 	return respBody, resp.StatusCode, nil
@@ -102,7 +133,7 @@ func (c *apiClient) stream(ctx context.Context, path string, query url.Values) (
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("server returned HTTP %d: %s", resp.StatusCode, parseServerError(body))
 	}
 	return resp.Body, nil
 }

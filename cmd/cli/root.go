@@ -46,6 +46,15 @@ var rootCmd = &cobra.Command{
 	Use:   "conure",
 	Short: "Conure CLI - manage application deployments",
 	Long:  `Conure CLI is a command-line tool for interacting with the Conure platform to create and manage application deployments.`,
+	// Separate usage errors from runtime errors. PersistentPreRunE runs only
+	// after flag/arg parsing succeeds, so flipping SilenceUsage here keeps the
+	// help dump for genuine CLI misuse (unknown command, missing flag) while
+	// hiding it when RunE returns — at that point the failure is a server or
+	// network problem, not a usage problem.
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = true
+		return nil
+	},
 }
 
 func init() {

@@ -63,7 +63,6 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	resp, err := http.Post(server+"/auth/login", "application/json", bytes.NewReader(payload))
 	stopSpinner(sp)
 	if err != nil {
-		errC.Println("✗ Login failed")
 		return fmt.Errorf("connecting to server: %w", err)
 	}
 	defer resp.Body.Close()
@@ -71,9 +70,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	body, _ := io.ReadAll(resp.Body)
 
 	if resp.StatusCode != http.StatusOK {
-		errC.Println("✗ Login failed")
-		fmt.Printf("  Server responded with HTTP %d: %s\n", resp.StatusCode, string(body))
-		return fmt.Errorf("authentication failed")
+		return fmt.Errorf("login failed (HTTP %d): %s", resp.StatusCode, parseServerError(body))
 	}
 
 	var result struct {
