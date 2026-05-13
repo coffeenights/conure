@@ -102,11 +102,13 @@ type CreateComponentRequest struct {
 }
 
 type CreateRevisionRequest struct {
-	Values map[string]interface{} `json:"values"`
+	Values  map[string]interface{} `json:"values"`
+	Comment string                 `json:"comment,omitempty"`
 }
 
 type UpdateRevisionRequest struct {
-	Values map[string]interface{} `json:"values"`
+	Values  map[string]interface{} `json:"values"`
+	Comment string                 `json:"comment,omitempty"`
 }
 
 type PromoteRequest struct {

@@ -106,6 +106,7 @@ type ComponentRevision struct {
 	Version       int                    `json:"version"`
 	Values        map[string]interface{} `json:"values"`
 	Status        string                 `json:"status"` // draft | deployed
+	Comment       string                 `json:"comment,omitempty"`
 	DeployedAt    *time.Time             `json:"deployed_at,omitempty"`
 	CreatedBy     string                 `json:"created_by,omitempty"`
 	CreatedAt     time.Time              `json:"created_at"`
@@ -116,11 +117,13 @@ type ComponentRevisionListResponse struct {
 }
 
 type CreateRevisionRequest struct {
-	Values map[string]interface{} `json:"values"`
+	Values  map[string]interface{} `json:"values"`
+	Comment string                 `json:"comment,omitempty"`
 }
 
 type UpdateRevisionRequest struct {
-	Values map[string]interface{} `json:"values"`
+	Values  map[string]interface{} `json:"values"`
+	Comment string                 `json:"comment,omitempty"`
 }
 
 // ----- Env-scoped component view ------------------------------------------

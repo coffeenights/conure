@@ -156,6 +156,7 @@ func (a *ApiHandler) CreateRevision(c *gin.Context) {
 		ComponentID:   component.ID,
 		EnvironmentID: env.ID,
 		Values:        req.Values,
+		Comment:       req.Comment,
 		CreatedBy:     uID,
 	}
 	if err := rev.CreateDraft(c.Request.Context(), a.MongoDB); err != nil {
@@ -212,7 +213,7 @@ func (a *ApiHandler) UpdateDraftRevision(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
-	if err := rev.UpdateDraft(ctx, a.MongoDB, req.Values); err != nil {
+	if err := rev.UpdateDraft(ctx, a.MongoDB, req.Values, req.Comment); err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
 	}

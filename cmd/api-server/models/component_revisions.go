@@ -33,6 +33,7 @@ type ComponentRevision struct {
 	Version       int                     `bson:"version" json:"version"`
 	Values        map[string]interface{}  `bson:"values" json:"values"`
 	Status        ComponentRevisionStatus `bson:"status" json:"status"`
+	Comment       string                  `bson:"comment,omitempty" json:"comment,omitempty"`
 	DeployedAt    *time.Time              `bson:"deployedAt,omitempty" json:"deployed_at,omitempty"`
 	CreatedBy     primitive.ObjectID      `bson:"createdBy,omitempty" json:"created_by"`
 	CreatedAt     time.Time               `bson:"createdAt" json:"created_at"`
@@ -161,16 +162,16 @@ func (r *ComponentRevision) CreateDeployed(ctx context.Context, db *database.Mon
 	return nil
 }
 
-// UpdateDraft replaces values on an existing draft revision. Rejects updates
-// to deployed revisions — the deployed history is immutable.
-func (r *ComponentRevision) UpdateDraft(ctx context.Context, db *database.MongoDB, values map[string]interface{}) error {
+// UpdateDraft replaces values and comment on an existing draft revision.
+// Rejects updates to deployed revisions — the deployed history is immutable.
+func (r *ComponentRevision) UpdateDraft(ctx context.Context, db *database.MongoDB, values map[string]interface{}, comment string) error {
 	if r.Status != RevisionStatusDraft {
 		return conureerrors.ErrNotAllowed
 	}
 	coll := db.Client.Database(db.DBName).Collection(ComponentRevisionCollection)
 	res, err := coll.UpdateOne(ctx,
 		bson.M{"_id": r.ID, "status": RevisionStatusDraft},
-		bson.M{"$set": bson.M{"values": values}},
+		bson.M{"$set": bson.M{"values": values, "comment": comment}},
 	)
 	if err != nil {
 		return err
@@ -179,6 +180,7 @@ func (r *ComponentRevision) UpdateDraft(ctx context.Context, db *database.MongoD
 		return conureerrors.ErrObjectNotFound
 	}
 	r.Values = values
+	r.Comment = comment
 	return nil
 }
 
