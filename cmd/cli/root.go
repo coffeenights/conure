@@ -60,7 +60,11 @@ func requireLinked(cmd *cobra.Command) (*linkedCtx, error) {
 	if err != nil {
 		return nil, err
 	}
-	l, err := link.Load()
+	resolved := profileFlag
+	if resolved == "" {
+		resolved = cfg.Active
+	}
+	l, err := link.Get(resolved)
 	if err != nil {
 		return nil, err
 	}

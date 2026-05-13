@@ -15,5 +15,7 @@ func GenerateRoutes(relativePath string, r *gin.Engine, handler *Handler) {
 		paths.GET("/:organizationID/:applicationID/e/:environmentID", middlewares.CheckAuthenticatedUser(handler.Config, handler.MongoDB), handler.ListEnvironmentVariables)
 		paths.POST("/:organizationID/:applicationID/e/:environmentID/c/:componentID", middlewares.CheckAuthenticatedUser(handler.Config, handler.MongoDB), handler.CreateVariable)
 		paths.GET("/:organizationID/:applicationID/e/:environmentID/c/:componentID", middlewares.CheckAuthenticatedUser(handler.Config, handler.MongoDB), handler.ListComponentVariables)
+		paths.GET("/:organizationID/:applicationID/e/:environmentID/allscopes", middlewares.CheckAuthenticatedUser(handler.Config, handler.MongoDB), handler.ListEnvironmentVariablesAllScopes)
+		paths.GET("/:organizationID/:applicationID/e/:environmentID/c/:componentID/allscopes", middlewares.CheckAuthenticatedUser(handler.Config, handler.MongoDB), handler.ListComponentVariablesAllScopes)
 	}
 }

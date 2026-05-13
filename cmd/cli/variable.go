@@ -25,6 +25,7 @@ var (
 	varSecretFlag    bool
 	varOverwriteFlag bool
 	varRevealFlag    bool
+	varMergedFlag    bool
 )
 
 var varCmd = &cobra.Command{
@@ -95,6 +96,8 @@ func init() {
 		"Mark every imported entry as a secret (regardless of '# @secret' markers)")
 	varListCmd.Flags().BoolVar(&varRevealFlag, "reveal", false,
 		"Print decrypted secret values instead of masking them with "+secretMask)
+	varListCmd.Flags().BoolVar(&varMergedFlag, "merged", false,
+		"Show the effective merged set (org+env, or org+env+component) instead of the raw tier")
 
 	varCmd.AddCommand(varListCmd)
 	varCmd.AddCommand(varSetCmd)
@@ -125,7 +128,7 @@ type scopeCtx struct {
 func resolveScope(cmd *cobra.Command) (*scopeCtx, error) {
 	scope := strings.ToLower(strings.TrimSpace(varScopeFlag))
 	if scope == "" {
-		if link.Exists() {
+		if link.FileExists() {
 			scope = "component"
 		} else {
 			scope = "org"
@@ -164,7 +167,7 @@ func resolveScope(cmd *cobra.Command) (*scopeCtx, error) {
 	case "org", "organization", "o":
 		// Org scope works without a link — fall back to the active org
 		// if the current directory isn't linked.
-		if link.Exists() {
+		if link.FileExists() {
 			lc, err := requireLinked(cmd)
 			if err != nil {
 				return nil, err
@@ -193,6 +196,14 @@ func runVarList(cmd *cobra.Command, _ []string) error {
 	sc, err := resolveScope(cmd)
 	if err != nil {
 		return err
+	}
+	// Default behavior when the user didn't pick a scope and we're in a
+	// linked directory: show the effective merged view, since that matches
+	// what the controller actually delivers to the component. --merged is
+	// the explicit opt-in when a scope IS named (e.g. `--scope env --merged`
+	// to roll org+env together without touching component-tier vars).
+	if strings.TrimSpace(varScopeFlag) == "" || varMergedFlag {
+		sc.Scope.AllScopes = true
 	}
 	vars, err := sc.Client.ListVariables(cmd.Context(), sc.Scope)
 	if err != nil {

@@ -405,6 +405,151 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	assert.Equal(t, 0, len(variables), "should return 0 results")
 }
 
+func TestHandler_ListEnvironmentVariablesAllScopes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	token, _ := auth.GenerateToken(1*time.Hour, auth.JWTData{
+		Email: "test@test.com", Client: "test-client",
+	}, "test-secret")
+
+	config := &apiConfig.Config{
+		JWTSecret:          "test-secret",
+		MongoDBURI:         "mongodb://localhost:27017",
+		MongoDBName:        "conure-test-variables",
+		AuthStrategySystem: "local",
+	}
+	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
+	defer cleanUpDB(mongo)
+	keyStorage := NewLocalSecretKey("secret.key")
+
+	user := models.User{Email: "test@test.com", Client: "test-client"}
+	_ = user.Create(mongo)
+
+	orgID := primitive.NewObjectID()
+	appID := primitive.NewObjectID()
+	envName := "prod"
+
+	// Seed: org-only var, env-only var, and a name that exists in both
+	// tiers — the env value should win.
+	orgOnly := &models.Variable{OrganizationID: orgID, Name: "ORG_ONLY", Value: "from-org", Type: models.OrganizationType}
+	_, _ = orgOnly.Create(mongo)
+	shared := &models.Variable{OrganizationID: orgID, Name: "SHARED", Value: "org-value", Type: models.OrganizationType}
+	_, _ = shared.Create(mongo)
+
+	// Env-tier: one plain, one encrypted, and the SHARED override.
+	envApp := appID
+	envEnv := envName
+	envOnly := &models.Variable{OrganizationID: orgID, ApplicationID: &envApp, EnvironmentID: &envEnv, Name: "ENV_ONLY", Value: "from-env", Type: models.EnvironmentType}
+	_, _ = envOnly.Create(mongo)
+	encryptedValue, err := EncryptValue(keyStorage, "secret-plain")
+	require.NoError(t, err)
+	envSecret := &models.Variable{OrganizationID: orgID, ApplicationID: &envApp, EnvironmentID: &envEnv, Name: "ENV_SECRET", Value: encryptedValue, IsEncrypted: true, Type: models.EnvironmentType}
+	_, _ = envSecret.Create(mongo)
+	envShared := &models.Variable{OrganizationID: orgID, ApplicationID: &envApp, EnvironmentID: &envEnv, Name: "SHARED", Value: "env-value", Type: models.EnvironmentType}
+	_, _ = envShared.Create(mongo)
+
+	setupTestHandler(router, mongo, config, keyStorage)
+
+	url := fmt.Sprintf("/variables/%s/%s/e/%s/allscopes", orgID.Hex(), appID.Hex(), envName)
+	req, _ := http.NewRequest("GET", url, nil)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+
+	var got []models.Variable
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &got))
+
+	byName := map[string]models.Variable{}
+	for _, v := range got {
+		byName[v.Name] = v
+	}
+	assert.Equal(t, 4, len(got), "should return ORG_ONLY, ENV_ONLY, ENV_SECRET, SHARED")
+	assert.Equal(t, "from-org", byName["ORG_ONLY"].Value)
+	assert.Equal(t, models.OrganizationType, byName["ORG_ONLY"].Type)
+	assert.Equal(t, "from-env", byName["ENV_ONLY"].Value)
+	assert.Equal(t, models.EnvironmentType, byName["ENV_ONLY"].Type)
+	assert.Equal(t, "env-value", byName["SHARED"].Value, "env should override org")
+	assert.Equal(t, models.EnvironmentType, byName["SHARED"].Type)
+	assert.Equal(t, "secret-plain", byName["ENV_SECRET"].Value, "secret value should be decrypted in response")
+	assert.True(t, byName["ENV_SECRET"].IsEncrypted)
+}
+
+func TestHandler_ListComponentVariablesAllScopes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+
+	token, _ := auth.GenerateToken(1*time.Hour, auth.JWTData{
+		Email: "test@test.com", Client: "test-client",
+	}, "test-secret")
+
+	config := &apiConfig.Config{
+		JWTSecret:          "test-secret",
+		MongoDBURI:         "mongodb://localhost:27017",
+		MongoDBName:        "conure-test-variables",
+		AuthStrategySystem: "local",
+	}
+	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
+	defer cleanUpDB(mongo)
+	keyStorage := NewLocalSecretKey("secret.key")
+
+	user := models.User{Email: "test@test.com", Client: "test-client"}
+	_ = user.Create(mongo)
+
+	orgID := primitive.NewObjectID()
+	appID := primitive.NewObjectID()
+	compID := primitive.NewObjectID()
+	envName := "prod"
+
+	// Three tiers, one common name: component should win.
+	orgVar := &models.Variable{OrganizationID: orgID, Name: "SHARED", Value: "org-value", Type: models.OrganizationType}
+	_, _ = orgVar.Create(mongo)
+
+	envApp := appID
+	envEnv := envName
+	envVar := &models.Variable{OrganizationID: orgID, ApplicationID: &envApp, EnvironmentID: &envEnv, Name: "SHARED", Value: "env-value", Type: models.EnvironmentType}
+	_, _ = envVar.Create(mongo)
+	envOnly := &models.Variable{OrganizationID: orgID, ApplicationID: &envApp, EnvironmentID: &envEnv, Name: "ENV_ONLY", Value: "env-only", Type: models.EnvironmentType}
+	_, _ = envOnly.Create(mongo)
+
+	compApp := appID
+	compEnv := envName
+	compComp := compID
+	compVar := &models.Variable{OrganizationID: orgID, ApplicationID: &compApp, EnvironmentID: &compEnv, ComponentID: &compComp, Name: "SHARED", Value: "comp-value", Type: models.ComponentType}
+	_, _ = compVar.Create(mongo)
+	compOnly := &models.Variable{OrganizationID: orgID, ApplicationID: &compApp, EnvironmentID: &compEnv, ComponentID: &compComp, Name: "COMP_ONLY", Value: "comp-only", Type: models.ComponentType}
+	_, _ = compOnly.Create(mongo)
+
+	setupTestHandler(router, mongo, config, keyStorage)
+
+	url := fmt.Sprintf("/variables/%s/%s/e/%s/c/%s/allscopes", orgID.Hex(), appID.Hex(), envName, compID.Hex())
+	req, _ := http.NewRequest("GET", url, nil)
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusOK, resp.Code)
+
+	var got []models.Variable
+	require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &got))
+
+	byName := map[string]models.Variable{}
+	for _, v := range got {
+		byName[v.Name] = v
+	}
+	assert.Equal(t, 3, len(got), "should return SHARED, ENV_ONLY, COMP_ONLY")
+	assert.Equal(t, "comp-value", byName["SHARED"].Value, "component should win over env and org")
+	assert.Equal(t, models.ComponentType, byName["SHARED"].Type)
+	assert.Equal(t, "env-only", byName["ENV_ONLY"].Value)
+	assert.Equal(t, models.EnvironmentType, byName["ENV_ONLY"].Type)
+	assert.Equal(t, "comp-only", byName["COMP_ONLY"].Value)
+	assert.Equal(t, models.ComponentType, byName["COMP_ONLY"].Type)
+}
+
 func TestHandler_CreateVariableOrg(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()

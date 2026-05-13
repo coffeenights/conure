@@ -77,62 +77,41 @@ func BuildComponentCRD(application *models.Application, environment *models.Envi
 // gatherVariables collects variables from all scopes (org → environment → component),
 // with lower levels taking priority over higher ones on name conflicts.
 // Encrypted variables are decrypted and returned in Secrets; plain variables in Variables.
+//
+// The merge step delegates to variables.MergeAllScopes so this code path and
+// the /allscopes HTTP endpoints cannot disagree on precedence.
 func gatherVariables(db *database.MongoDB, application *models.Application, environment *models.Environment, component *models.Component, keyStorage variables.SecretKeyStorage) (providers.ComponentVariables, error) {
-	type entry struct {
-		value       string
-		isEncrypted bool
-	}
-	merged := map[string]entry{}
-
 	v := new(models.Variable)
-	type scopedFetcher struct {
-		scope string
-		fetch func() ([]models.Variable, error)
-	}
-	fetchers := []scopedFetcher{
-		{
-			scope: "org",
-			fetch: func() ([]models.Variable, error) { return v.ListByOrg(db, application.OrganizationID) },
-		},
-		{
-			scope: "env",
-			fetch: func() ([]models.Variable, error) {
-				return v.ListByEnv(db, application.OrganizationID, application.ID, environment.Name)
-			},
-		},
-		{
-			scope: "component",
-			fetch: func() ([]models.Variable, error) {
-				return v.ListByComp(db, application.OrganizationID, application.ID, environment.Name, component.ID)
-			},
-		},
-	}
 
-	for _, sf := range fetchers {
-		vars, err := sf.fetch()
-		if err != nil {
-			return providers.ComponentVariables{}, fmt.Errorf("listing %s variables for component %q: %w", sf.scope, component.Name, err)
-		}
-		log.Printf("gatherVariables: %s scope returned %d variable(s) for component %q", sf.scope, len(vars), component.Name)
-		for _, v := range vars {
-			merged[v.Name] = entry{value: v.Value, isEncrypted: v.IsEncrypted}
-		}
+	orgVars, err := v.ListByOrg(db, application.OrganizationID)
+	if err != nil {
+		return providers.ComponentVariables{}, fmt.Errorf("listing org variables for component %q: %w", component.Name, err)
 	}
+	envVars, err := v.ListByEnv(db, application.OrganizationID, application.ID, environment.Name)
+	if err != nil {
+		return providers.ComponentVariables{}, fmt.Errorf("listing env variables for component %q: %w", component.Name, err)
+	}
+	compVars, err := v.ListByComp(db, application.OrganizationID, application.ID, environment.Name, component.ID)
+	if err != nil {
+		return providers.ComponentVariables{}, fmt.Errorf("listing component variables for component %q: %w", component.Name, err)
+	}
+	log.Printf("gatherVariables: org=%d env=%d component=%d for component %q",
+		len(orgVars), len(envVars), len(compVars), component.Name)
 
 	cv := providers.ComponentVariables{
 		ComponentName: component.Name,
 		Variables:     make(map[string]string),
 		Secrets:       make(map[string]string),
 	}
-	for name, e := range merged {
-		if e.isEncrypted {
-			decrypted, err := variables.DecryptValue(keyStorage, e.value)
+	for _, m := range variables.MergeAllScopes(orgVars, envVars, compVars) {
+		if m.IsEncrypted {
+			decrypted, err := variables.DecryptValue(keyStorage, m.Value)
 			if err != nil {
-				return providers.ComponentVariables{}, fmt.Errorf("decrypting variable %q for component %q: %w", name, component.Name, err)
+				return providers.ComponentVariables{}, fmt.Errorf("decrypting variable %q for component %q: %w", m.Name, component.Name, err)
 			}
-			cv.Secrets[name] = decrypted
+			cv.Secrets[m.Name] = decrypted
 		} else {
-			cv.Variables[name] = e.value
+			cv.Variables[m.Name] = m.Value
 		}
 	}
 	return cv, nil

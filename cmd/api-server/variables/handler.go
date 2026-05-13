@@ -134,6 +134,106 @@ func (h *Handler) ListComponentVariables(c *gin.Context) {
 	c.JSON(http.StatusOK, variables)
 }
 
+// ListEnvironmentVariablesAllScopes returns the merged set of org- and
+// env-tier variables that would be effective for a component in this
+// environment. Component-tier variables are not included here — pick the
+// component-allscopes endpoint when a specific component is in play.
+func (h *Handler) ListEnvironmentVariablesAllScopes(c *gin.Context) {
+	var variable models.Variable
+
+	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+	applicationID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+	environmentID := c.Param("environmentID")
+
+	orgVars, err := variable.ListByOrg(h.MongoDB, organizationID)
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+	envVars, err := variable.ListByEnv(h.MongoDB, organizationID, applicationID, environmentID)
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+
+	merged := MergeAllScopes(orgVars, envVars, nil)
+	for i, v := range merged {
+		if v.IsEncrypted {
+			decrypted, err := DecryptValue(h.KeyStorage, v.Value)
+			if err != nil {
+				conureerrors.AbortWithError(c, fmt.Errorf("decrypting variable %q: %w", v.Name, err))
+				return
+			}
+			merged[i].Value = decrypted
+		}
+	}
+
+	c.JSON(http.StatusOK, merged)
+}
+
+// ListComponentVariablesAllScopes returns the merged set of org-, env-, and
+// component-tier variables that would be delivered to a component at render
+// time. The Type field on each entry identifies which tier the winning value
+// came from.
+func (h *Handler) ListComponentVariablesAllScopes(c *gin.Context) {
+	var variable models.Variable
+
+	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+	applicationID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+	componentID, err := primitive.ObjectIDFromHex(c.Param("componentID"))
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+	environmentID := c.Param("environmentID")
+
+	orgVars, err := variable.ListByOrg(h.MongoDB, organizationID)
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+	envVars, err := variable.ListByEnv(h.MongoDB, organizationID, applicationID, environmentID)
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+	compVars, err := variable.ListByComp(h.MongoDB, organizationID, applicationID, environmentID, componentID)
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+
+	merged := MergeAllScopes(orgVars, envVars, compVars)
+	for i, v := range merged {
+		if v.IsEncrypted {
+			decrypted, err := DecryptValue(h.KeyStorage, v.Value)
+			if err != nil {
+				conureerrors.AbortWithError(c, fmt.Errorf("decrypting variable %q: %w", v.Name, err))
+				return
+			}
+			merged[i].Value = decrypted
+		}
+	}
+
+	c.JSON(http.StatusOK, merged)
+}
+
 func (h *Handler) CreateVariable(c *gin.Context) {
 	var variable models.Variable
 

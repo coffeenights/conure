@@ -31,17 +31,24 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, _ []string) error {
-	if link.Exists() {
-		path, _, _ := link.Path()
-		ui.Error("✗ Already linked: %s\n", path)
-		fmt.Println("  Delete the file to re-link this directory.")
-		return fmt.Errorf("already linked")
-	}
-
 	cfg, prof, err := config.RequireAuth(serverFlag, profileFlag)
 	if err != nil {
 		return err
 	}
+	profName := profileFlag
+	if profName == "" {
+		profName = cfg.Active
+	}
+
+	// Refuse only if this directory is already linked *under this profile*.
+	// Other profiles' entries are left alone — the new entry is appended.
+	if link.Exists(profName) {
+		path, _, _ := link.Path()
+		ui.Error("✗ Already linked for profile %q: %s\n", profName, path)
+		fmt.Printf("  Delete the %q entry from the file to re-link this directory for that profile.\n", profName)
+		return fmt.Errorf("already linked")
+	}
+
 	client := apiclient.New(prof.Server, prof.Token)
 	ctx := cmd.Context()
 
@@ -60,18 +67,22 @@ func runInit(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	l := &link.Link{
+	file, err := link.LoadOrEmpty()
+	if err != nil {
+		return fmt.Errorf("reading link file: %w", err)
+	}
+	file[profName] = &link.Link{
 		OrgID:         orgID,
 		AppID:         app.ID,
 		ComponentID:   componentID,
 		ComponentName: compName,
 		Environment:   envName,
 	}
-	if err := link.Save(l); err != nil {
+	if err := link.Save(file); err != nil {
 		return fmt.Errorf("writing link: %w", err)
 	}
 	path, _, _ := link.Path()
-	ui.Success("✓ Linked %s\n", path)
+	ui.Success("✓ Linked profile %q in %s\n", profName, path)
 	fmt.Println()
 	ui.InfoLn("Next: run `conure deploy` to deploy.")
 	return nil

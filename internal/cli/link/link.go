@@ -1,7 +1,8 @@
-// Package link owns the per-repo .conure/link.json file that pins a
-// directory to a single org/app/component/env. It's intentionally tiny:
-// the file is machine-written by `conure init` and machine-read by every
-// other linked-component command.
+// Package link owns the per-repo .conure/link.json file. It maps each
+// CLI profile to the org/app/component/env that this directory is pinned
+// to under that profile, so one checkout can deploy to multiple servers
+// at once. The file is machine-written by `conure init` and machine-read
+// by every other linked-component command.
 package link
 
 import (
@@ -12,8 +13,9 @@ import (
 	"path/filepath"
 )
 
-// Link is the on-disk shape of .conure/link.json. Field tags match what
-// `conure init` writes; do not rename without a migration.
+// Link is one profile's pin: which org/app/component/env in this dir
+// belongs to that profile. The owning profile is the map key in the
+// on-disk file, not a field here.
 type Link struct {
 	OrgID         string `json:"org_id"`
 	AppID         string `json:"app_id"`
@@ -21,6 +23,11 @@ type Link struct {
 	ComponentName string `json:"component_name"`
 	Environment   string `json:"environment"`
 }
+
+// File is the on-disk shape: profile name → link entry. The map is keyed
+// by profile name so duplicates within a directory are impossible by
+// construction.
+type File map[string]*Link
 
 const relPath = ".conure/link.json"
 
@@ -48,9 +55,9 @@ func Path() (string, bool, error) {
 	return filepath.Join(cwd, relPath), false, nil
 }
 
-// Load reads the link reachable from cwd, or returns an actionable error
-// telling the user to run `conure init` first.
-func Load() (*Link, error) {
+// Load reads the link file as a profile-keyed map. Returns an actionable
+// error when no file is reachable from cwd.
+func Load() (File, error) {
 	path, found, err := Path()
 	if err != nil {
 		return nil, err
@@ -62,16 +69,29 @@ func Load() (*Link, error) {
 	if err != nil {
 		return nil, err
 	}
-	var l Link
-	if err := json.Unmarshal(data, &l); err != nil {
+	var f File
+	if err := json.Unmarshal(data, &f); err != nil {
 		return nil, fmt.Errorf("parsing %s: %w", path, err)
 	}
-	return &l, nil
+	if f == nil {
+		f = File{}
+	}
+	return f, nil
 }
 
-// Save writes the link to whichever path Path() resolves to. Existing
+// LoadOrEmpty returns Load()'s result, or an empty File when the file is
+// missing. `conure init` uses this so the first run can write the file
+// from scratch.
+func LoadOrEmpty() (File, error) {
+	if !FileExists() {
+		return File{}, nil
+	}
+	return Load()
+}
+
+// Save writes the map to whichever path Path() resolves to. Existing
 // directories are reused; missing ones are created with 0755.
-func Save(l *Link) error {
+func Save(f File) error {
 	path, _, err := Path()
 	if err != nil {
 		return err
@@ -79,16 +99,48 @@ func Save(l *Link) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(l, "", "  ")
+	if f == nil {
+		f = File{}
+	}
+	data, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, data, 0644)
 }
 
-// Exists reports whether a link is reachable from cwd without loading it.
-// Useful for the `conure init` guard that refuses to overwrite.
-func Exists() bool {
+// Get returns the entry for profile or an actionable error explaining
+// how to add one.
+func Get(profile string) (*Link, error) {
+	f, err := Load()
+	if err != nil {
+		return nil, err
+	}
+	l, ok := f[profile]
+	if !ok {
+		return nil, fmt.Errorf(
+			"no link for profile %q in .conure/link.json — run 'conure init' (with the %q profile active) to add one",
+			profile, profile,
+		)
+	}
+	return l, nil
+}
+
+// Exists reports whether the link file has an entry for the given
+// profile.
+func Exists(profile string) bool {
+	f, err := Load()
+	if err != nil {
+		return false
+	}
+	_, ok := f[profile]
+	return ok
+}
+
+// FileExists reports whether the link file is present at all, regardless
+// of which profiles it pins. Useful for "is this a linked dir?" UX
+// defaults where the caller doesn't yet have a profile name in hand.
+func FileExists() bool {
 	_, found, err := Path()
 	return err == nil && found
 }

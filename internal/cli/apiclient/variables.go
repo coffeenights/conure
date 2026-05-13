@@ -19,6 +19,11 @@ type VariableScope struct {
 	ApplicationID string // required for env + component scopes
 	EnvironmentID string // required for env + component scopes
 	ComponentID   string // required for component scope
+	// AllScopes flips list URLs to the merged /allscopes variant for the
+	// env and component tiers. Ignored for org-only scope (nothing above it
+	// to merge) and ignored for write operations (those always target a
+	// concrete tier).
+	AllScopes bool
 }
 
 // path returns the /variables/... URL for this scope. Returns an empty
@@ -32,15 +37,23 @@ func (s VariableScope) path() string {
 		if s.ApplicationID == "" || s.EnvironmentID == "" {
 			return ""
 		}
-		return fmt.Sprintf("/variables/%s/%s/e/%s/c/%s",
+		base := fmt.Sprintf("/variables/%s/%s/e/%s/c/%s",
 			s.OrgID, s.ApplicationID, s.EnvironmentID, s.ComponentID)
+		if s.AllScopes {
+			return base + "/allscopes"
+		}
+		return base
 	}
 	if s.EnvironmentID != "" {
 		if s.ApplicationID == "" {
 			return ""
 		}
-		return fmt.Sprintf("/variables/%s/%s/e/%s",
+		base := fmt.Sprintf("/variables/%s/%s/e/%s",
 			s.OrgID, s.ApplicationID, s.EnvironmentID)
+		if s.AllScopes {
+			return base + "/allscopes"
+		}
+		return base
 	}
 	return fmt.Sprintf("/variables/%s", s.OrgID)
 }

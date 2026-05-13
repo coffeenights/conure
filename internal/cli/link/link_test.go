@@ -1,40 +1,32 @@
 package link
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-// writeLink is a small helper so tests don't reimplement the dir+file dance
-// each time they need a fixture link in place.
-func writeLink(t *testing.T, dir string, l *Link) {
+// writeFile is a small helper so tests don't reimplement the dir+file dance
+// each time they need a fixture link file in place.
+func writeFile(t *testing.T, dir string, f File) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Join(dir, ".conure"), 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, ".conure", "link.json"), []byte(toJSON(t, l)), 0644); err != nil {
+	data, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".conure", "link.json"), data, 0644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-}
-
-func toJSON(t *testing.T, l *Link) string {
-	t.Helper()
-	// We marshal via Save's format implicitly by round-tripping through the
-	// public API in another test; here we just want a minimal valid file.
-	return `{
-  "org_id":         "` + l.OrgID + `",
-  "app_id":         "` + l.AppID + `",
-  "component_id":   "` + l.ComponentID + `",
-  "component_name": "` + l.ComponentName + `",
-  "environment":    "` + l.Environment + `"
-}`
 }
 
 func TestPath_FoundInCwd(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	writeLink(t, dir, &Link{OrgID: "o1"})
+	writeFile(t, dir, File{"prod": {OrgID: "o1"}})
 
 	got, found, err := Path()
 	if err != nil {
@@ -50,9 +42,8 @@ func TestPath_FoundInCwd(t *testing.T) {
 
 func TestPath_FoundInAncestor(t *testing.T) {
 	root := t.TempDir()
-	writeLink(t, root, &Link{OrgID: "o1"})
+	writeFile(t, root, File{"prod": {OrgID: "o1"}})
 
-	// Descend two levels and look from there.
 	deep := filepath.Join(root, "a", "b")
 	if err := os.MkdirAll(deep, 0755); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -87,15 +78,28 @@ func TestPath_NotFoundReturnsCwdDefault(t *testing.T) {
 	}
 }
 
-func TestExists(t *testing.T) {
+func TestFileExists(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
-	if Exists() {
-		t.Fatal("Exists should be false on an empty dir")
+	if FileExists() {
+		t.Fatal("FileExists should be false on an empty dir")
 	}
-	writeLink(t, dir, &Link{OrgID: "o1"})
-	if !Exists() {
-		t.Fatal("Exists should be true after writing a link")
+	writeFile(t, dir, File{"prod": {OrgID: "o1"}})
+	if !FileExists() {
+		t.Fatal("FileExists should be true after writing a link")
+	}
+}
+
+func TestExists_PerProfile(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeFile(t, dir, File{"prod": {OrgID: "o1"}})
+
+	if !Exists("prod") {
+		t.Error("Exists(prod) should be true")
+	}
+	if Exists("staging") {
+		t.Error("Exists(staging) should be false — no entry for it")
 	}
 }
 
@@ -103,12 +107,21 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 
-	orig := &Link{
-		OrgID:         "org-1",
-		AppID:         "app-1",
-		ComponentID:   "comp-1",
-		ComponentName: "api",
-		Environment:   "production",
+	orig := File{
+		"prod": {
+			OrgID:         "org-1",
+			AppID:         "app-1",
+			ComponentID:   "comp-1",
+			ComponentName: "api",
+			Environment:   "production",
+		},
+		"staging": {
+			OrgID:         "org-2",
+			AppID:         "app-2",
+			ComponentID:   "comp-2",
+			ComponentName: "api",
+			Environment:   "staging",
+		},
 	}
 	if err := Save(orig); err != nil {
 		t.Fatalf("Save: %v", err)
@@ -118,8 +131,28 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if *got != *orig {
-		t.Errorf("round-trip mismatch:\n got = %+v\nwant = %+v", *got, *orig)
+	if len(got) != len(orig) {
+		t.Fatalf("len = %d, want %d", len(got), len(orig))
+	}
+	for name, want := range orig {
+		gotLink, ok := got[name]
+		if !ok {
+			t.Errorf("missing profile %q after round-trip", name)
+			continue
+		}
+		if *gotLink != *want {
+			t.Errorf("round-trip mismatch for %q:\n got = %+v\nwant = %+v", name, *gotLink, *want)
+		}
+	}
+}
+
+func TestGet_MissingProfile(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+	writeFile(t, dir, File{"prod": {OrgID: "o1"}})
+
+	if _, err := Get("staging"); err == nil {
+		t.Fatal("expected error when profile is not in the file")
 	}
 }
 
@@ -127,9 +160,21 @@ func TestLoad_MissingFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
 
-	_, err := Load()
-	if err == nil {
+	if _, err := Load(); err == nil {
 		t.Fatal("expected error when no link file exists")
+	}
+}
+
+func TestLoadOrEmpty_MissingFile(t *testing.T) {
+	dir := t.TempDir()
+	t.Chdir(dir)
+
+	f, err := LoadOrEmpty()
+	if err != nil {
+		t.Fatalf("LoadOrEmpty: %v", err)
+	}
+	if len(f) != 0 {
+		t.Errorf("expected empty map, got %v", f)
 	}
 }
 
@@ -143,8 +188,7 @@ func TestLoad_MalformedJSON(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 
-	_, err := Load()
-	if err == nil {
+	if _, err := Load(); err == nil {
 		t.Fatal("expected error on malformed JSON")
 	}
 }
