@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
@@ -648,3 +649,92 @@ func TestApplyResources_SetsOwnerReferences(t *testing.T) {
 
 // Verify the interface is satisfied by the mock at compile time.
 var _ render.Engine = (*mockEngine)(nil)
+
+// stubBuilder is a render.Builder that always hands back the same mockEngine.
+// Used by the digest-verification tests to exercise renderComponent without a
+// real OCI pull.
+type stubBuilder struct{ engine *mockEngine }
+
+func (s *stubBuilder) Build(ctx context.Context, def *conurev1alpha1.ComponentDefinition, comp *conurev1alpha1.Component, creds string) (render.Engine, error) {
+	return s.engine, nil
+}
+func (s *stubBuilder) BuildForApply(ctx context.Context, comp *conurev1alpha1.Component) (render.Engine, error) {
+	return s.engine, nil
+}
+
+// TestRenderComponent_DigestVerification asserts that the digest gate in
+// renderComponent works identically for both engines: when ComponentDefinition
+// sets OCIDigest, the engine's resolved digest must match or the render fails
+// with Rendered=Failed. Both engines share the gate (handler.go) and only
+// differ in how they populate Digest(), so we drive the same scenarios under
+// each engine label to confirm parity.
+func TestRenderComponent_DigestVerification(t *testing.T) {
+	cases := []struct {
+		name       string
+		engine     conurev1alpha1.ComponentEngine
+		crdDigest  string
+		realDigest string
+		wantFailed bool
+		wantSubstr string
+	}{
+		{"timoni: digest match passes", conurev1alpha1.EngineTimoni, "sha256:abc", "sha256:abc", false, ""},
+		{"timoni: digest mismatch fails", conurev1alpha1.EngineTimoni, "sha256:abc", "sha256:zzz", true, "OCI digest mismatch"},
+		{"timoni: empty CRD digest skips check", conurev1alpha1.EngineTimoni, "", "sha256:whatever", false, ""},
+		{"helm: digest match passes", conurev1alpha1.EngineHelm, "sha256:abc", "sha256:abc", false, ""},
+		{"helm: digest mismatch fails", conurev1alpha1.EngineHelm, "sha256:abc", "sha256:zzz", true, "OCI digest mismatch"},
+		{"helm: empty CRD digest skips check", conurev1alpha1.EngineHelm, "", "sha256:whatever", false, ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			def := &conurev1alpha1.ComponentDefinition{
+				ObjectMeta: metav1.ObjectMeta{Name: "def-" + string(tc.engine)},
+				Spec: conurev1alpha1.ComponentDefinitionSpec{
+					ComponentType: "type-" + string(tc.engine),
+					Engine:        tc.engine,
+					OCIRepository: "example.test/chart",
+					OCITag:        "1.0",
+					OCIDigest:     tc.crdDigest,
+				},
+			}
+			comp := newTestComponent("comp", "default", def.Spec.ComponentType)
+
+			mock := &mockEngine{
+				applySets: nil, // empty render -> skips label propagation
+				digest:    tc.realDigest,
+			}
+			k8sClient := newFakeClient(def, comp)
+			r := &ComponentReconciler{
+				Client: k8sClient,
+				Scheme: newTestScheme(),
+				Builders: map[conurev1alpha1.ComponentEngine]render.Builder{
+					tc.engine: &stubBuilder{engine: mock},
+				},
+			}
+			h := &ComponentHandler{Component: comp, Reconciler: r, Ctx: ctx}
+
+			err := h.RenderComponent()
+			rendered := h.GetCondition(conurev1alpha1.ComponentConditionTypeRendered)
+			if tc.wantFailed {
+				if err == nil {
+					t.Fatal("expected error from RenderComponent")
+				}
+				if rendered == nil || rendered.Reason != conurev1alpha1.ComponentReasonFailed.String() {
+					t.Fatalf("expected Rendered=Failed, got %+v", rendered)
+				}
+				if tc.wantSubstr != "" && !strings.Contains(rendered.Message, tc.wantSubstr) {
+					t.Fatalf("expected Rendered.Message to contain %q, got %q", tc.wantSubstr, rendered.Message)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expected success, got error: %v", err)
+				}
+				if rendered == nil || rendered.Status != metav1.ConditionTrue {
+					t.Fatalf("expected Rendered=True, got %+v", rendered)
+				}
+			}
+		})
+	}
+}

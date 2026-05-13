@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	chartcommon "helm.sh/helm/v4/pkg/chart/common"
+	chartv2 "helm.sh/helm/v4/pkg/chart/v2"
 	chartv2loader "helm.sh/helm/v4/pkg/chart/v2/loader"
 	helmregistry "helm.sh/helm/v4/pkg/registry"
 
@@ -84,6 +85,23 @@ func (b *Builder) Build(ctx context.Context, def *conurev1alpha1.ComponentDefini
 // resource — no fetch, no template render.
 func (b *Builder) BuildForApply(ctx context.Context, comp *conurev1alpha1.Component) (render.Engine, error) {
 	return &Engine{applier: b.applier}, nil
+}
+
+// NewEngineFromChart wires a render.Engine around an already-loaded chart.
+// Exposed for tests and any consumer that wants to skip the OCI pull (e.g.
+// envtest harnesses loading a chart from disk).
+func NewEngineFromChart(chart *chartv2.Chart, def *conurev1alpha1.ComponentDefinition, comp *conurev1alpha1.Component, applier *apply.Manager) (*Engine, error) {
+	values, err := decodeValues(comp)
+	if err != nil {
+		return nil, err
+	}
+	return &Engine{
+		chart:   chart,
+		values:  values,
+		release: buildReleaseOptions(def, comp),
+		caps:    buildCapabilities(def),
+		applier: applier,
+	}, nil
 }
 
 // decodeValues converts the Component's Spec.Values RawExtension into a

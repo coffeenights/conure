@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
+	"github.com/coffeenights/conure/internal/render"
+	"github.com/coffeenights/conure/internal/render/apply"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -60,9 +62,22 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	// The envtest reconciler is wired with a Helm builder that loads its
+	// chart from internal/render/helm/testdata/sample on disk, bypassing the
+	// OCI pull. Timoni is intentionally not registered: the existing tests
+	// (which use ComponentType "webservice" without a matching
+	// ComponentDefinition) short-circuit before SelectBuilder is consulted.
+	helmApplier, err := apply.New(cfg, k8sManager.GetScheme())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "failed to build apply manager: %v\n", err)
+		os.Exit(1)
+	}
 	if err = (&ComponentReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: k8sManager.GetScheme(),
+		Builders: map[conurev1alpha1.ComponentEngine]render.Builder{
+			conurev1alpha1.EngineHelm: newDiskHelmBuilder(helmApplier),
+		},
 	}).SetupWithManager(k8sManager); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to setup reconciler: %v\n", err)
 		os.Exit(1)
