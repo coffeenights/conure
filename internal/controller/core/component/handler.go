@@ -147,18 +147,38 @@ func (c *ComponentHandler) renderComponent() error {
 }
 
 // lookupComponentDefinition finds the ComponentDefinition matching the
-// component's spec.type. Returns an error if no definition matches.
+// component's spec.type. When the Component pins spec.engine, the match must
+// also agree on engine (timoni vs helm); otherwise a single type match wins
+// and finding more than one match is reported as an ambiguity the user must
+// resolve by setting spec.engine.
 func (c *ComponentHandler) lookupComponentDefinition() (*conurev1alpha1.ComponentDefinition, error) {
 	compDefList := &conurev1alpha1.ComponentDefinitionList{}
 	if err := c.Reconciler.List(c.Ctx, compDefList); err != nil {
 		return nil, fmt.Errorf("failed to list component definitions: %w", err)
 	}
+
+	wantEngine := c.Component.Spec.Engine
+	var matches []*conurev1alpha1.ComponentDefinition
 	for i := range compDefList.Items {
-		if compDefList.Items[i].Spec.ComponentType == c.Component.Spec.ComponentType {
-			return &compDefList.Items[i], nil
+		if compDefList.Items[i].Spec.ComponentType != c.Component.Spec.ComponentType {
+			continue
 		}
+		if wantEngine != "" && engineOf(&compDefList.Items[i]) != wantEngine {
+			continue
+		}
+		matches = append(matches, &compDefList.Items[i])
 	}
-	return nil, fmt.Errorf("component definition not found for type %q", c.Component.Spec.ComponentType)
+	switch len(matches) {
+	case 0:
+		if wantEngine != "" {
+			return nil, fmt.Errorf("component definition not found for type %q with engine %q", c.Component.Spec.ComponentType, wantEngine)
+		}
+		return nil, fmt.Errorf("component definition not found for type %q", c.Component.Spec.ComponentType)
+	case 1:
+		return matches[0], nil
+	default:
+		return nil, fmt.Errorf("%d ComponentDefinitions match type %q; set spec.engine on the Component to disambiguate", len(matches), c.Component.Spec.ComponentType)
+	}
 }
 
 // writeApplySetsAnnotation marshals the apply sets through the engine, wraps

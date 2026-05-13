@@ -71,8 +71,16 @@ var knownComponentConditionReasons = map[ComponentConditionReason]struct{}{
 }
 
 type ComponentSpec struct {
-	ComponentType string                `json:"type"`
-	Values        *runtime.RawExtension `json:"values"`
+	ComponentType string `json:"type"`
+	// Engine optionally narrows ComponentDefinition lookup to a specific
+	// rendering backend. Required only when more than one ComponentDefinition
+	// shares the same spec.type (e.g. a Timoni and a Helm implementation of
+	// "webservice" deployed side-by-side). When empty, the lookup expects a
+	// single matching ComponentDefinition for the type.
+	// +kubebuilder:validation:Enum=timoni;helm
+	// +optional
+	Engine ComponentEngine       `json:"engine,omitempty"`
+	Values *runtime.RawExtension `json:"values"`
 }
 
 type ComponentStatus struct {

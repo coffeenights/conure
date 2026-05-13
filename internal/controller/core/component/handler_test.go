@@ -650,6 +650,100 @@ func TestApplyResources_SetsOwnerReferences(t *testing.T) {
 // Verify the interface is satisfied by the mock at compile time.
 var _ render.Engine = (*mockEngine)(nil)
 
+// TestLookupComponentDefinition_DisambiguatesByEngine covers the (type,engine)
+// match logic added so a single spec.type can be implemented by both a Timoni
+// and a Helm ComponentDefinition simultaneously:
+//   - Single matching definition for a type → returned regardless of
+//     Component.spec.engine.
+//   - Two definitions sharing the type, Component pins engine → that one wins.
+//   - Two definitions sharing the type, Component leaves engine empty →
+//     ambiguity error tells the user to disambiguate.
+//   - Component pins an engine that no definition implements → not-found.
+func TestLookupComponentDefinition_DisambiguatesByEngine(t *testing.T) {
+	timoniDef := &conurev1alpha1.ComponentDefinition{
+		ObjectMeta: metav1.ObjectMeta{Name: "webservice-timoni"},
+		Spec: conurev1alpha1.ComponentDefinitionSpec{
+			ComponentType: "webservice",
+			Engine:        conurev1alpha1.EngineTimoni,
+		},
+	}
+	helmDef := &conurev1alpha1.ComponentDefinition{
+		ObjectMeta: metav1.ObjectMeta{Name: "webservice-helm"},
+		Spec: conurev1alpha1.ComponentDefinitionSpec{
+			ComponentType: "webservice",
+			Engine:        conurev1alpha1.EngineHelm,
+		},
+	}
+
+	cases := []struct {
+		name        string
+		defs        []client.Object
+		compEngine  conurev1alpha1.ComponentEngine
+		wantDefName string
+		wantErr     string
+	}{
+		{
+			name:        "single timoni def, no engine on component",
+			defs:        []client.Object{timoniDef},
+			wantDefName: "webservice-timoni",
+		},
+		{
+			name:        "two defs, component pins helm",
+			defs:        []client.Object{timoniDef, helmDef},
+			compEngine:  conurev1alpha1.EngineHelm,
+			wantDefName: "webservice-helm",
+		},
+		{
+			name:        "two defs, component pins timoni",
+			defs:        []client.Object{timoniDef, helmDef},
+			compEngine:  conurev1alpha1.EngineTimoni,
+			wantDefName: "webservice-timoni",
+		},
+		{
+			name:    "two defs, no engine on component → ambiguous",
+			defs:    []client.Object{timoniDef, helmDef},
+			wantErr: "set spec.engine on the Component to disambiguate",
+		},
+		{
+			name:       "engine pinned but no def implements it",
+			defs:       []client.Object{timoniDef},
+			compEngine: conurev1alpha1.EngineHelm,
+			wantErr:    `with engine "helm"`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			comp := newTestComponent("web", "default", "webservice")
+			comp.Spec.Engine = tc.compEngine
+
+			r := &ComponentReconciler{
+				Client: newFakeClient(tc.defs...),
+				Scheme: newTestScheme(),
+			}
+			h := &ComponentHandler{Component: comp, Reconciler: r, Ctx: ctx}
+
+			got, err := h.lookupComponentDefinition()
+			if tc.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+				}
+				if !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("expected error containing %q, got %q", tc.wantErr, err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Name != tc.wantDefName {
+				t.Fatalf("expected def %q, got %q", tc.wantDefName, got.Name)
+			}
+		})
+	}
+}
+
 // stubBuilder is a render.Builder that always hands back the same mockEngine.
 // Used by the digest-verification tests to exercise renderComponent without a
 // real OCI pull.
