@@ -29,12 +29,33 @@ func NewVariablesHandler(config *apiConfig.Config, mongo *database.MongoDB, keyS
 	}
 }
 
+// requireOrgOwnership parses :organizationID, loads the org, and verifies the
+// authenticated user owns it. On failure it writes the response and returns
+// ok=false; callers must return immediately.
+func (h *Handler) requireOrgOwnership(c *gin.Context) (primitive.ObjectID, bool) {
+	orgID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return primitive.NilObjectID, false
+	}
+	user := c.MustGet("currentUser").(models.User)
+	org := models.Organization{}
+	if _, err := org.GetById(h.MongoDB, orgID.Hex()); err != nil {
+		conureerrors.AbortWithError(c, err)
+		return primitive.NilObjectID, false
+	}
+	if org.AccountID != user.ID {
+		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
+		return primitive.NilObjectID, false
+	}
+	return orgID, true
+}
+
 func (h *Handler) ListOrganizationVariables(c *gin.Context) {
 	var variable models.Variable
 
-	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
-	if err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+	organizationID, ok := h.requireOrgOwnership(c)
+	if !ok {
 		return
 	}
 
@@ -61,9 +82,8 @@ func (h *Handler) ListOrganizationVariables(c *gin.Context) {
 func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 	var variable models.Variable
 
-	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
-	if err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+	organizationID, ok := h.requireOrgOwnership(c)
+	if !ok {
 		return
 	}
 	applicationID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
@@ -97,9 +117,8 @@ func (h *Handler) ListEnvironmentVariables(c *gin.Context) {
 func (h *Handler) ListComponentVariables(c *gin.Context) {
 	var variable models.Variable
 
-	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
-	if err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+	organizationID, ok := h.requireOrgOwnership(c)
+	if !ok {
 		return
 	}
 	applicationID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
@@ -141,9 +160,8 @@ func (h *Handler) ListComponentVariables(c *gin.Context) {
 func (h *Handler) ListEnvironmentVariablesAllScopes(c *gin.Context) {
 	var variable models.Variable
 
-	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
-	if err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+	organizationID, ok := h.requireOrgOwnership(c)
+	if !ok {
 		return
 	}
 	applicationID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
@@ -186,9 +204,8 @@ func (h *Handler) ListEnvironmentVariablesAllScopes(c *gin.Context) {
 func (h *Handler) ListComponentVariablesAllScopes(c *gin.Context) {
 	var variable models.Variable
 
-	organizationID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
-	if err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+	organizationID, ok := h.requireOrgOwnership(c)
+	if !ok {
 		return
 	}
 	applicationID, err := primitive.ObjectIDFromHex(c.Param("applicationID"))
@@ -247,9 +264,8 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 		return
 	}
 
-	orgID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
-	if err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+	orgID, ok := h.requireOrgOwnership(c)
+	if !ok {
 		return
 	}
 	variable.OrganizationID = orgID
@@ -303,7 +319,7 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 	}
 
 	// save the variable to the database
-	_, err = variable.Create(h.MongoDB)
+	_, err := variable.Create(h.MongoDB)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
@@ -314,11 +330,9 @@ func (h *Handler) CreateVariable(c *gin.Context) {
 
 func (h *Handler) DeleteVariable(c *gin.Context) {
 	var variable models.Variable
-	user := c.MustGet("currentUser").(models.User)
 
-	orgID, err := primitive.ObjectIDFromHex(c.Param("organizationID"))
-	if err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+	orgID, ok := h.requireOrgOwnership(c)
+	if !ok {
 		return
 	}
 
@@ -328,20 +342,18 @@ func (h *Handler) DeleteVariable(c *gin.Context) {
 		return
 	}
 
-	org := models.Organization{}
-	_, err = org.GetById(h.MongoDB, orgID.Hex())
-	if err != nil {
-		log.Printf("Error getting organization: %v", err)
+	// Confirm the variable actually belongs to the org in the URL. Without
+	// this, an owner of OrgA could delete a variable belonging to OrgB by
+	// pairing their own org ID with another org's variable ID.
+	if err := variable.GetByID(h.MongoDB, varID.Hex()); err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-
-	if org.AccountID != user.ID {
-		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
+	if variable.OrganizationID != orgID {
+		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 		return
 	}
 
-	variable.ID = varID
 	err = variable.Delete(h.MongoDB)
 	if err != nil {
 		log.Printf("Error deleting variable: %v", err)

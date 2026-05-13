@@ -62,7 +62,19 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 		Client: "test-client",
 	}
 	_ = user.Create(mongo)
-	orgID := primitive.NewObjectID()
+
+	// Org owned by the authenticated user — what the happy-path requests use.
+	ownedOrg := &models.Organization{Status: models.OrgActive, AccountID: user.ID}
+	ownedOrgIDHex, err := ownedOrg.Create(mongo)
+	require.NoError(t, err)
+	orgID, err := primitive.ObjectIDFromHex(ownedOrgIDHex)
+	require.NoError(t, err)
+
+	// Org owned by a different user — variables here must NOT be visible.
+	otherOrg := &models.Organization{Status: models.OrgActive, AccountID: primitive.NewObjectID()}
+	otherOrgIDHex, err := otherOrg.Create(mongo)
+	require.NoError(t, err)
+
 	orgVar := &models.Variable{
 		OrganizationID: orgID,
 		Name:           "var1",
@@ -110,16 +122,25 @@ func TestHandler_ListOrganizationVariables(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 Bad Request")
 
+	// Valid object id but the org doesn't exist → 404.
 	req, _ = http.NewRequest("GET", "/variables/"+primitive.NewObjectID().Hex(), nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
-	_ = json.Unmarshal(resp.Body.Bytes(), &variables)
 
-	assert.Equal(t, http.StatusOK, resp.Code, "should return 200 OK")
-	assert.Equal(t, 0, len(variables), "should return 0 results")
+	assert.Equal(t, http.StatusNotFound, resp.Code, "should return 404 Not Found")
+
+	// Org owned by someone else → 403.
+	req, _ = http.NewRequest("GET", "/variables/"+otherOrgIDHex, nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusForbidden, resp.Code, "should return 403 Forbidden when org is owned by another user")
 
 	req, _ = http.NewRequest("GET", "/variables/fakeOrg", nil)
 	req.Header.Set("Content-Type", "application/json")
@@ -159,7 +180,16 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 	}
 	_ = user.Create(mongo)
 
-	orgID1 := primitive.NewObjectID()
+	ownedOrg := &models.Organization{Status: models.OrgActive, AccountID: user.ID}
+	ownedOrgIDHex, err := ownedOrg.Create(mongo)
+	require.NoError(t, err)
+	orgID1, err := primitive.ObjectIDFromHex(ownedOrgIDHex)
+	require.NoError(t, err)
+
+	otherOrg := &models.Organization{Status: models.OrgActive, AccountID: primitive.NewObjectID()}
+	otherOrgIDHex, err := otherOrg.Create(mongo)
+	require.NoError(t, err)
+
 	app1 := primitive.NewObjectID()
 	env1 := "env1"
 	orgVar := &models.Variable{
@@ -259,6 +289,17 @@ func TestHandler_ListEnvironmentVariables(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.Code, "should return 200 OK")
 	assert.Equal(t, 0, len(variables), "should return 0 results")
+
+	// Foreign org → 403.
+	fakeURL = fmt.Sprintf(urlFormat, otherOrgIDHex, app1.Hex(), env1)
+	req, _ = http.NewRequest("GET", fakeURL, nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusForbidden, resp.Code, "should return 403 for foreign org")
 }
 
 func TestHandler_ListComponentVariables(t *testing.T) {
@@ -289,7 +330,16 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 	}
 	_ = user.Create(mongo)
 
-	orgID1 := primitive.NewObjectID()
+	ownedOrg := &models.Organization{Status: models.OrgActive, AccountID: user.ID}
+	ownedOrgIDHex, err := ownedOrg.Create(mongo)
+	require.NoError(t, err)
+	orgID1, err := primitive.ObjectIDFromHex(ownedOrgIDHex)
+	require.NoError(t, err)
+
+	otherOrg := &models.Organization{Status: models.OrgActive, AccountID: primitive.NewObjectID()}
+	otherOrgIDHex, err := otherOrg.Create(mongo)
+	require.NoError(t, err)
+
 	app1 := primitive.NewObjectID()
 	env1 := "env1"
 	comp1 := primitive.NewObjectID()
@@ -403,6 +453,17 @@ func TestHandler_ListComponentVariables(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, resp.Code, "should return 200 OK")
 	assert.Equal(t, 0, len(variables), "should return 0 results")
+
+	// Foreign org → 403.
+	fakeURL = fmt.Sprintf(urlFormat, otherOrgIDHex, app1.Hex(), env1, comp1.Hex())
+	req, _ = http.NewRequest("GET", fakeURL, nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusForbidden, resp.Code, "should return 403 for foreign org")
 }
 
 func TestHandler_ListEnvironmentVariablesAllScopes(t *testing.T) {
@@ -426,7 +487,11 @@ func TestHandler_ListEnvironmentVariablesAllScopes(t *testing.T) {
 	user := models.User{Email: "test@test.com", Client: "test-client"}
 	_ = user.Create(mongo)
 
-	orgID := primitive.NewObjectID()
+	ownedOrg := &models.Organization{Status: models.OrgActive, AccountID: user.ID}
+	ownedOrgIDHex, err := ownedOrg.Create(mongo)
+	require.NoError(t, err)
+	orgID, err := primitive.ObjectIDFromHex(ownedOrgIDHex)
+	require.NoError(t, err)
 	appID := primitive.NewObjectID()
 	envName := "prod"
 
@@ -499,7 +564,11 @@ func TestHandler_ListComponentVariablesAllScopes(t *testing.T) {
 	user := models.User{Email: "test@test.com", Client: "test-client"}
 	_ = user.Create(mongo)
 
-	orgID := primitive.NewObjectID()
+	ownedOrg := &models.Organization{Status: models.OrgActive, AccountID: user.ID}
+	ownedOrgIDHex, err := ownedOrg.Create(mongo)
+	require.NoError(t, err)
+	orgID, err := primitive.ObjectIDFromHex(ownedOrgIDHex)
+	require.NoError(t, err)
 	appID := primitive.NewObjectID()
 	compID := primitive.NewObjectID()
 	envName := "prod"
@@ -578,6 +647,16 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 	}
 	_ = user.Create(mongo)
 
+	ownedOrg := &models.Organization{Status: models.OrgActive, AccountID: user.ID}
+	ownedOrgIDHex, err := ownedOrg.Create(mongo)
+	require.NoError(t, err)
+	orgID1, err := primitive.ObjectIDFromHex(ownedOrgIDHex)
+	require.NoError(t, err)
+
+	otherOrg := &models.Organization{Status: models.OrgActive, AccountID: primitive.NewObjectID()}
+	otherOrgIDHex, err := otherOrg.Create(mongo)
+	require.NoError(t, err)
+
 	setupTestHandler(router, mongo, config, keyStorage)
 	newVar := models.Variable{
 		Name:        "newVar",
@@ -587,7 +666,6 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 
 	jsonVar, _ := json.Marshal(newVar)
 	var result models.Variable
-	orgID1 := primitive.NewObjectID()
 
 	req, _ := http.NewRequest("POST", "/variables/"+orgID1.Hex(), bytes.NewBuffer(jsonVar))
 	req.Header.Set("Content-Type", "application/json")
@@ -683,6 +761,28 @@ func TestHandler_CreateVariableOrg(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+
+	// Posting to a foreign org must be rejected.
+	newVar = models.Variable{Name: "stealthVar", Value: "x", IsEncrypted: false}
+	jsonVar, _ = json.Marshal(newVar)
+	req, _ = http.NewRequest("POST", "/variables/"+otherOrgIDHex, bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusForbidden, resp.Code, "should return 403 for foreign org")
+
+	// Posting to a non-existent org should 404.
+	req, _ = http.NewRequest("POST", "/variables/"+primitive.NewObjectID().Hex(), bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusNotFound, resp.Code, "should return 404 for non-existent org")
 }
 
 func TestHandler_CreateVariableEnv(t *testing.T) {
@@ -713,13 +813,22 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	}
 	_ = user.Create(mongo)
 
+	ownedOrg := &models.Organization{Status: models.OrgActive, AccountID: user.ID}
+	ownedOrgIDHex, err := ownedOrg.Create(mongo)
+	require.NoError(t, err)
+	orgID1, err := primitive.ObjectIDFromHex(ownedOrgIDHex)
+	require.NoError(t, err)
+
+	otherOrg := &models.Organization{Status: models.OrgActive, AccountID: primitive.NewObjectID()}
+	otherOrgIDHex, err := otherOrg.Create(mongo)
+	require.NoError(t, err)
+
 	setupTestHandler(router, mongo, config, keyStorage)
 	newVar := models.Variable{
 		Name:        "newVar",
 		Value:       "value2",
 		IsEncrypted: true,
 	}
-	orgID1 := primitive.NewObjectID()
 	appID1 := primitive.NewObjectID()
 
 	jsonVar, _ := json.Marshal(newVar)
@@ -815,6 +924,19 @@ func TestHandler_CreateVariableEnv(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+
+	// Foreign org → 403.
+	newVar = models.Variable{Name: "stealthVar", Value: "x", IsEncrypted: false}
+	jsonVar, _ = json.Marshal(newVar)
+	foreignURL := fmt.Sprintf(urlFormat, otherOrgIDHex, appID1.Hex(), "env1")
+	req, _ = http.NewRequest("POST", foreignURL, bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusForbidden, resp.Code, "should return 403 for foreign org")
 }
 
 func TestHandler_CreateVariableComp(t *testing.T) {
@@ -845,6 +967,16 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	}
 	_ = user.Create(mongo)
 
+	ownedOrg := &models.Organization{Status: models.OrgActive, AccountID: user.ID}
+	ownedOrgIDHex, err := ownedOrg.Create(mongo)
+	require.NoError(t, err)
+	orgID1, err := primitive.ObjectIDFromHex(ownedOrgIDHex)
+	require.NoError(t, err)
+
+	otherOrg := &models.Organization{Status: models.OrgActive, AccountID: primitive.NewObjectID()}
+	otherOrgIDHex, err := otherOrg.Create(mongo)
+	require.NoError(t, err)
+
 	setupTestHandler(router, mongo, config, keyStorage)
 	newVar := models.Variable{
 		Name:        "newVar",
@@ -852,7 +984,6 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 		IsEncrypted: true,
 	}
 
-	orgID1 := primitive.NewObjectID()
 	appID1 := primitive.NewObjectID()
 	compID1 := primitive.NewObjectID()
 
@@ -983,6 +1114,19 @@ func TestHandler_CreateVariableComp(t *testing.T) {
 	_ = json.Unmarshal(resp.Body.Bytes(), &result)
 
 	assert.Equal(t, http.StatusBadRequest, resp.Code, "should return 400 BadRequest")
+
+	// Foreign org → 403.
+	newVar = models.Variable{Name: "stealthVar", Value: "x", IsEncrypted: false}
+	jsonVar, _ = json.Marshal(newVar)
+	foreignURL := fmt.Sprintf(urlFormat, otherOrgIDHex, appID1.Hex(), "env1", compID1.Hex())
+	req, _ = http.NewRequest("POST", foreignURL, bytes.NewBuffer(jsonVar))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusForbidden, resp.Code, "should return 403 for foreign org")
 }
 
 func TestHandler_DeleteVariable(t *testing.T) {
@@ -1014,26 +1158,62 @@ func TestHandler_DeleteVariable(t *testing.T) {
 	_ = user.Create(mongo)
 
 	setupTestHandler(router, mongo, config, keyStorage)
-	newVar := models.Variable{
-		Name:        "newVar",
-		Value:       "value",
-		IsEncrypted: true,
-	}
+
 	org := &models.Organization{Status: models.OrgActive, AccountID: user.ID}
-	orgID, err := org.Create(mongo)
-	if err != nil {
-		assert.Fail(t, "failed to create organization")
+	orgIDHex, err := org.Create(mongo)
+	require.NoError(t, err, "failed to create organization")
+	orgID, err := primitive.ObjectIDFromHex(orgIDHex)
+	require.NoError(t, err)
+
+	// Second org owned by someone else, used to verify cross-org delete fails.
+	otherOrg := &models.Organization{Status: models.OrgActive, AccountID: primitive.NewObjectID()}
+	otherOrgIDHex, err := otherOrg.Create(mongo)
+	require.NoError(t, err)
+	otherOrgID, err := primitive.ObjectIDFromHex(otherOrgIDHex)
+	require.NoError(t, err)
+
+	newVar := models.Variable{
+		OrganizationID: orgID,
+		Type:           models.OrganizationType,
+		Name:           "newVar",
+		Value:          "value",
+		IsEncrypted:    true,
 	}
 	varID, err := newVar.Create(mongo)
-	if err != nil {
-		assert.Fail(t, "failed to create variable")
-	}
+	require.NoError(t, err, "failed to create variable")
 
-	req, _ := http.NewRequest("DELETE", "/variables/"+orgID+"/"+varID, nil)
+	// A variable that belongs to the other org. The owned user must not be
+	// able to delete it by pairing their own org ID with this variable ID.
+	foreignVar := models.Variable{
+		OrganizationID: otherOrgID,
+		Type:           models.OrganizationType,
+		Name:           "foreignVar",
+		Value:          "secret",
+	}
+	foreignVarID, err := foreignVar.Create(mongo)
+	require.NoError(t, err)
+
+	// Cross-org pairing must be rejected.
+	req, _ := http.NewRequest("DELETE", "/variables/"+orgIDHex+"/"+foreignVarID, nil)
 	req.Header.Set("Content-Type", "application/json")
 	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
 
 	resp := httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusNotFound, resp.Code, "deleting a variable from another org must not succeed")
+
+	// And the foreign variable must still exist.
+	var stillThere models.Variable
+	err = stillThere.GetByID(mongo, foreignVar.ID.Hex())
+	require.NoError(t, err, "foreign variable should still exist after blocked delete")
+
+	// Happy path: delete own org's variable.
+	req, _ = http.NewRequest("DELETE", "/variables/"+orgIDHex+"/"+varID, nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp = httptest.NewRecorder()
 	router.ServeHTTP(resp, req)
 
 	assert.Equal(t, http.StatusNoContent, resp.Code, "should return 204 No Content")
@@ -1041,4 +1221,14 @@ func TestHandler_DeleteVariable(t *testing.T) {
 	var result models.Variable
 	err = result.GetByID(mongo, newVar.ID.Hex())
 	assert.ErrorIsf(t, err, conureerrors.ErrObjectNotFound, "should return error as variable does not exist")
+
+	// Foreign org → 403.
+	req, _ = http.NewRequest("DELETE", "/variables/"+otherOrgIDHex+"/"+foreignVarID, nil)
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "auth", Value: token})
+
+	resp = httptest.NewRecorder()
+	router.ServeHTTP(resp, req)
+
+	assert.Equal(t, http.StatusForbidden, resp.Code, "should return 403 for foreign org")
 }
