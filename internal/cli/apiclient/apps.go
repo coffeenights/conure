@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/coffeenights/conure/pkg/api"
 )
@@ -52,5 +53,14 @@ func (c *Client) CreateEnvironment(ctx context.Context, orgID, appID, name strin
 		fmt.Sprintf("/organizations/%s/a/%s/e", orgID, appID),
 		api.CreateEnvironmentRequest{Name: name},
 	)
+	return err
+}
+
+// DeleteEnvironment removes an environment by name. The server cascades to
+// the environment's revisions/components, so the caller is expected to
+// confirm before invoking.
+func (c *Client) DeleteEnvironment(ctx context.Context, orgID, appID, name string) error {
+	_, _, err := c.do(ctx, http.MethodDelete,
+		fmt.Sprintf("/organizations/%s/a/%s/e/%s", orgID, appID, name), nil)
 	return err
 }

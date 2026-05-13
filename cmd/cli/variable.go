@@ -24,7 +24,7 @@ var (
 	varScopeFlag     string
 	varSecretFlag    bool
 	varOverwriteFlag bool
-	varShowValueFlag bool
+	varRevealFlag    bool
 )
 
 var varCmd = &cobra.Command{
@@ -93,8 +93,8 @@ func init() {
 		"Replace existing variables with the same name")
 	varImportCmd.Flags().BoolVar(&varSecretFlag, "secret", false,
 		"Mark every imported entry as a secret (regardless of '# @secret' markers)")
-	varListCmd.Flags().BoolVar(&varShowValueFlag, "show-values", false,
-		"Print values in the table (off by default to avoid accidentally leaking secrets)")
+	varListCmd.Flags().BoolVar(&varRevealFlag, "reveal", false,
+		"Print decrypted secret values instead of masking them with "+secretMask)
 
 	varCmd.AddCommand(varListCmd)
 	varCmd.AddCommand(varSetCmd)
@@ -203,35 +203,32 @@ func runVarList(cmd *cobra.Command, _ []string) error {
 			ui.InfoLn("No variables found")
 			return nil
 		}
-		headers := []string{"NAME", "TYPE", "SECRET"}
-		if varShowValueFlag {
-			headers = append(headers, "VALUE")
-		}
 		rows := make([][]string, len(vars))
 		for i, v := range vars {
 			secretMark := "-"
 			if v.IsEncrypted {
 				secretMark = "✓"
 			}
-			row := []string{v.Name, v.Type, secretMark}
-			if varShowValueFlag {
-				row = append(row, displayValue(v))
-			}
-			rows[i] = row
+			rows[i] = []string{v.Name, displayValue(v), v.Type, secretMark}
 		}
-		ui.RenderTable(headers, rows, nil)
-		if !varShowValueFlag {
-			ui.DimLn("  (pass --show-values to print values)")
+		ui.RenderTable([]string{"NAME", "VALUE", "SCOPE", "SECRET"}, rows, nil)
+		if varRevealFlag {
+			ui.DimLn("  (secret values revealed via --reveal)")
 		}
 		return nil
 	})
 }
 
-// displayValue masks secret values unless --show-values was set. We don't
-// hide non-secrets — the user opted into showing values at all.
+// secretMask is the placeholder rendered for encrypted values in the text
+// listing. JSON/YAML output still emits real values — the mask is purely
+// to keep terminals from leaking secrets to over-the-shoulder readers.
+const secretMask = "*****"
+
+// displayValue masks encrypted values by default. --reveal opts out, for
+// the operator who genuinely needs to read the value back at the terminal.
 func displayValue(v api.Variable) string {
-	if v.IsEncrypted {
-		return "••••••"
+	if v.IsEncrypted && !varRevealFlag {
+		return secretMask
 	}
 	return v.Value
 }

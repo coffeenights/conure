@@ -151,6 +151,15 @@ func TestClient_Endpoints(t *testing.T) {
 			},
 		},
 		{
+			name:       "DeleteEnvironment",
+			bodyReturn: ``,
+			wantMethod: http.MethodDelete,
+			wantPath:   "/organizations/o1/a/a1/e/staging",
+			run: func(c *Client) error {
+				return c.DeleteEnvironment(context.Background(), "o1", "a1", "staging")
+			},
+		},
+		{
 			name:       "ListComponentDefinitions",
 			bodyReturn: `{"definitions":[{"id":"d1","name":"web","type":"web-service"}]}`,
 			wantMethod: http.MethodGet,
