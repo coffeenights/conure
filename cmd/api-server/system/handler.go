@@ -1,6 +1,6 @@
 // Package system exposes cluster-level metadata that the CLI needs to make
 // build decisions: target platform (so M-series Macs cross-build for amd64
-// clusters), Kubernetes version, and whether remote builds are enabled.
+// clusters) and Kubernetes version.
 package system
 
 import (

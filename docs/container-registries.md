@@ -138,12 +138,12 @@ needed) or IAM Roles for Service Accounts (IRSA, recommended).
 because ECR auth tokens expire after 12 hours):
 
 ```bash
-aws ecr get-login-password --region us-east-1 | \
-  kubectl create secret docker-registry registry-credentials \
-    --docker-server=<account>.dkr.ecr.us-east-1.amazonaws.com \
-    --docker-username=AWS \
-    --docker-password-stdin \
-    --namespace conure-system
+ECR_PASSWORD="$(aws ecr get-login-password --region us-east-1)"
+kubectl create secret docker-registry registry-credentials \
+  --docker-server=<account>.dkr.ecr.us-east-1.amazonaws.com \
+  --docker-username=AWS \
+  --docker-password="$ECR_PASSWORD" \
+  --namespace conure-system
 ```
 
 You'll need to refresh this every 12 hours via a CronJob or external
@@ -313,7 +313,7 @@ policies. Worth it when you have multiple teams or compliance requirements.
    ```bash
    kubectl create secret docker-registry registry-credentials \
      --docker-server=harbor.example.com \
-     --docker-username=robot$<project>+<robot-name> \
+     --docker-username='robot$<project>+<robot-name>' \
      --docker-password=<robot-token> \
      --namespace conure-system
    ```

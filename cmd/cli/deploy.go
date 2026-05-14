@@ -102,14 +102,17 @@ func runDeploy(cmd *cobra.Command, _ []string) error {
 	// Resolve the target platform up front. The cluster owns the answer;
 	// we only fall back to local arch when /system/info can't be reached
 	// (offline / unauth) — so the error path here is informational, not
-	// fatal.
+	// fatal. The fallback always pins os=linux: the cluster runs Linux
+	// containers, and the host OS only affects the local builder
+	// (darwin/arm64 isn't a valid container platform — buildx would
+	// reject it or produce an image the cluster can't run).
 	clusterPlatform, kubeVer := resolveClusterPlatform(cmd, lc.Client)
 	if platform == "" {
 		if clusterPlatform != "" {
 			platform = clusterPlatform
 		} else {
-			platform = runtime.GOOS + "/" + runtime.GOARCH
-			ui.Info("Could not detect cluster platform; defaulting to %s\n", platform)
+			platform = "linux/" + runtime.GOARCH
+			ui.Info("Could not detect cluster platform; defaulting to %s (host arch, assuming linux)\n", platform)
 		}
 	}
 
