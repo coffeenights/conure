@@ -30,14 +30,11 @@ type ResetPasswordResponse struct {
 }
 
 type UserResponse struct {
-	*models.User
-	// Role is repeated as the effective role (post-fallback) so clients
-	// don't have to know about the legacy client="conure" sentinel.
-	Role models.Role `json:"role"`
+	models.User
 }
 
 func toUserResponse(u models.User) UserResponse {
-	return UserResponse{User: &u, Role: u.EffectiveRole()}
+	return UserResponse{User: u}
 }
 
 type UserListResponse struct {

@@ -25,17 +25,12 @@ func TestRequireAdmin(t *testing.T) {
 			expectCode: http.StatusOK,
 		},
 		{
-			name:       "legacy superuser client sentinel still passes",
-			user:       models.User{ID: primitive.NewObjectID(), Client: models.SuperuserClient},
-			expectCode: http.StatusOK,
-		},
-		{
 			name:       "developer is rejected",
 			user:       models.User{ID: primitive.NewObjectID(), Role: models.RoleDeveloper},
 			expectCode: http.StatusForbidden,
 		},
 		{
-			name:       "missing role defaults to developer and is rejected",
+			name:       "missing role is rejected",
 			user:       models.User{ID: primitive.NewObjectID()},
 			expectCode: http.StatusForbidden,
 		},

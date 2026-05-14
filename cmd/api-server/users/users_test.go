@@ -75,25 +75,6 @@ func TestUsers_DeveloperIsForbidden(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, w.Code, "developer must be blocked from /users")
 }
 
-func TestUsers_LegacySuperuserClientPasses(t *testing.T) {
-	router, mongo, conf := newTestRouter(t)
-	defer cleanUpDB(mongo)
-
-	// User predates the Role field — Client=="conure" is the legacy admin
-	// sentinel and EffectiveRole should promote them.
-	hashed, _ := auth.GenerateFromPassword("Password123")
-	u := models.User{Email: "legacy@test.io", Password: hashed, Client: models.SuperuserClient}
-	if err := u.Create(mongo); err != nil {
-		t.Fatal(err)
-	}
-
-	req, _ := http.NewRequest(http.MethodGet, "/users/", nil)
-	req.AddCookie(&http.Cookie{Name: "auth", Value: tokenFor(t, conf, "legacy@test.io")})
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	assert.Equal(t, http.StatusOK, w.Code, "legacy superuser must still reach admin endpoints")
-}
-
 func TestUsers_AdminCRUD(t *testing.T) {
 	router, mongo, conf := newTestRouter(t)
 	defer cleanUpDB(mongo)

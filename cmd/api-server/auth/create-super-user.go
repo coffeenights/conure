@@ -12,8 +12,6 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
-const superuserClient = "conure"
-
 func CreateSuperuser(db *database.MongoDB, email, password string) error {
 	if password == "" {
 		password = GenerateRandomPassword(10)
@@ -26,7 +24,6 @@ func CreateSuperuser(db *database.MongoDB, email, password string) error {
 	user := models.User{
 		Email:    email,
 		Password: hashedPassword,
-		Client:   superuserClient,
 		Role:     models.RoleAdmin,
 	}
 	if err := user.Create(db); err != nil {

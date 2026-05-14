@@ -25,11 +25,6 @@ const (
 	RoleDeveloper Role = "developer"
 )
 
-// SuperuserClient mirrors the historical sentinel set on User.Client by
-// CreateSuperuser. It's kept so EffectiveRole can promote legacy superuser
-// rows that predate the Role field.
-const SuperuserClient string = "conure"
-
 type User struct {
 	ID             primitive.ObjectID `bson:"_id,omitempty" json:"id"`
 	Email          string             `bson:"email" json:"email"`
@@ -43,21 +38,8 @@ type User struct {
 	OrganizationID primitive.ObjectID `bson:"organizationId,omitempty" json:"organization_id,omitempty"`
 }
 
-// EffectiveRole resolves the user's role, falling back to the legacy
-// Client=="conure" sentinel for rows written before Role existed. Anything
-// else defaults to developer.
-func (u *User) EffectiveRole() Role {
-	if u.Role != "" {
-		return u.Role
-	}
-	if u.Client == SuperuserClient {
-		return RoleAdmin
-	}
-	return RoleDeveloper
-}
-
 // IsAdmin is shorthand used by authorization middleware and handlers.
-func (u *User) IsAdmin() bool { return u.EffectiveRole() == RoleAdmin }
+func (u *User) IsAdmin() bool { return u.Role == RoleAdmin }
 
 func (u *User) Create(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(UserCollection)
