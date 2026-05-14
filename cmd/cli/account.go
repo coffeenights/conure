@@ -53,8 +53,9 @@ func runAccountShow(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	orgNames := orgNameLookup(cmd, client)
 	return ui.Render(u, func() error {
-		printUser(u)
+		printUser(u, orgNames)
 		return nil
 	})
 }

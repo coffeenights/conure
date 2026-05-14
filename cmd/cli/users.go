@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -107,6 +108,9 @@ func runUsersList(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	// JSON/YAML outputs keep raw IDs so they remain machine-friendly; the
+	// name-resolution only affects the human table.
+	orgNames := orgNameLookup(cmd, client)
 	return ui.Render(users, func() error {
 		if len(users) == 0 {
 			ui.InfoLn("No users found")
@@ -118,11 +122,28 @@ func runUsersList(cmd *cobra.Command, _ []string) error {
 			if !u.IsActive {
 				active = "no"
 			}
-			rows[i] = []string{u.ID, u.Email, u.Role, u.OrganizationID, active}
+			rows[i] = []string{u.ID, u.Email, u.Role, displayOrgName(u.OrganizationID, orgNames), active}
 		}
 		ui.RenderTable([]string{"ID", "EMAIL", "ROLE", "ORG", "ACTIVE"}, rows, nil)
 		return nil
 	})
+}
+
+// orgNameLookup tries to build an id→name map by listing the orgs visible
+// to the caller. Failure is non-fatal — we fall back to showing IDs, since
+// org-name resolution is a presentation nicety, not a correctness need.
+func orgNameLookup(cmd *cobra.Command, client interface {
+	ListOrganizations(ctx context.Context) ([]api.Organization, error)
+}) map[string]string {
+	orgs, err := client.ListOrganizations(cmd.Context())
+	if err != nil {
+		return nil
+	}
+	names := make(map[string]string, len(orgs))
+	for _, o := range orgs {
+		names[o.ID] = o.Name
+	}
+	return names
 }
 
 func runUsersGet(cmd *cobra.Command, args []string) error {
@@ -134,8 +155,9 @@ func runUsersGet(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	orgNames := orgNameLookup(cmd, client)
 	return ui.Render(u, func() error {
-		printUser(u)
+		printUser(u, orgNames)
 		return nil
 	})
 }
@@ -166,8 +188,9 @@ func runUsersCreate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	ui.Success("✓ Created user %s (%s)\n", u.Email, u.ID)
+	orgNames := orgNameLookup(cmd, client)
 	return ui.Render(u, func() error {
-		printUser(u)
+		printUser(u, orgNames)
 		return nil
 	})
 }
@@ -209,8 +232,9 @@ func runUsersUpdate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	ui.Success("✓ Updated user %s\n", u.Email)
+	orgNames := orgNameLookup(cmd, client)
 	return ui.Render(u, func() error {
-		printUser(u)
+		printUser(u, orgNames)
 		return nil
 	})
 }
@@ -248,12 +272,26 @@ func runUsersResetPassword(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func printUser(u *api.User) {
+func printUser(u *api.User, orgNames map[string]string) {
 	ui.Plain("ID:    %s\n", u.ID)
 	ui.Plain("Email: %s\n", u.Email)
 	ui.Plain("Role:  %s\n", u.Role)
-	if u.OrganizationID != "" {
-		ui.Plain("Org:   %s\n", u.OrganizationID)
-	}
+	ui.Plain("Org:   %s\n", displayOrgName(u.OrganizationID, orgNames))
 	ui.Plain("Active: %t\n", u.IsActive)
+}
+
+// displayOrgName renders an organisation reference for humans. It collapses
+// the "no organization" case (the all-zero ObjectID, which primitive.ObjectID
+// serialises explicitly because it's a fixed-size array rather than a slice
+// or pointer) to "-", and substitutes the org name when we have one in the
+// lookup. Falls back to the raw ID when the lookup misses — that happens
+// when the caller can't list orgs or the user's home org was deleted.
+func displayOrgName(id string, names map[string]string) string {
+	if id == "" || id == "000000000000000000000000" {
+		return "-"
+	}
+	if name, ok := names[id]; ok {
+		return name
+	}
+	return id
 }
