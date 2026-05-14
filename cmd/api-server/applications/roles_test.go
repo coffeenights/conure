@@ -126,3 +126,25 @@ func TestDeveloperOutsideOrg_CannotRead(t *testing.T) {
 		t.Errorf("non-member developer must not read the org, got %d (%s)", w.Code, w.Body.String())
 	}
 }
+
+// TestMalformedRouteIDs_Return400 covers the boundary check: a client
+// sending a non-ObjectID in the URL must get a 400, not a 500. The raw
+// error from primitive.ObjectIDFromHex is not a ConureError, so without
+// explicit translation it would have fallen through AbortWithError to
+// the generic-500 branch.
+func TestMalformedRouteIDs_Return400(t *testing.T) {
+	cases := []string{
+		"/organizations/not-a-hex/a",
+		"/organizations/not-a-hex/a/also-not-hex",
+		"/organizations/" + testConf.authUser.ID.Hex() + "/a/also-not-hex",
+	}
+	for _, path := range cases {
+		req, _ := http.NewRequest(http.MethodGet, path, nil)
+		req.AddCookie(testConf.generateCookie())
+		w := httptest.NewRecorder()
+		testConf.router.ServeHTTP(w, req)
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("%s: expected 400, got %d (%s)", path, w.Code, w.Body.String())
+		}
+	}
+}

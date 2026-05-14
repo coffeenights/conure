@@ -16,7 +16,7 @@ import (
 func (a *ApiHandler) ListApplications(c *gin.Context) {
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
-		conureerrors.AbortWithError(c, err)
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	org := models.Organization{}
@@ -64,12 +64,12 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 func (a *ApiHandler) DetailApplication(c *gin.Context) {
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
-		conureerrors.AbortWithError(c, err)
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	if _, err := primitive.ObjectIDFromHex(c.Param("applicationID")); err != nil {
 		log.Printf("Error parsing applicationID: %v\n", err)
-		conureerrors.AbortWithError(c, err)
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 
@@ -101,7 +101,7 @@ func (a *ApiHandler) DetailApplication(c *gin.Context) {
 func (a *ApiHandler) CreateApplication(c *gin.Context) {
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
-		conureerrors.AbortWithError(c, err)
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	org := models.Organization{}

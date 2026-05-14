@@ -19,7 +19,7 @@ func (a *ApiHandler) CreateIntegration(c *gin.Context) {
 	// Escape the organizationID
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
-		conureerrors.AbortWithError(c, err)
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	org := models.Organization{}
@@ -104,7 +104,7 @@ func (a *ApiHandler) ListIntegrations(c *gin.Context) {
 	// Escape the organizationID
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
-		conureerrors.AbortWithError(c, err)
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	org := models.Organization{}
@@ -139,7 +139,7 @@ func (a *ApiHandler) DeleteIntegration(c *gin.Context) {
 	// Escape the organizationID
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
-		conureerrors.AbortWithError(c, err)
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
 		return
 	}
 	org := models.Organization{}

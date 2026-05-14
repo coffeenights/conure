@@ -87,13 +87,17 @@ func abortIfCannotWriteApp(c *gin.Context, handler *ApplicationHandler) bool {
 }
 
 func resolveAppFromRoute(c *gin.Context, db *database.MongoDB) (*ApplicationHandler, *models.Organization, error) {
+	// Translate raw "not a valid hex" errors from primitive.ObjectIDFromHex
+	// into ErrInvalidRequest. Otherwise AbortWithError (and any upstream
+	// caller) treats them as unknown and falls back to HTTP 500 — a bad
+	// ID in the URL is a client problem, not a server problem.
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
-		return nil, nil, err
+		return nil, nil, conureerrors.ErrInvalidRequest
 	}
 	if _, err := primitive.ObjectIDFromHex(c.Param("applicationID")); err != nil {
 		log.Printf("Error parsing applicationID: %v\n", err)
-		return nil, nil, err
+		return nil, nil, conureerrors.ErrInvalidRequest
 	}
 
 	handler, err := NewApplicationHandler(db)
