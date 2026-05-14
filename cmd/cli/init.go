@@ -279,27 +279,41 @@ func createComponentFlow(ctx context.Context, client *apiclient.Client, orgID, a
 	if len(defs) == 0 {
 		return "", "", fmt.Errorf("no component definitions registered for this org")
 	}
-	compType := defs[0].Type
-	typeOpts := make([]huh.Option[string], len(defs))
+
+	// Bind the picker to the definition index rather than the type. With
+	// multi-engine support a single type can have multiple definitions
+	// (e.g. "webservice" implemented by both Timoni and Helm); binding by
+	// index keeps the choice unambiguous and lets us read engine off the
+	// chosen definition.
+	choice := 0
+	typeOpts := make([]huh.Option[int], len(defs))
 	for i, d := range defs {
 		label := d.Name
 		if label == "" {
 			label = d.Type
 		}
-		typeOpts[i] = huh.NewOption(label, d.Type)
+		if d.Engine != "" {
+			label = fmt.Sprintf("%s (%s)", label, d.Engine)
+		}
+		typeOpts[i] = huh.NewOption(label, i)
 	}
-	if err := huh.NewSelect[string]().
+	if err := huh.NewSelect[int]().
 		Title("Component type").
 		Options(typeOpts...).
-		Value(&compType).
+		Value(&choice).
 		Run(); err != nil {
 		return "", "", err
 	}
+	picked := defs[choice]
 
-	created, err := client.CreateComponent(ctx, orgID, appID, name, compType, envName)
+	created, err := client.CreateComponent(ctx, orgID, appID, name, picked.Type, picked.Engine, envName)
 	if err != nil {
 		return "", "", fmt.Errorf("creating component: %w", err)
 	}
-	ui.Success("✓ Created component `%s` (%s) in env `%s`\n", created.Component.Name, compType, envName)
+	displayType := picked.Type
+	if picked.Engine != "" {
+		displayType = fmt.Sprintf("%s/%s", picked.Type, picked.Engine)
+	}
+	ui.Success("✓ Created component `%s` (%s) in env `%s`\n", created.Component.Name, displayType, envName)
 	return created.Component.ID, created.Component.Name, nil
 }

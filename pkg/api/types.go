@@ -85,8 +85,12 @@ type ComponentListResponse struct {
 }
 
 type CreateComponentRequest struct {
-	Name        string                 `json:"name" binding:"required"`
-	Type        string                 `json:"type" binding:"required"`
+	Name string `json:"name" binding:"required"`
+	Type string `json:"type" binding:"required"`
+	// Engine pins the rendering backend (timoni or helm). Required when
+	// more than one ComponentDefinition shares the same type; otherwise the
+	// API resolves it from the single matching definition.
+	Engine      string                 `json:"engine,omitempty"`
 	Description string                 `json:"description,omitempty"`
 	Environment string                 `json:"environment" binding:"required"`
 	Values      map[string]interface{} `json:"values,omitempty"`
@@ -201,6 +205,7 @@ type ComponentDefinition struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
 	Type          string  `json:"type"`
+	Engine        string  `json:"engine,omitempty"`
 	Description   string  `json:"description"`
 	OCIRepository string  `json:"oci_repository"`
 	OCITag        string  `json:"oci_tag"`

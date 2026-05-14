@@ -1,0 +1,11 @@
+apiVersion: core.conure.io/v1alpha1
+kind: ComponentDefinition
+metadata:
+  name: webservice-helm
+spec:
+  type: webservice
+  engine: helm
+  description: "Helm-packaged web service component that deploys a container with network exposure"
+  ociRepository: "ghcr.io/coffeenights/conure-templates/helm/components/webservice"
+  ociTag: "0.1.0"
+  ociDigest: "sha256:6d042a4fd4d12d79e15e8bf817c4f7caf18cca78757edc5f86077dc465db06fe"

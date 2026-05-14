@@ -18,7 +18,15 @@ var componentCmd = &cobra.Command{
 var componentListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List components in the linked application",
-	RunE:  runComponentList,
+	Long: `List components in the linked application, with a per-environment
+presence summary in the ENVS column.
+
+Env flag:
+  *  draft revision present (not yet deployed)
+
+Example: "staging*, production" means staging has an undeployed draft,
+production is clean.`,
+	RunE: runComponentList,
 }
 
 var componentAddCmd = &cobra.Command{
@@ -74,9 +82,6 @@ func runComponentList(cmd *cobra.Command, _ []string) error {
 					flags := ""
 					if e.HasDraft {
 						flags += "*"
-					}
-					if e.Drifted {
-						flags += "!"
 					}
 					envSummary += fmt.Sprintf("%s%s", e.EnvironmentName, flags)
 				}

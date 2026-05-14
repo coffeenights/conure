@@ -191,10 +191,11 @@ func TestClient_Endpoints(t *testing.T) {
 			wantMethod: http.MethodPost,
 			wantPath:   "/organizations/o1/a/a1/c",
 			// Values is an empty map, but the request struct tags it
-			// omitempty, so it doesn't appear in the wire body.
+			// omitempty, so it doesn't appear in the wire body. Engine is
+			// likewise omitted when empty.
 			wantReqBody: `{"name":"api","type":"web-service","environment":"production"}`,
 			run: func(c *Client) error {
-				resp, err := c.CreateComponent(context.Background(), "o1", "a1", "api", "web-service", "production")
+				resp, err := c.CreateComponent(context.Background(), "o1", "a1", "api", "web-service", "", "production")
 				if err != nil {
 					return err
 				}
@@ -202,6 +203,17 @@ func TestClient_Endpoints(t *testing.T) {
 					t.Errorf("CreateComponent result = %+v", resp)
 				}
 				return nil
+			},
+		},
+		{
+			name:        "CreateComponent_WithEngine",
+			bodyReturn:  `{"component":{"id":"c2","name":"web"},"revision":{"id":"r2"}}`,
+			wantMethod:  http.MethodPost,
+			wantPath:    "/organizations/o1/a/a1/c",
+			wantReqBody: `{"name":"web","type":"webservice","engine":"helm","environment":"production"}`,
+			run: func(c *Client) error {
+				_, err := c.CreateComponent(context.Background(), "o1", "a1", "web", "webservice", "helm", "production")
+				return err
 			},
 		},
 		{

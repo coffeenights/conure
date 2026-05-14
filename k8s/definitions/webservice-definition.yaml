@@ -4,6 +4,7 @@ metadata:
   name: webservice
 spec:
   type: webservice
+  engine: timoni
   description: "A web service component that deploys a container with network exposure"
   ociRepository: "ghcr.io/coffeenights/conure-templates/components/webservice"
   ociTag: "0.1.9"

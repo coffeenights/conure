@@ -7,12 +7,12 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
-	"github.com/coffeenights/conure/internal/timoni"
+	"github.com/coffeenights/conure/internal/render"
 	"github.com/fluxcd/pkg/ssa"
-	"github.com/stefanprodan/timoni/pkg/module"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,9 +42,10 @@ func newFakeClientWithStatusUpdateCounter(counter *int, objs ...client.Object) c
 		Build()
 }
 
-// mockModuleManager implements timoni.ModuleManager for testing.
-type mockModuleManager struct {
-	applySets    []module.ResourceSet
+// mockEngine implements render.Engine for testing the handler in isolation
+// from any OCI pull / template rendering / SSA apply.
+type mockEngine struct {
+	applySets    []render.ResourceSet
 	applyErr     error
 	marshalErr   error
 	unmarshalErr error
@@ -53,31 +54,33 @@ type mockModuleManager struct {
 	digest       string
 }
 
-func (m *mockModuleManager) GetApplySets() ([]module.ResourceSet, error) {
+func (m *mockEngine) Render(ctx context.Context) ([]render.ResourceSet, error) {
 	return m.applySets, m.applyErr
 }
 
-func (m *mockModuleManager) GetDigest() string {
+func (m *mockEngine) Digest() string {
 	return m.digest
 }
 
-func (m *mockModuleManager) MarshalApplySets(sets []module.ResourceSet) ([]byte, error) {
+func (m *mockEngine) MarshalApplySets(sets []render.ResourceSet) ([]byte, error) {
 	if m.marshalErr != nil {
 		return nil, m.marshalErr
 	}
 	return json.Marshal(sets)
 }
 
-func (m *mockModuleManager) UnmarshalApplySets(data []byte) ([]module.ResourceSet, error) {
+func (m *mockEngine) UnmarshalApplySets(data []byte) ([]render.ResourceSet, error) {
 	if m.unmarshalErr != nil {
 		return nil, m.unmarshalErr
 	}
-	var sets []module.ResourceSet
-	err := json.Unmarshal(data, &sets)
-	return sets, err
+	var sets []render.ResourceSet
+	if err := json.Unmarshal(data, &sets); err != nil {
+		return nil, err
+	}
+	return sets, nil
 }
 
-func (m *mockModuleManager) ApplyObject(resource *unstructured.Unstructured, force bool) (*ssa.ChangeSetEntry, error) {
+func (m *mockEngine) ApplyObject(ctx context.Context, resource *unstructured.Unstructured, force bool) (*ssa.ChangeSetEntry, error) {
 	if m.applyObjErr != nil {
 		return nil, m.applyObjErr
 	}
@@ -314,8 +317,8 @@ func TestApplyResources_OrdersByKind(t *testing.T) {
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
 
-	mock := &mockModuleManager{}
-	handler.componentTemplate = mock
+	mock := &mockEngine{}
+	handler.engine = mock
 
 	// Add resources in wrong order
 	deployment := &unstructured.Unstructured{}
@@ -363,8 +366,8 @@ func TestApplyResources_ReturnsErrorWithoutSettingCondition(t *testing.T) {
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
 
-	mock := &mockModuleManager{applyObjErr: fmt.Errorf("apply failed")}
-	handler.componentTemplate = mock
+	mock := &mockEngine{applyObjErr: fmt.Errorf("apply failed")}
+	handler.engine = mock
 
 	obj := &unstructured.Unstructured{}
 	obj.SetKind("Deployment")
@@ -383,7 +386,7 @@ func TestApplyResources_ReturnsErrorWithoutSettingCondition(t *testing.T) {
 }
 
 // helper: compress and base64-encode apply sets for annotation
-func encodeApplySets(t *testing.T, sets []module.ResourceSet) string {
+func encodeApplySets(t *testing.T, sets []render.ResourceSet) string {
 	t.Helper()
 	data, err := json.Marshal(sets)
 	if err != nil {
@@ -431,16 +434,16 @@ func TestReconcileDeployedObjects_ReAppliesCachedResources(t *testing.T) {
 			"spec": map[string]interface{}{},
 		},
 	}
-	encoded := encodeApplySets(t, []module.ResourceSet{
+	encoded := encodeApplySets(t, []render.ResourceSet{
 		{Name: "main", Objects: []*unstructured.Unstructured{deploy, svc}},
 	})
 
 	comp := newTestComponent("web", "default", "webservice")
 	comp.Annotations = map[string]string{conurev1alpha1.ApplySetsAnnotation: encoded}
 
-	mock := &mockModuleManager{}
+	mock := &mockEngine{}
 	handler := newTestHandler(ctx, newFakeClient(comp), comp)
-	handler.componentTemplate = mock
+	handler.engine = mock
 
 	if err := handler.ReconcileDeployedObjects(); err != nil {
 		t.Fatalf("ReconcileDeployedObjects failed: %v", err)
@@ -471,7 +474,7 @@ func TestReconcileDeployedObjects_DriftFailureFlipsDeployedCondition(t *testing.
 			"spec":       map[string]interface{}{},
 		},
 	}
-	encoded := encodeApplySets(t, []module.ResourceSet{
+	encoded := encodeApplySets(t, []render.ResourceSet{
 		{Name: "main", Objects: []*unstructured.Unstructured{obj}},
 	})
 
@@ -486,9 +489,9 @@ func TestReconcileDeployedObjects_DriftFailureFlipsDeployedCondition(t *testing.
 		},
 	}
 
-	mock := &mockModuleManager{applyObjErr: fmt.Errorf("apiserver said no")}
+	mock := &mockEngine{applyObjErr: fmt.Errorf("apiserver said no")}
 	handler := newTestHandler(ctx, newFakeClient(comp), comp)
-	handler.componentTemplate = mock
+	handler.engine = mock
 
 	if err := handler.ReconcileDeployedObjects(); err == nil {
 		t.Fatal("expected ReconcileDeployedObjects to surface the apply error")
@@ -513,7 +516,7 @@ func TestReconcileDeployedObjects_NoAnnotation(t *testing.T) {
 	comp := newTestComponent("web", "default", "webservice")
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
-	handler.componentTemplate = &mockModuleManager{}
+	handler.engine = &mockEngine{}
 
 	err := handler.ReconcileDeployedObjects()
 	if err != nil {
@@ -539,7 +542,7 @@ func TestReconcileDeployedObjects_DecodesAndApplies(t *testing.T) {
 			"spec": map[string]interface{}{},
 		},
 	}
-	sets := []module.ResourceSet{
+	sets := []render.ResourceSet{
 		{Name: "main", Objects: []*unstructured.Unstructured{obj}},
 	}
 	encoded := encodeApplySets(t, sets)
@@ -549,12 +552,12 @@ func TestReconcileDeployedObjects_DecodesAndApplies(t *testing.T) {
 		conurev1alpha1.ApplySetsAnnotation: encoded,
 	}
 
-	mock := &mockModuleManager{}
+	mock := &mockEngine{}
 	// ReconcileDeployedObjects calls module.NewManager internally for the real apply,
 	// but we can test the decode path by pre-setting componentTemplate
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
-	handler.componentTemplate = mock
+	handler.engine = mock
 
 	// The method will decode the annotation, unmarshal via mock, then try to create
 	// a new module.Manager for applying. Since we can't mock that call, we verify
@@ -598,8 +601,8 @@ func TestApplyResources_SetsOwnerReferences(t *testing.T) {
 	k8sClient := newFakeClient(comp)
 	handler := newTestHandler(ctx, k8sClient, comp)
 
-	mock := &mockModuleManager{}
-	handler.componentTemplate = mock
+	mock := &mockEngine{}
+	handler.engine = mock
 
 	deployment := &unstructured.Unstructured{}
 	deployment.SetKind("Deployment")
@@ -645,4 +648,187 @@ func TestApplyResources_SetsOwnerReferences(t *testing.T) {
 }
 
 // Verify the interface is satisfied by the mock at compile time.
-var _ timoni.ModuleManager = (*mockModuleManager)(nil)
+var _ render.Engine = (*mockEngine)(nil)
+
+// TestLookupComponentDefinition_DisambiguatesByEngine covers the (type,engine)
+// match logic added so a single spec.type can be implemented by both a Timoni
+// and a Helm ComponentDefinition simultaneously:
+//   - Single matching definition for a type → returned regardless of
+//     Component.spec.engine.
+//   - Two definitions sharing the type, Component pins engine → that one wins.
+//   - Two definitions sharing the type, Component leaves engine empty →
+//     ambiguity error tells the user to disambiguate.
+//   - Component pins an engine that no definition implements → not-found.
+func TestLookupComponentDefinition_DisambiguatesByEngine(t *testing.T) {
+	timoniDef := &conurev1alpha1.ComponentDefinition{
+		ObjectMeta: metav1.ObjectMeta{Name: "webservice-timoni"},
+		Spec: conurev1alpha1.ComponentDefinitionSpec{
+			ComponentType: "webservice",
+			Engine:        conurev1alpha1.EngineTimoni,
+		},
+	}
+	helmDef := &conurev1alpha1.ComponentDefinition{
+		ObjectMeta: metav1.ObjectMeta{Name: "webservice-helm"},
+		Spec: conurev1alpha1.ComponentDefinitionSpec{
+			ComponentType: "webservice",
+			Engine:        conurev1alpha1.EngineHelm,
+		},
+	}
+
+	cases := []struct {
+		name        string
+		defs        []client.Object
+		compEngine  conurev1alpha1.ComponentEngine
+		wantDefName string
+		wantErr     string
+	}{
+		{
+			name:        "single timoni def, no engine on component",
+			defs:        []client.Object{timoniDef},
+			wantDefName: "webservice-timoni",
+		},
+		{
+			name:        "two defs, component pins helm",
+			defs:        []client.Object{timoniDef, helmDef},
+			compEngine:  conurev1alpha1.EngineHelm,
+			wantDefName: "webservice-helm",
+		},
+		{
+			name:        "two defs, component pins timoni",
+			defs:        []client.Object{timoniDef, helmDef},
+			compEngine:  conurev1alpha1.EngineTimoni,
+			wantDefName: "webservice-timoni",
+		},
+		{
+			name:    "two defs, no engine on component → ambiguous",
+			defs:    []client.Object{timoniDef, helmDef},
+			wantErr: "set spec.engine on the Component to disambiguate",
+		},
+		{
+			name:       "engine pinned but no def implements it",
+			defs:       []client.Object{timoniDef},
+			compEngine: conurev1alpha1.EngineHelm,
+			wantErr:    `with engine "helm"`,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			comp := newTestComponent("web", "default", "webservice")
+			comp.Spec.Engine = tc.compEngine
+
+			r := &ComponentReconciler{
+				Client: newFakeClient(tc.defs...),
+				Scheme: newTestScheme(),
+			}
+			h := &ComponentHandler{Component: comp, Reconciler: r, Ctx: ctx}
+
+			got, err := h.lookupComponentDefinition()
+			if tc.wantErr != "" {
+				if err == nil {
+					t.Fatalf("expected error containing %q, got nil", tc.wantErr)
+				}
+				if !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("expected error containing %q, got %q", tc.wantErr, err.Error())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Name != tc.wantDefName {
+				t.Fatalf("expected def %q, got %q", tc.wantDefName, got.Name)
+			}
+		})
+	}
+}
+
+// stubBuilder is a render.Builder that always hands back the same mockEngine.
+// Used by the digest-verification tests to exercise renderComponent without a
+// real OCI pull.
+type stubBuilder struct{ engine *mockEngine }
+
+func (s *stubBuilder) Build(ctx context.Context, def *conurev1alpha1.ComponentDefinition, comp *conurev1alpha1.Component, creds string) (render.Engine, error) {
+	return s.engine, nil
+}
+func (s *stubBuilder) BuildForApply(ctx context.Context, comp *conurev1alpha1.Component) (render.Engine, error) {
+	return s.engine, nil
+}
+
+// TestRenderComponent_DigestVerification asserts that the digest gate in
+// renderComponent works identically for both engines: when ComponentDefinition
+// sets OCIDigest, the engine's resolved digest must match or the render fails
+// with Rendered=Failed. Both engines share the gate (handler.go) and only
+// differ in how they populate Digest(), so we drive the same scenarios under
+// each engine label to confirm parity.
+func TestRenderComponent_DigestVerification(t *testing.T) {
+	cases := []struct {
+		name       string
+		engine     conurev1alpha1.ComponentEngine
+		crdDigest  string
+		realDigest string
+		wantFailed bool
+		wantSubstr string
+	}{
+		{"timoni: digest match passes", conurev1alpha1.EngineTimoni, "sha256:abc", "sha256:abc", false, ""},
+		{"timoni: digest mismatch fails", conurev1alpha1.EngineTimoni, "sha256:abc", "sha256:zzz", true, "OCI digest mismatch"},
+		{"timoni: empty CRD digest skips check", conurev1alpha1.EngineTimoni, "", "sha256:whatever", false, ""},
+		{"helm: digest match passes", conurev1alpha1.EngineHelm, "sha256:abc", "sha256:abc", false, ""},
+		{"helm: digest mismatch fails", conurev1alpha1.EngineHelm, "sha256:abc", "sha256:zzz", true, "OCI digest mismatch"},
+		{"helm: empty CRD digest skips check", conurev1alpha1.EngineHelm, "", "sha256:whatever", false, ""},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+
+			def := &conurev1alpha1.ComponentDefinition{
+				ObjectMeta: metav1.ObjectMeta{Name: "def-" + string(tc.engine)},
+				Spec: conurev1alpha1.ComponentDefinitionSpec{
+					ComponentType: "type-" + string(tc.engine),
+					Engine:        tc.engine,
+					OCIRepository: "example.test/chart",
+					OCITag:        "1.0",
+					OCIDigest:     tc.crdDigest,
+				},
+			}
+			comp := newTestComponent("comp", "default", def.Spec.ComponentType)
+
+			mock := &mockEngine{
+				applySets: nil, // empty render -> skips label propagation
+				digest:    tc.realDigest,
+			}
+			k8sClient := newFakeClient(def, comp)
+			r := &ComponentReconciler{
+				Client: k8sClient,
+				Scheme: newTestScheme(),
+				Builders: map[conurev1alpha1.ComponentEngine]render.Builder{
+					tc.engine: &stubBuilder{engine: mock},
+				},
+			}
+			h := &ComponentHandler{Component: comp, Reconciler: r, Ctx: ctx}
+
+			err := h.RenderComponent()
+			rendered := h.GetCondition(conurev1alpha1.ComponentConditionTypeRendered)
+			if tc.wantFailed {
+				if err == nil {
+					t.Fatal("expected error from RenderComponent")
+				}
+				if rendered == nil || rendered.Reason != conurev1alpha1.ComponentReasonFailed.String() {
+					t.Fatalf("expected Rendered=Failed, got %+v", rendered)
+				}
+				if tc.wantSubstr != "" && !strings.Contains(rendered.Message, tc.wantSubstr) {
+					t.Fatalf("expected Rendered.Message to contain %q, got %q", tc.wantSubstr, rendered.Message)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("expected success, got error: %v", err)
+				}
+				if rendered == nil || rendered.Status != metav1.ConditionTrue {
+					t.Fatalf("expected Rendered=True, got %+v", rendered)
+				}
+			}
+		})
+	}
+}

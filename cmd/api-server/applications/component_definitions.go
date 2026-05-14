@@ -13,6 +13,7 @@ type ComponentDefinitionResponse struct {
 	ID            string  `json:"id"`
 	Name          string  `json:"name"`
 	Type          string  `json:"type"`
+	Engine        string  `json:"engine"`
 	Description   string  `json:"description"`
 	OCIRepository string  `json:"oci_repository"`
 	OCITag        string  `json:"oci_tag"`
@@ -51,6 +52,7 @@ func (a *ApiHandler) ListComponentDefinitions(c *gin.Context) {
 			ID:            s.ID.Hex(),
 			Name:          s.Name,
 			Type:          s.Type,
+			Engine:        s.Engine,
 			Description:   s.Description,
 			OCIRepository: s.OCIRepository,
 			OCITag:        s.OCITag,

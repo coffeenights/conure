@@ -32,12 +32,17 @@ func (c *Client) ListAppComponents(ctx context.Context, orgID, appID string) ([]
 	return resp.Components, nil
 }
 
-func (c *Client) CreateComponent(ctx context.Context, orgID, appID, name, typeName, environment string) (*api.CreateComponentResponse, error) {
+// CreateComponent posts a new component to the API. engine is optional —
+// pass "" when the type has a single ComponentDefinition and the API can
+// infer it; pass "timoni"/"helm" when multiple implementations of the same
+// type are registered and the caller wants a specific one.
+func (c *Client) CreateComponent(ctx context.Context, orgID, appID, name, typeName, engine, environment string) (*api.CreateComponentResponse, error) {
 	data, err := c.post(ctx,
 		fmt.Sprintf("/organizations/%s/a/%s/c", orgID, appID),
 		api.CreateComponentRequest{
 			Name:        name,
 			Type:        typeName,
+			Engine:      engine,
 			Environment: environment,
 			Values:      map[string]interface{}{},
 		},
