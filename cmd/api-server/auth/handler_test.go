@@ -299,3 +299,105 @@ func TestHandler_ChangePassword(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, resp.Code, "(no token) should return 401 Unauthorized")
 }
+
+// TestHandler_UpdateMe covers PATCH /auth/me — the self-service email
+// edit. Mirrors the structure of TestHandler_ChangePassword: walk through
+// the happy path, validation rejects, duplicate-email collision, and the
+// unauthenticated case.
+func TestHandler_UpdateMe(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	config := &apiConfig.Config{
+		JWTSecret:   "test-secret",
+		MongoDBURI:  "mongodb://localhost:27017",
+		MongoDBName: "conure-test-auth",
+	}
+
+	mongo, _ := database.ConnectToMongoDB(config.MongoDBURI, config.MongoDBName)
+	defer cleanUpDB(mongo)
+	setupTestHandler(router, mongo, config)
+
+	// The auth router doesn't run the full bootstrap that installs the
+	// unique-email index, so install it directly. Without it, the
+	// duplicate-email subtest would silently succeed via two coexisting
+	// rows instead of exercising the 11000 → ErrEmailAlreadyExists path.
+	if err := models.EnsureUserIndexes(context.Background(), mongo); err != nil {
+		t.Fatal(err)
+	}
+
+	hashed, _ := GenerateFromPassword("Password123")
+	caller := models.User{Email: "caller@test.com", Client: "test-client", Password: hashed}
+	if err := caller.Create(mongo); err != nil {
+		t.Fatal(err)
+	}
+	other := models.User{Email: "taken@test.com", Client: "test-client", Password: hashed}
+	if err := other.Create(mongo); err != nil {
+		t.Fatal(err)
+	}
+
+	tokenFor := func(email string) string {
+		tok, err := GenerateToken(time.Hour, JWTData{Email: email}, config.JWTSecret)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return tok
+	}
+
+	doPATCH := func(t *testing.T, body any, cookie *http.Cookie) *httptest.ResponseRecorder {
+		t.Helper()
+		jsonData, _ := json.Marshal(body)
+		req, _ := http.NewRequest("PATCH", "/auth/me", bytes.NewBuffer(jsonData))
+		req.Header.Set("Content-Type", "application/json")
+		if cookie != nil {
+			req.AddCookie(cookie)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	t.Run("happy path updates email", func(t *testing.T) {
+		newEmail := "renamed@test.com"
+		resp := doPATCH(t, UpdateMeRequest{Email: &newEmail}, &http.Cookie{Name: "auth", Value: tokenFor(caller.Email)})
+		assert.Equal(t, http.StatusOK, resp.Code, "should return 200 on successful update")
+
+		// Verify the row actually changed.
+		u := models.User{}
+		_ = u.GetByEmail(mongo, newEmail)
+		assert.Equal(t, newEmail, u.Email, "email column should be the new value")
+
+		// Reset for subsequent subtests.
+		u.Email = caller.Email
+		if err := u.Update(mongo); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("invalid email is rejected", func(t *testing.T) {
+		bad := "not-an-email"
+		resp := doPATCH(t, UpdateMeRequest{Email: &bad}, &http.Cookie{Name: "auth", Value: tokenFor(caller.Email)})
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+		assert.Contains(t, resp.Body.String(), "invalid_email")
+	})
+
+	t.Run("duplicate email collides with another user", func(t *testing.T) {
+		clash := other.Email
+		resp := doPATCH(t, UpdateMeRequest{Email: &clash}, &http.Cookie{Name: "auth", Value: tokenFor(caller.Email)})
+		assert.Equal(t, http.StatusBadRequest, resp.Code)
+		assert.Contains(t, resp.Body.String(), "email_already_exists")
+	})
+
+	t.Run("no token returns 401", func(t *testing.T) {
+		newEmail := "anything@test.com"
+		resp := doPATCH(t, UpdateMeRequest{Email: &newEmail}, nil)
+		assert.Equal(t, http.StatusUnauthorized, resp.Code)
+	})
+
+	t.Run("empty body is a no-op success", func(t *testing.T) {
+		// Sending {} means "change nothing." The handler should treat that
+		// as a successful no-op rather than failing — we don't want clients
+		// to have to send the current email back just to keep it.
+		resp := doPATCH(t, struct{}{}, &http.Cookie{Name: "auth", Value: tokenFor(caller.Email)})
+		assert.Equal(t, http.StatusOK, resp.Code)
+	})
+}
