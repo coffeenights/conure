@@ -75,10 +75,12 @@ func getHandlerFromRouteForWrite(c *gin.Context, db *database.MongoDB) (*Applica
 // abortIfCannotWriteApp emits a 403 and returns true when the current
 // user is not allowed to mutate the resolved application. Use after a read
 // resolution (loadComponentEnv / getHandlerFromRoute) on write paths.
+//
+// Callers must pass a non-nil handler — every existing caller does, because
+// the loader they use aborts before this is reached. We intentionally do
+// not nil-check; a nil here is a caller bug and we want it to panic with a
+// real stack trace rather than silently allowing the write to proceed.
 func abortIfCannotWriteApp(c *gin.Context, handler *ApplicationHandler) bool {
-	if handler == nil {
-		return false
-	}
 	if !middlewares.CanWriteOwned(c.MustGet("currentUser").(models.User), handler.Model.AccountID) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return true
