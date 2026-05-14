@@ -22,35 +22,31 @@ func TestNormalizePlatform(t *testing.T) {
 }
 
 func TestPickBuildLocation(t *testing.T) {
+	yes := func() bool { return true }
+	no := func() bool { return false }
 	cases := []struct {
 		name            string
 		clusterPlatform string
 		gitRepo         string
+		hasBuildx       func() bool
 		want            string
 	}{
-		{"git supplied means remote", "linux/amd64", "https://x", "remote"},
-		{"unknown cluster falls back to local", "", "", "local"},
-		// We can't reliably exercise the buildx branch in a unit test, so we
-		// only check the cases that don't depend on docker being installed.
-		{"same arch is local", "linux/" + goarchForTest(), "", "local"},
+		{"git supplied means remote", "linux/amd64", "https://x", yes, "remote"},
+		{"git supplied still remote even without buildx", "linux/amd64", "https://x", no, "remote"},
+		{"no buildx routes to remote", "", "", no, "remote"},
+		{"no buildx routes to remote even on same arch", "linux/" + runtime.GOARCH, "", no, "remote"},
+		{"unknown cluster falls back to local when buildx present", "", "", yes, "local"},
+		{"same arch is local when buildx present", "linux/" + runtime.GOARCH, "", yes, "local"},
+		{"cross arch is local when buildx present", "linux/wrongarch", "", yes, "local"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got := pickBuildLocation(tc.clusterPlatform, tc.gitRepo)
-			// In the "same arch" case, only assert == local; in the other
-			// cases the expectation is fixed.
+			got := pickBuildLocationWith(tc.clusterPlatform, tc.gitRepo, tc.hasBuildx)
 			if got != tc.want {
-				t.Errorf("pickBuildLocation(%q,%q) = %q, want %q", tc.clusterPlatform, tc.gitRepo, got, tc.want)
+				t.Errorf("pickBuildLocationWith(%q,%q,buildx=%v) = %q, want %q", tc.clusterPlatform, tc.gitRepo, tc.hasBuildx(), got, tc.want)
 			}
 		})
 	}
-}
-
-// goarchForTest exists so we can build a canonical "same arch" cluster
-// platform string for the current host. Avoids importing runtime in the
-// table.
-func goarchForTest() string {
-	return runtime.GOARCH
 }
 
 func TestFirstNonEmpty(t *testing.T) {

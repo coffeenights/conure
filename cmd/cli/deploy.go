@@ -129,8 +129,16 @@ func runDeploy(cmd *cobra.Command, _ []string) error {
 		if buildTool == "railpack" && !commandExists("railpack") {
 			return fmt.Errorf("--build-tool=railpack requires the `railpack` CLI on PATH; install from https://railpack.com or use --build-tool=dockerfile")
 		}
-		if buildTool == "dockerfile" && !commandExists("docker") {
-			return fmt.Errorf("--build-tool=dockerfile requires Docker on PATH")
+		if buildTool == "dockerfile" {
+			if !commandExists("docker") {
+				return fmt.Errorf("--build-tool=dockerfile requires Docker on PATH")
+			}
+			// runLocalBuild always invokes `docker buildx build`, so the
+			// plugin must be present even on same-arch hosts. Surface this
+			// up front instead of letting docker emit a cryptic error.
+			if !hasBuildx() {
+				return fmt.Errorf("--build-tool=dockerfile (local) requires the Docker buildx plugin; install it (https://docs.docker.com/build/buildx/install/) or use --build-location=remote")
+			}
 		}
 		if err := runLocalBuild(cmd, buildTool, ctxDir, imageRef, platform); err != nil {
 			return err
@@ -200,7 +208,21 @@ func resolveClusterPlatform(cmd *cobra.Command, c *apiclient.Client) (string, st
 // We treat "buildx present" as the cross-build capability check; modern
 // Docker desktop ships it by default, so this is a reliable signal.
 func pickBuildLocation(clusterPlatform, gitRepo string) string {
+	return pickBuildLocationWith(clusterPlatform, gitRepo, hasBuildx)
+}
+
+// pickBuildLocationWith is the testable core of pickBuildLocation. The
+// buildx-presence probe is injected so unit tests don't depend on the host's
+// Docker installation.
+func pickBuildLocationWith(clusterPlatform, gitRepo string, hasBuildxFn func() bool) string {
 	if gitRepo != "" {
+		return "remote"
+	}
+	// runLocalBuild for dockerfile always uses `docker buildx build`, so a
+	// host without buildx can't do local-dockerfile at all — same-arch or
+	// not. Route to remote in that case so auto doesn't pick a path that
+	// will fail at exec time.
+	if !hasBuildxFn() {
 		return "remote"
 	}
 	if clusterPlatform == "" {
@@ -210,11 +232,8 @@ func pickBuildLocation(clusterPlatform, gitRepo string) string {
 	if normalizePlatform(localPlat) == normalizePlatform(clusterPlatform) {
 		return "local"
 	}
-	// Cross-build needed. Local is fine if buildx is available.
-	if hasBuildx() {
-		return "local"
-	}
-	return "remote"
+	// Cross-build needed; buildx is already confirmed above.
+	return "local"
 }
 
 // normalizePlatform collapses darwin/arm64 → linux/arm64 for the comparison.
