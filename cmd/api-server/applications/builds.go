@@ -38,12 +38,12 @@ const RegistryCredentialsSecret = "registry-credentials"
 // adoption latency for an orphaned remote build is leaseTTL + scanInterval
 // (~90s). Lowering further increases Mongo load without practical benefit.
 const (
-	buildLeaseTTL       = 60 * time.Second
-	buildHeartbeat      = 20 * time.Second
-	buildPoll           = 5 * time.Second
-	buildJobTTLAfter    = int32(3600)
-	buildScanInterval   = 30 * time.Second
-	buildAdoptionBatch  = 50
+	buildLeaseTTL      = 60 * time.Second
+	buildHeartbeat     = 20 * time.Second
+	buildPoll          = 5 * time.Second
+	buildJobTTLAfter   = int32(3600)
+	buildScanInterval  = 30 * time.Second
+	buildAdoptionBatch = 50
 	// buildJobDeadline bounds remote build wall-clock time. Anything past
 	// this is almost certainly a stuck git clone or hung buildkitd and not
 	// a legitimate slow build; without it a wedged Job holds its
