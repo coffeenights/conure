@@ -242,3 +242,72 @@ type CreateVariableRequest struct {
 	Value       string `json:"value" binding:"required"`
 	IsEncrypted bool   `json:"is_encrypted"`
 }
+
+// ----- System info --------------------------------------------------------
+
+// SystemInfo carries cluster-level metadata the CLI needs to decide how to
+// build (cross-arch or native) and which target platform to push.
+type SystemInfo struct {
+	// Platform is "<os>/<arch>", e.g. "linux/amd64" — the dominant node
+	// platform in the target cluster.
+	Platform string `json:"platform"`
+	// KubernetesVersion is the cluster's server GitVersion. Advisory.
+	KubernetesVersion string `json:"kubernetes_version"`
+}
+
+// ----- Builds --------------------------------------------------------------
+
+// BuildStatus matches the server enum: "pending" | "building" |
+// "succeeded" | "failed".
+type BuildStatus string
+
+const (
+	BuildStatusPending   BuildStatus = "pending"
+	BuildStatusBuilding  BuildStatus = "building"
+	BuildStatusSucceeded BuildStatus = "succeeded"
+	BuildStatusFailed    BuildStatus = "failed"
+)
+
+// TriggerBuildRequest is the body of POST /builds.
+//
+// Two flows on the server side:
+//
+//   - build_location == "local": the CLI has already built and pushed
+//     image_ref. The server records the build as succeeded and rolls the
+//     deploy forward synchronously.
+//   - build_location == "remote": the server creates a BuildKit Job in
+//     conure-system, clones git_repository@git_branch, builds with the
+//     chosen frontend (dockerfile or railpack), pushes to image_ref, and
+//     deploys when the Job succeeds. Railpack is rejected for remote builds.
+type TriggerBuildRequest struct {
+	BuildTool     string `json:"build_tool" binding:"required"`     // "railpack" | "dockerfile"
+	BuildLocation string `json:"build_location" binding:"required"` // "local" | "remote"
+	Platform      string `json:"platform,omitempty"`                // "linux/amd64" etc.
+	GitRepository string `json:"git_repository,omitempty"`
+	GitBranch     string `json:"git_branch,omitempty"`
+	ImageRef      string `json:"image_ref" binding:"required"`
+}
+
+// Build is the wire shape returned by the build endpoints.
+type Build struct {
+	ID            string      `json:"id"`
+	ComponentID   string      `json:"component_id"`
+	ApplicationID string      `json:"application_id"`
+	EnvironmentID string      `json:"environment_id"`
+	Status        BuildStatus `json:"status"`
+	BuildTool     string      `json:"build_tool"`
+	BuildLocation string      `json:"build_location"`
+	Platform      string      `json:"platform,omitempty"`
+	GitRepository string      `json:"git_repository,omitempty"`
+	GitBranch     string      `json:"git_branch,omitempty"`
+	ImageRef      string      `json:"image_ref,omitempty"`
+	JobName       string      `json:"job_name,omitempty"`
+	JobNamespace  string      `json:"job_namespace,omitempty"`
+	ErrorMessage  string      `json:"error_message,omitempty"`
+	CreatedAt     time.Time   `json:"created_at"`
+	FinishedAt    *time.Time  `json:"finished_at,omitempty"`
+}
+
+type BuildListResponse struct {
+	Builds []Build `json:"builds"`
+}

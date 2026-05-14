@@ -47,6 +47,23 @@ rules:
   - apiGroups: [apps]
     resources: [deployments, statefulsets]
     verbs: [list]
+  # /system/info reads node labels to detect the cluster's dominant
+  # platform. Read-only, cluster-scoped.
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+  # Remote builds: the API creates BuildKit Jobs in conure-system, watches
+  # their pods, and streams logs back to the CLI. Scoped to the system
+  # namespace via the RoleBinding below.
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, watch, create, delete]
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get]
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get, list]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

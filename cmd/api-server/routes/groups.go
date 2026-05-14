@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"log"
 	"strings"
 
@@ -12,7 +13,9 @@ import (
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/health"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/cmd/api-server/settings"
+	"github.com/coffeenights/conure/cmd/api-server/system"
 	"github.com/coffeenights/conure/cmd/api-server/variables"
 	"github.com/coffeenights/conure/internal/config"
 )
@@ -59,11 +62,24 @@ func GenerateRouter() *gin.Engine {
 	authHandler := auth.NewAuthHandler(conf, mongo)
 	variablesHandler := variables.NewVariablesHandler(conf, mongo, keyStorage)
 	healthHandler := health.NewHandler(mongo)
+	systemHandler := system.NewHandler(nil)
 	auth.GenerateRoutes("/auth", router, authHandler)
 	apps.GenerateRoutes("/organizations", router, appHandler)
 	settings.GenerateRoutes("/settings", router, settingsHandler)
 	variables.GenerateRoutes("/variables", router, variablesHandler)
+	system.GenerateRoutes("/system", router, systemHandler, conf, mongo)
 	health.GenerateRoutes(router, healthHandler)
+
+	// Ensure indexes for collections that ship after the initial seed; safe
+	// to run on every boot. Build adoption needs the (status,
+	// watcherExpiresAt) index to make the scan cheap.
+	if err := models.EnsureBuildIndexes(context.Background(), mongo); err != nil {
+		log.Printf("ensuring build indexes: %v", err)
+	}
+	// Periodic build adoption + startup recovery: pick up orphaned remote
+	// builds (replica died mid-build, or this replica just booted).
+	appHandler.StartBuildAdoptionScan(context.Background())
+
 	return router
 }
 
