@@ -1,6 +1,7 @@
 package applications
 
 import (
+	"context"
 	"testing"
 
 	"github.com/coffeenights/conure/cmd/api-server/models"
@@ -118,6 +119,74 @@ func TestMergeImageIntoValues_EmptyMap(t *testing.T) {
 	}
 	if src["ociRepository"] != "repo" || src["tag"] != "tag" {
 		t.Errorf("got %+v", src)
+	}
+}
+
+func TestBaseValuesForBuild_DraftIsReturnedForPromotion(t *testing.T) {
+	_, app, env := orgWithApp(t, "TestBaseValuesForBuild_Draft", "staging")
+
+	component := &models.Component{
+		Name:          "buildsrc",
+		Type:          "service",
+		ApplicationID: app.ID,
+	}
+	if err := component.Create(testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
+	cleanupComponent(t, component)
+
+	draft := &models.ComponentRevision{
+		ComponentID:   component.ID,
+		EnvironmentID: env.ID,
+		Values:        map[string]interface{}{"replicas": float64(3)},
+	}
+	if err := draft.CreateDraft(context.Background(), testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
+
+	values, returnedDraft, err := baseValuesForBuild(context.Background(), testConf.app, component, env)
+	if err != nil {
+		t.Fatalf("baseValuesForBuild err: %v", err)
+	}
+	if returnedDraft == nil || returnedDraft.ID != draft.ID {
+		t.Fatalf("expected draft to be returned for caller-side promotion, got %v", returnedDraft)
+	}
+	if got, ok := values["replicas"].(float64); !ok || got != 3 {
+		t.Errorf("draft values not copied: %+v", values)
+	}
+}
+
+func TestBaseValuesForBuild_DeployedFallback_NoDraftReturned(t *testing.T) {
+	_, app, env := orgWithApp(t, "TestBaseValuesForBuild_Deployed", "staging")
+
+	component := &models.Component{
+		Name:          "buildsrc-deployed",
+		Type:          "service",
+		ApplicationID: app.ID,
+	}
+	if err := component.Create(testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
+	cleanupComponent(t, component)
+
+	deployed := &models.ComponentRevision{
+		ComponentID:   component.ID,
+		EnvironmentID: env.ID,
+		Values:        map[string]interface{}{"replicas": float64(5)},
+	}
+	if err := deployed.CreateDeployed(context.Background(), testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
+
+	values, returnedDraft, err := baseValuesForBuild(context.Background(), testConf.app, component, env)
+	if err != nil {
+		t.Fatalf("baseValuesForBuild err: %v", err)
+	}
+	if returnedDraft != nil {
+		t.Errorf("expected nil draft when only a deployed revision exists, got %v", returnedDraft)
+	}
+	if got, ok := values["replicas"].(float64); !ok || got != 5 {
+		t.Errorf("deployed values not copied: %+v", values)
 	}
 }
 

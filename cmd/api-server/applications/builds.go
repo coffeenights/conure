@@ -305,13 +305,18 @@ func (r TriggerBuildRequest) validate() error {
 // latest draft) and override `source.ociRepository` + `source.tag` from the
 // pushed image. The CRD apply runs synchronously; if it fails the caller
 // flips the build to failed.
+//
+// If the base values came from a draft, that draft is marked deployed after
+// the new deployed revision lands. Otherwise a later plain `conure deploy`
+// would re-apply the pre-build values (including the old image) on top of
+// what the build just rolled out.
 func deployBuildImage(ctx context.Context, a *ApiHandler, app *models.Application, env *models.Environment, component *models.Component, imageRef string, userID primitive.ObjectID) error {
 	repo, tag := splitImageRef(imageRef)
 	if repo == "" || tag == "" {
 		return fmt.Errorf("malformed image_ref %q (need repo:tag)", imageRef)
 	}
 
-	baseValues, err := baseValuesForBuild(ctx, a, component, env)
+	baseValues, draft, err := baseValuesForBuild(ctx, a, component, env)
 	if err != nil {
 		return err
 	}
@@ -327,29 +332,41 @@ func deployBuildImage(ctx context.Context, a *ApiHandler, app *models.Applicatio
 		Comment:       fmt.Sprintf("Build %s:%s", repo, tag),
 		CreatedBy:     userID,
 	}
-	return rev.CreateDeployed(ctx, a.MongoDB)
+	if err := rev.CreateDeployed(ctx, a.MongoDB); err != nil {
+		return err
+	}
+	if draft != nil {
+		if err := draft.MarkDeployed(ctx, a.MongoDB); err != nil && !errors.Is(err, conureerrors.ErrObjectNotFound) {
+			return err
+		}
+	}
+	return nil
 }
 
 // baseValuesForBuild returns the values blob a build should layer the new
 // image onto. Preference order: latest draft (the user may have prepped
 // non-image edits there) → latest deployed (steady state) → empty map (no
 // history yet — first build).
-func baseValuesForBuild(ctx context.Context, a *ApiHandler, component *models.Component, env *models.Environment) (map[string]interface{}, error) {
+//
+// The returned *ComponentRevision is non-nil only when values came from a
+// draft; callers use it to mark the draft deployed once the build rolls out,
+// so it doesn't linger as a stale pending revision pointing at the old image.
+func baseValuesForBuild(ctx context.Context, a *ApiHandler, component *models.Component, env *models.Environment) (map[string]interface{}, *models.ComponentRevision, error) {
 	draft, err := models.LatestDraft(ctx, a.MongoDB, component.ID, env.ID)
 	if err == nil && draft != nil {
-		return cloneValues(draft.Values), nil
+		return cloneValues(draft.Values), draft, nil
 	}
 	if err != nil && !errors.Is(err, conureerrors.ErrObjectNotFound) {
-		return nil, err
+		return nil, nil, err
 	}
 	deployed, err := models.LatestDeployed(ctx, a.MongoDB, component.ID, env.ID)
 	if err == nil && deployed != nil {
-		return cloneValues(deployed.Values), nil
+		return cloneValues(deployed.Values), nil, nil
 	}
 	if err != nil && !errors.Is(err, conureerrors.ErrObjectNotFound) {
-		return nil, err
+		return nil, nil, err
 	}
-	return map[string]interface{}{}, nil
+	return map[string]interface{}{}, nil, nil
 }
 
 func cloneValues(in map[string]interface{}) map[string]interface{} {
