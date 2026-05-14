@@ -187,3 +187,19 @@ type PodResponse struct {
 type ComponentPodsResponse struct {
 	Pods []PodResponse `json:"pods"`
 }
+
+// TriggerBuildRequest is the body of POST .../builds. See validate() in
+// builds.go for the cross-field rules (railpack is local-only; remote needs
+// git fields; image_ref is always required).
+type TriggerBuildRequest struct {
+	BuildTool     string `json:"build_tool" binding:"required"`
+	BuildLocation string `json:"build_location" binding:"required"`
+	Platform      string `json:"platform"`
+	GitRepository string `json:"git_repository"`
+	GitBranch     string `json:"git_branch"`
+	ImageRef      string `json:"image_ref" binding:"required"`
+}
+
+type BuildListResponse struct {
+	Builds []models.Build `json:"builds"`
+}

@@ -46,5 +46,11 @@ func GenerateRoutes(relativePath string, r *gin.Engine, appHandler *ApiHandler) 
 		// Pod-level reads --------------------------------------------------
 		applications.GET("/:organizationID/a/:applicationID/e/:environment/c/:componentID/pods", appHandler.ListComponentPods)
 		applications.GET("/:organizationID/a/:applicationID/e/:environment/c/:componentID/logs", appHandler.StreamComponentLogs)
+
+		// Builds --------------------------------------------------------
+		applications.POST("/:organizationID/a/:applicationID/e/:environment/c/:componentID/builds", appHandler.TriggerBuild)
+		applications.GET("/:organizationID/a/:applicationID/e/:environment/c/:componentID/builds", appHandler.ListBuilds)
+		applications.GET("/:organizationID/a/:applicationID/e/:environment/c/:componentID/builds/:buildID", appHandler.GetBuild)
+		applications.GET("/:organizationID/a/:applicationID/e/:environment/c/:componentID/builds/:buildID/logs", appHandler.StreamBuildLogs)
 	}
 }

@@ -1,6 +1,10 @@
 package applications
 
 import (
+	"crypto/rand"
+	"encoding/hex"
+	"os"
+
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/variables"
@@ -15,6 +19,9 @@ type ApiHandler struct {
 	// (drift detection, orphan-CRD listing). May be nil in tests; handlers
 	// that need it construct one lazily via k8sUtils.GetClientset().
 	Kube *k8sUtils.GenericClientset
+	// WatcherID identifies this API replica when acquiring build leases.
+	// Generated once per process at NewApiHandler. Tests may override.
+	WatcherID string
 }
 
 func NewApiHandler(config *apiConfig.Config, mongo *database.MongoDB, keyStorage variables.SecretKeyStorage, kube *k8sUtils.GenericClientset) *ApiHandler {
@@ -23,7 +30,22 @@ func NewApiHandler(config *apiConfig.Config, mongo *database.MongoDB, keyStorage
 		Config:     config,
 		KeyStorage: keyStorage,
 		Kube:       kube,
+		WatcherID:  newWatcherID(),
 	}
+}
+
+// newWatcherID returns a process-unique identifier used as the lease owner
+// when watching build Jobs. Uniqueness across replicas is what makes the
+// lease's conditional update safe under HA. Format is opaque; hostname is
+// included only as a debugging aid.
+func newWatcherID() string {
+	host, _ := os.Hostname()
+	if host == "" {
+		host = "api"
+	}
+	b := make([]byte, 8)
+	_, _ = rand.Read(b)
+	return host + "-" + hex.EncodeToString(b)
 }
 
 // kubeClient returns the handler's pre-wired clientset, or constructs a fresh

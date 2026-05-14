@@ -33,11 +33,17 @@ rules:
     resources: [namespaces]
     verbs: [create]
   - apiGroups: [""]
-    resources: [pods, services, events]
+    # `pods get/list/watch` powers both the existing component log/pod
+    # endpoints and remote-build log streaming (which lists pods by the
+    # Job's `job-name` label before opening a stream).
+    resources: [pods]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [services, events]
     verbs: [list]
   - apiGroups: [""]
     resources: [pods/log]
-    verbs: [get]
+    verbs: [get, list]
   - apiGroups: [""]
     resources: [secrets]
     verbs: [get, create, update, delete]
@@ -47,6 +53,16 @@ rules:
   - apiGroups: [apps]
     resources: [deployments, statefulsets]
     verbs: [list]
+  # /system/info reads node labels to detect the cluster's dominant
+  # platform. Read-only, cluster-scoped.
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list]
+  # Remote builds: the API creates BuildKit Jobs in conure-system and
+  # watches them through completion.
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get, list, watch, create, delete]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
