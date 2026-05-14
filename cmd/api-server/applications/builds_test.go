@@ -54,6 +54,16 @@ func TestTriggerBuildRequest_Validate(t *testing.T) {
 			req:  TriggerBuildRequest{BuildTool: "dockerfile", BuildLocation: "elsewhere", ImageRef: "x:1"},
 			ok:   false,
 		},
+		{
+			name: "local with image_ref missing tag is rejected up front",
+			req:  TriggerBuildRequest{BuildTool: "dockerfile", BuildLocation: "local", ImageRef: "ghcr.io/org/app"},
+			ok:   false,
+		},
+		{
+			name: "remote with image_ref missing tag is rejected up front",
+			req:  TriggerBuildRequest{BuildTool: "dockerfile", BuildLocation: "remote", GitRepository: "https://x", GitBranch: "main", ImageRef: "ghcr.io/org/app"},
+			ok:   false,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -224,6 +234,9 @@ func TestRenderBuildJob_LabelsAndStructure(t *testing.T) {
 	}
 	if job.Labels["conure.io/build-id"] != b.ID.Hex() {
 		t.Errorf("build-id label missing/wrong")
+	}
+	if job.Spec.ActiveDeadlineSeconds == nil || *job.Spec.ActiveDeadlineSeconds != buildJobDeadline {
+		t.Errorf("expected ActiveDeadlineSeconds=%d, got %v", buildJobDeadline, job.Spec.ActiveDeadlineSeconds)
 	}
 	if len(job.Spec.Template.Spec.InitContainers) != 1 {
 		t.Fatalf("expected one initContainer")

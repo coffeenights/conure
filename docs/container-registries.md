@@ -151,12 +151,22 @@ operator (e.g. `ecr-credentials-sync`).
 
 **IRSA** (preferred on EKS):
 
-1. Annotate the API server's ServiceAccount with an IAM role that has
+For remote builds, the registry push runs from the BuildKit Job pod (in
+`conure-system`), not the API server pod. The Job currently uses the
+namespace's `default` ServiceAccount and authenticates via the mounted
+`registry-credentials` Secret. To use IRSA for the push you'd need to:
+
+1. Annotate the ServiceAccount the BuildKit Job pod uses (today the
+   `default` SA in `conure-system`; bind the role there or run the Job
+   under a dedicated SA) with an IAM role that has
    `ecr:GetAuthorizationToken` + `ecr:BatchCheckLayerAvailability` +
    `ecr:PutImage` etc.
 2. Use the AWS ECR credential helper inside the BuildKit container (out
    of scope of the bundled remote-build Job today — supporting this is a
    future enhancement).
+
+Until the BuildKit Job grows native IRSA support, prefer the long-lived
+credentials path above for remote builds.
 
 Image ref format:
 
@@ -176,9 +186,12 @@ Use `aws ecr create-repository --repository-name <repo>` first.
      --location=us-central1
    ```
 2. **Workload Identity** (preferred on GKE):
-   Bind the API server's ServiceAccount to a GCP SA with the
-   `roles/artifactregistry.writer` role on the repository. No Secret
-   needed.
+   The remote-build push runs from the BuildKit Job pod, not the API
+   server pod — so bind Workload Identity on the ServiceAccount the
+   Job pod uses (today the `default` SA in `conure-system`; bind that
+   account, or reconfigure the Job to use a dedicated SA) to a GCP SA
+   with the `roles/artifactregistry.writer` role on the repository. No
+   Secret needed.
 
 3. **Service account JSON key** (works anywhere):
    ```bash
@@ -201,10 +214,15 @@ Image ref format:
    ```bash
    az acr create --resource-group <rg> --name <acr-name> --sku Basic
    ```
-2. **Workload Identity / Managed Identity** (preferred on AKS): attach
-   `AcrPush`/`AcrPull` roles to the API server's identity, skip the
-   Secret.
-3. **Admin credentials** (simple but coarse):
+2. **Managed Identity on AKS:** For Conure remote builds, do **not**
+   attach `AcrPush` to the API server's identity. The image push runs
+   from the BuildKit Job pod, which currently has no explicit
+   ServiceAccount. Use registry credentials via the
+   `registry-credentials` Secret (option 3 below) for ACR pushes. If
+   your AKS nodes also need private pull access, grant `AcrPull` to the
+   node or kubelet identity separately.
+3. **Admin credentials** (simple but coarse, and the supported option
+   for remote builds):
    ```bash
    az acr update --name <acr-name> --admin-enabled true
    ACR_PASSWORD=$(az acr credential show --name <acr-name> --query 'passwords[0].value' -o tsv)

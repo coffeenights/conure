@@ -78,6 +78,47 @@ func TestBuild_MarkTerminal_ClearsLease(t *testing.T) {
 	}
 }
 
+func TestBuild_MarkTerminal_PreservesOriginalFinishedAt(t *testing.T) {
+	db, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	b := newTestBuild()
+	if err := Create(ctx, db, b); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	if err := b.MarkTerminal(ctx, db, BuildStatusSucceeded, "ghcr.io/example/app:tag", ""); err != nil {
+		t.Fatalf("first mark terminal: %v", err)
+	}
+	first, err := GetBuildByID(ctx, db, b.ID.Hex())
+	if err != nil || first.FinishedAt == nil {
+		t.Fatalf("first read: %v finishedAt=%v", err, first.FinishedAt)
+	}
+	original := *first.FinishedAt
+
+	// Ensure wall-clock advances past Mongo's millisecond resolution
+	// before the second call so an accidental overwrite would be visible.
+	time.Sleep(10 * time.Millisecond)
+
+	if err := b.MarkTerminal(ctx, db, BuildStatusSucceeded, "ghcr.io/example/app:tag", ""); err != nil {
+		t.Fatalf("second mark terminal: %v", err)
+	}
+	second, err := GetBuildByID(ctx, db, b.ID.Hex())
+	if err != nil || second.FinishedAt == nil {
+		t.Fatalf("second read: %v finishedAt=%v", err, second.FinishedAt)
+	}
+	if !second.FinishedAt.Equal(original) {
+		t.Errorf("finishedAt was rewritten on idempotent re-mark: first=%v second=%v", original, *second.FinishedAt)
+	}
+	// In-memory copy should reflect the original timestamp too.
+	if b.FinishedAt == nil || !b.FinishedAt.Equal(original) {
+		t.Errorf("in-memory FinishedAt drifted from canonical: have %v, want %v", b.FinishedAt, original)
+	}
+}
+
 func TestBuild_TryAcquireLease_RaceLoserFails(t *testing.T) {
 	db, err := SetupDB()
 	if err != nil {

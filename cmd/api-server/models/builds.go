@@ -151,29 +151,48 @@ func GetBuildByID(ctx context.Context, db *database.MongoDB, id string) (*Build,
 
 // MarkTerminal flips a build to succeeded/failed and stamps FinishedAt. Also
 // clears the lease fields so a future scan never tries to adopt a finished
-// build. Idempotent — calling it twice with the same status is a no-op.
+// build. Safe to call more than once: the first call wins FinishedAt and
+// subsequent calls leave the original timestamp untouched even when the
+// status/imageRef/errMsg are re-supplied.
 func (b *Build) MarkTerminal(ctx context.Context, db *database.MongoDB, status BuildStatus, imageRef, errMsg string) error {
 	now := time.Now()
 	coll := db.Client.Database(db.DBName).Collection(BuildCollection)
-	update := bson.M{
+	set := bson.M{
 		"status":           status,
-		"finishedAt":       now,
 		"updatedAt":        now,
 		"watcherID":        "",
 		"watcherExpiresAt": nil,
 	}
 	if imageRef != "" {
-		update["imageRef"] = imageRef
+		set["imageRef"] = imageRef
 	}
 	if errMsg != "" {
-		update["errorMessage"] = errMsg
+		set["errorMessage"] = errMsg
 	}
-	_, err := coll.UpdateOne(ctx, bson.M{"_id": b.ID}, bson.M{"$set": update})
+	// Only stamp finishedAt the first time. $setOnInsert won't work here
+	// (this is an Update, not an Upsert), so use a conditional $set via
+	// an aggregation pipeline.
+	update := bson.A{
+		bson.M{"$set": set},
+		bson.M{"$set": bson.M{
+			"finishedAt": bson.M{
+				"$ifNull": bson.A{"$finishedAt", now},
+			},
+		}},
+	}
+	_, err := coll.UpdateOne(ctx, bson.M{"_id": b.ID}, update)
 	if err != nil {
 		return err
 	}
+	// Refresh the in-memory copy. Re-read finishedAt so the caller sees
+	// the canonical first-call timestamp, not `now`.
+	var refreshed Build
+	if err := coll.FindOne(ctx, bson.M{"_id": b.ID}).Decode(&refreshed); err == nil {
+		b.FinishedAt = refreshed.FinishedAt
+	} else if b.FinishedAt == nil {
+		b.FinishedAt = &now
+	}
 	b.Status = status
-	b.FinishedAt = &now
 	b.WatcherID = ""
 	b.WatcherExpiresAt = nil
 	if imageRef != "" {

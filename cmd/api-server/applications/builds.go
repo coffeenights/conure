@@ -43,6 +43,11 @@ const (
 	buildJobTTLAfter    = int32(3600)
 	buildScanInterval   = 30 * time.Second
 	buildAdoptionBatch  = 50
+	// buildJobDeadline bounds remote build wall-clock time. Anything past
+	// this is almost certainly a stuck git clone or hung buildkitd and not
+	// a legitimate slow build; without it a wedged Job holds its
+	// privileged pod + Mongo lease forever while the CLI polls forever.
+	buildJobDeadline = int64(45 * 60)
 )
 
 // TriggerBuild creates a new Build. Branching on build_location:
@@ -288,12 +293,17 @@ func (r TriggerBuildRequest) validate() error {
 	switch models.BuildLocation(r.BuildLocation) {
 	case models.BuildLocationLocal:
 		// imageRef carries the already-pushed image; everything else is
-		// metadata.
-		if r.ImageRef == "" {
+		// metadata. Reject malformed refs (missing tag) up front so the
+		// caller gets a 400 instead of a 500 from deployBuildImage after
+		// the Build doc has already been persisted.
+		if r.ImageRef == "" || !isFullyQualifiedImageRef(r.ImageRef) {
 			return conureerrors.ErrInvalidRequest
 		}
 	case models.BuildLocationRemote:
 		if r.GitRepository == "" || r.GitBranch == "" || r.ImageRef == "" {
+			return conureerrors.ErrInvalidRequest
+		}
+		if !isFullyQualifiedImageRef(r.ImageRef) {
 			return conureerrors.ErrInvalidRequest
 		}
 		// Railpack is local-only — the remote BuildKit Job ships only the
@@ -419,6 +429,15 @@ func splitImageRef(ref string) (string, string) {
 	return ref[:idx], ref[idx+1:]
 }
 
+// isFullyQualifiedImageRef reports whether ref splits cleanly into
+// (repo, tag). deployBuildImage requires both, so rejecting the malformed
+// shape at request-validate time turns a post-persist 500 into a 400 before
+// the Build document is ever written.
+func isFullyQualifiedImageRef(ref string) bool {
+	repo, tag := splitImageRef(ref)
+	return repo != "" && tag != ""
+}
+
 // renderBuildJob builds the BuildKit Job spec. The init container clones
 // git_repository@git_branch into /workspace; the build container starts
 // buildkitd, waits for it to be ready, and runs `buildctl build ... --push`.
@@ -480,6 +499,7 @@ buildctl --addr unix:///run/buildkit/buildkitd.sock build \
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoffLimit,
 			TTLSecondsAfterFinished: &ttl,
+			ActiveDeadlineSeconds:   ptrInt64(buildJobDeadline),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
@@ -618,7 +638,8 @@ func isValidPlatform(p string) bool {
 	return true
 }
 
-func ptrBool(b bool) *bool { return &b }
+func ptrBool(b bool) *bool    { return &b }
+func ptrInt64(i int64) *int64 { return &i }
 
 // watchBuildJob polls the BuildKit Job, heartbeats the lease, and on
 // completion (success or failure) marks the build terminal and — on success
