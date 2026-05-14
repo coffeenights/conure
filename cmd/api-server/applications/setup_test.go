@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/joho/godotenv/autoload"
@@ -97,13 +98,23 @@ func setup() {
 		Email:  user.Email,
 		Client: user.Client,
 	}
-	testConf.JWT, err = auth.GenerateToken(3600, payload, testConf.app.Config.JWTSecret)
-}
-
-func teardown() {
-	err := testConf.authUser.Delete(testConf.app.MongoDB)
+	// GenerateToken takes a time.Duration. The previous bare `3600` was
+	// interpreted as 3600 nanoseconds, which meant the token expired in
+	// the same Unix second it was issued — tests would pass or fail based
+	// on whether the clock ticked over before the request was served.
+	testConf.JWT, err = auth.GenerateToken(time.Hour, payload, testConf.app.Config.JWTSecret)
 	if err != nil {
 		log.Panic(err)
 	}
-	_ = testConf.app.MongoDB.Client.Disconnect(context.Background())
+}
+
+func teardown() {
+	// Drop the whole test database rather than per-row cleanup. The suite
+	// is the sole writer to `<dbname>-test-applications`; leaving rows
+	// behind across runs causes flakes when tests insert by unique fields
+	// (notably the users.email index) and the runner reuses the DB.
+	if testConf.app != nil && testConf.app.MongoDB != nil {
+		_ = testConf.app.MongoDB.Client.Database(testConf.app.MongoDB.DBName).Drop(context.Background())
+		_ = testConf.app.MongoDB.Client.Disconnect(context.Background())
+	}
 }
