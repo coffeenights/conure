@@ -111,11 +111,30 @@ func resolveAppFromRoute(c *gin.Context, db *database.MongoDB) (*ApplicationHand
 		log.Printf("Error getting application: %v\n", err)
 		return nil, nil, conureerrors.ErrObjectNotFound
 	}
+
+	// Fast paths that don't need to load the org. App-scoped reads
+	// otherwise pay a second DB round-trip just to evaluate membership,
+	// which dominates the request cost for hot endpoints. Two cases let
+	// us answer "yes" without the lookup, each mirroring a branch of
+	// CanReadOrg exactly:
+	//   - admins see everything; the org's attributes are irrelevant.
+	//   - a developer whose home OrganizationID matches the app's
+	//     OrganizationID is by definition a member.
+	// "Caller is the app creator" is NOT a fast path here: app.AccountID
+	// is the app creator, whereas CanReadOrg's owner branch keys off
+	// org.AccountID (the org creator). They're different people in
+	// general, so the org still has to be loaded to evaluate that case.
+	user := c.MustGet("currentUser").(models.User)
+	if user.IsAdmin() ||
+		(!user.OrganizationID.IsZero() && user.OrganizationID == handler.Model.OrganizationID) {
+		return handler, nil, nil
+	}
+
 	org := models.Organization{}
 	if _, err := org.GetById(db, handler.Model.OrganizationID.Hex()); err != nil {
 		return nil, nil, conureerrors.ErrObjectNotFound
 	}
-	if !middlewares.CanReadOrg(c.MustGet("currentUser").(models.User), &org) {
+	if !middlewares.CanReadOrg(user, &org) {
 		return nil, nil, conureerrors.ErrNotAllowed
 	}
 	return handler, &org, nil
