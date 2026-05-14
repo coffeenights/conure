@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -49,11 +48,15 @@ gets a linux/amd64 image, no flag required.`,
 func init() {
 	addEnvFlag(deployCmd)
 	deployCmd.Flags().String("image-ref", "", "Image to push/deploy (e.g. ghcr.io/org/app:sha-abc). When set, runs a build before deploying.")
-	deployCmd.Flags().String("build-location", "auto", "Where to build: local, remote, or auto (prefer local when this machine can target the cluster).")
-	deployCmd.Flags().String("build-tool", "", "Build tool: dockerfile or railpack. Default: railpack when no Dockerfile is present, dockerfile otherwise.")
+	// All build-shape flags default to empty: when unset, the CLI reads
+	// the values from the component's latest revision (`source.buildTool`,
+	// `source.buildLocation`, `source.gitRepository`, `source.gitBranch`).
+	// Pass a flag explicitly to override the spec for one deploy.
+	deployCmd.Flags().String("build-location", "", "Override component's source.buildLocation: local, remote, or auto.")
+	deployCmd.Flags().String("build-tool", "", "Override component's source.buildTool: dockerfile or railpack.")
 	deployCmd.Flags().String("platform", "", "Target platform (e.g. linux/amd64). Defaults to the cluster's dominant node platform via /system/info.")
-	deployCmd.Flags().String("git-repository", "", "Git repo URL for remote builds.")
-	deployCmd.Flags().String("git-branch", "main", "Git branch for remote builds.")
+	deployCmd.Flags().String("git-repository", "", "Override component's source.gitRepository (remote builds only).")
+	deployCmd.Flags().String("git-branch", "", "Override component's source.gitBranch (remote builds only).")
 	deployCmd.Flags().String("context", ".", "Local build context directory (for local builds).")
 	rootCmd.AddCommand(deployCmd)
 }
@@ -77,12 +80,24 @@ func runDeploy(cmd *cobra.Command, _ []string) error {
 		return nil
 	}
 
-	location, _ := cmd.Flags().GetString("build-location")
-	buildTool, _ := cmd.Flags().GetString("build-tool")
+	flagLocation, _ := cmd.Flags().GetString("build-location")
+	flagBuildTool, _ := cmd.Flags().GetString("build-tool")
 	platform, _ := cmd.Flags().GetString("platform")
-	gitRepo, _ := cmd.Flags().GetString("git-repository")
-	gitBranch, _ := cmd.Flags().GetString("git-branch")
+	flagGitRepo, _ := cmd.Flags().GetString("git-repository")
+	flagGitBranch, _ := cmd.Flags().GetString("git-branch")
 	ctxDir, _ := cmd.Flags().GetString("context")
+
+	// Read the component's spec from the latest revision; it's the source
+	// of truth for buildTool/buildLocation/gitRepository/gitBranch. Flags,
+	// when set, override the spec for this one deploy. Failures here are
+	// non-fatal: we fall back to flag-only resolution and a hardcoded
+	// dockerfile/remote default.
+	spec := readComponentSourceSpec(cmd, lc)
+
+	buildTool := firstNonEmpty(flagBuildTool, spec.BuildTool, "dockerfile")
+	location := firstNonEmpty(flagLocation, spec.BuildLocation)
+	gitRepo := firstNonEmpty(flagGitRepo, spec.GitRepository)
+	gitBranch := firstNonEmpty(flagGitBranch, spec.GitBranch, "main")
 
 	// Resolve the target platform up front. The cluster owns the answer;
 	// we only fall back to local arch when /system/info can't be reached
@@ -98,22 +113,12 @@ func runDeploy(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	// Auto build-tool selection: Dockerfile in the context dir → dockerfile,
-	// otherwise railpack. Users can override with --build-tool.
-	if buildTool == "" {
-		if _, err := os.Stat(filepath.Join(ctxDir, "Dockerfile")); err == nil {
-			buildTool = "dockerfile"
-		} else {
-			buildTool = "railpack"
-		}
-	}
-
-	// Resolve build-location. "auto" prefers local when this machine can
-	// target the cluster platform via buildx (cross-build), otherwise
-	// falls back to remote. The presence of git fields tips the scale
-	// toward remote since the user clearly intends the server to do it.
+	// Resolve build-location. Empty (no flag, no spec value) and "auto"
+	// both run the same picker. The picker prefers local when this
+	// machine can target the cluster platform via buildx, otherwise
+	// falls back to remote.
 	resolvedLocation := location
-	if resolvedLocation == "auto" {
+	if resolvedLocation == "" || resolvedLocation == "auto" {
 		resolvedLocation = pickBuildLocation(clusterPlatform, gitRepo)
 	}
 
@@ -313,4 +318,74 @@ func tailRemoteBuild(cmd *cobra.Command, lc *linkedCtx, buildID string) error {
 		case <-time.After(3 * time.Second):
 		}
 	}
+}
+
+// componentSourceSpec carries the build-related fields the CLI cares
+// about from a component's latest revision values. Empty fields mean
+// "not set on the spec" — fall back to flags or hardcoded defaults.
+type componentSourceSpec struct {
+	BuildTool     string
+	BuildLocation string
+	GitRepository string
+	GitBranch     string
+}
+
+// readComponentSourceSpec fetches the linked component's env-scoped view
+// and extracts `source.{buildTool,buildLocation,gitRepository,gitBranch}`
+// from the values blob. Preference order: latest draft (the user may
+// have prepped non-image edits there) → deployed revision. Errors are
+// logged at info level and produce a zero spec so the caller can fall
+// back to flag-only defaults — `conure deploy --image-ref` must keep
+// working even when the API is temporarily unreachable.
+func readComponentSourceSpec(cmd *cobra.Command, lc *linkedCtx) componentSourceSpec {
+	view, err := lc.Client.GetComponentInEnv(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
+	if err != nil || view == nil {
+		if err != nil {
+			ui.Info("Could not read component spec for defaults: %v\n", err)
+		}
+		return componentSourceSpec{}
+	}
+	values := pickValues(view)
+	src, _ := values["source"].(map[string]interface{})
+	if src == nil {
+		return componentSourceSpec{}
+	}
+	return componentSourceSpec{
+		BuildTool:     stringFromValues(src, "buildTool"),
+		BuildLocation: stringFromValues(src, "buildLocation"),
+		GitRepository: stringFromValues(src, "gitRepository"),
+		GitBranch:     stringFromValues(src, "gitBranch"),
+	}
+}
+
+// pickValues prefers the latest draft over the deployed revision: the
+// draft is where unflushed edits live, so the spec the user just
+// authored takes effect on this deploy.
+func pickValues(view *api.ComponentInEnvResponse) map[string]interface{} {
+	if view.LatestDraft != nil && view.LatestDraft.Values != nil {
+		return view.LatestDraft.Values
+	}
+	if view.DeployedRevision != nil && view.DeployedRevision.Values != nil {
+		return view.DeployedRevision.Values
+	}
+	return nil
+}
+
+func stringFromValues(m map[string]interface{}, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// firstNonEmpty returns the first non-empty argument. Used to layer
+// flag > spec > hardcoded default with a single readable line per
+// build-related field.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }

@@ -13,9 +13,11 @@ build modes are supported:
 | `local`   | The developer's machine           | `conure deploy --image-ref ...` | Dockerfile, Railpack |
 | `remote`  | A BuildKit Job in `conure-system` | `conure deploy --image-ref ...` | Dockerfile only      |
 
-The CLI defaults to `--build-location auto`, which picks the right mode for
-the current machine and the target cluster — see *Architecture detection*
-below.
+The build shape (tool + location + git repo + branch) lives on the
+component's spec under `source.*`. The CLI reads those values from the
+latest revision and you only need to pass `--image-ref` for a standard
+deploy. Every other CLI flag is an override for one-off deploys — see
+*Flags* below.
 
 ## CLI usage
 
@@ -23,25 +25,42 @@ below.
 # Backwards-compatible: promote the latest draft (no image build)
 conure deploy
 
-# Build locally and deploy. Auto-picks the right target architecture.
+# Build using the component's `source.buildTool` + `source.buildLocation`
 conure deploy --image-ref ghcr.io/me/app:sha-abc
 
-# Force a remote build (server clones the repo and runs a BuildKit Job)
-conure deploy --image-ref ghcr.io/me/app:sha-abc --build-location remote \
-              --git-repository https://github.com/me/app --git-branch main
+# One-off: force a remote build even if the spec says local
+conure deploy --image-ref ghcr.io/me/app:sha-abc --build-location remote
+
+# Override the git branch for this deploy
+conure deploy --image-ref ghcr.io/me/app:sha-abc --git-branch hotfix-123
 ```
+
+### Where defaults come from
+
+Each build field is resolved in the order **flag → component spec → hardcoded fallback**:
+
+| Field             | Spec source                | Hardcoded fallback                    |
+|-------------------|----------------------------|---------------------------------------|
+| `build-tool`      | `source.buildTool`         | `dockerfile`                          |
+| `build-location`  | `source.buildLocation`     | `auto` (see *Architecture detection*) |
+| `git-repository`  | `source.gitRepository`     | —                                     |
+| `git-branch`      | `source.gitBranch`         | `main`                                |
+| `platform`        | — (cluster-derived)        | host `GOOS/GOARCH`                    |
+
+The "spec source" is read from the latest draft revision when present,
+otherwise from the last deployed revision.
 
 ### Flags
 
-| Flag                | Default | Notes                                                                                  |
-|---------------------|---------|----------------------------------------------------------------------------------------|
-| `--image-ref`       | —       | Target image (`registry/repo:tag`). Triggers a build when set.                         |
-| `--build-location`  | `auto`  | `local`, `remote`, or `auto`. See decision table below.                                |
-| `--build-tool`      | auto    | `dockerfile` when a `Dockerfile` exists in the context, `railpack` otherwise.          |
-| `--platform`        | from API | Defaults to the cluster's dominant node platform (via `GET /system/info`).            |
-| `--git-repository`  | —       | Required for remote builds.                                                            |
-| `--git-branch`      | `main`  | Used for remote builds.                                                                |
-| `--context`         | `.`     | Local build context directory.                                                         |
+| Flag                | Default          | Notes                                                                                |
+|---------------------|------------------|--------------------------------------------------------------------------------------|
+| `--image-ref`       | —                | Target image (`registry/repo:tag`). Triggers a build when set.                       |
+| `--build-location`  | spec / `auto`    | `local`, `remote`, or `auto`. Overrides `source.buildLocation`.                      |
+| `--build-tool`      | spec / `dockerfile` | `dockerfile` or `railpack`. Overrides `source.buildTool`.                         |
+| `--platform`        | from `/system/info` | Cluster's dominant node platform.                                                 |
+| `--git-repository`  | spec             | Overrides `source.gitRepository` (remote builds only).                               |
+| `--git-branch`      | spec / `main`    | Overrides `source.gitBranch` (remote builds only).                                   |
+| `--context`         | `.`              | Local build context directory.                                                       |
 
 ## Architecture detection
 
