@@ -137,6 +137,12 @@ func (h *Handler) Update(c *gin.Context) {
 		u.IsActive = *req.IsActive
 	}
 	if err := u.Update(h.MongoDB); err != nil {
+		// Pass conure errors (e.g. ErrEmailAlreadyExists) through with
+		// their original status, fall back to generic 500 otherwise.
+		if errors.Is(err, conureerrors.ErrEmailAlreadyExists) {
+			conureerrors.AbortWithError(c, err)
+			return
+		}
 		conureerrors.AbortWithError(c, conureerrors.ErrDatabaseError)
 		return
 	}

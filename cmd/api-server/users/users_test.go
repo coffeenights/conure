@@ -36,6 +36,14 @@ func newTestRouter(t *testing.T) (*gin.Engine, *database.MongoDB, *apiConfig.Con
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Wipe first so a prior aborted run can't leave a non-unique index
+	// behind that would prevent EnsureUserIndexes from upgrading it.
+	if err := mongo.Client.Database(mongo.DBName).Drop(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if err := models.EnsureUserIndexes(context.Background(), mongo); err != nil {
+		t.Fatal(err)
+	}
 	router := gin.New()
 	handler := NewHandler(conf, mongo)
 	GenerateRoutes("/users", router, handler)
@@ -145,6 +153,43 @@ func TestUsers_AdminCRUD(t *testing.T) {
 	w = httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+// TestUsers_DuplicateEmail covers the two paths where an admin could
+// accidentally produce duplicate emails — create and update. Both must
+// surface ErrEmailAlreadyExists (HTTP 400) rather than a generic 500.
+func TestUsers_DuplicateEmail(t *testing.T) {
+	router, mongo, conf := newTestRouter(t)
+	defer cleanUpDB(mongo)
+
+	admin := makeUser(t, mongo, "admin@test.io", models.RoleAdmin)
+	existing := makeUser(t, mongo, "existing@test.io", models.RoleDeveloper)
+	other := makeUser(t, mongo, "other@test.io", models.RoleDeveloper)
+	cookie := &http.Cookie{Name: "auth", Value: tokenFor(t, conf, admin.Email)}
+
+	// Create with an email already on file.
+	body, _ := json.Marshal(map[string]string{
+		"email":    existing.Email,
+		"password": "Password123",
+		"role":     "developer",
+	})
+	req, _ := http.NewRequest(http.MethodPost, "/users/", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code, "create with duplicate email must be 400")
+	assert.Contains(t, w.Body.String(), "email_already_exists")
+
+	// Update one user's email to another existing user's email.
+	updateBody, _ := json.Marshal(map[string]string{"email": existing.Email})
+	req, _ = http.NewRequest(http.MethodPatch, "/users/"+other.ID.Hex(), bytes.NewReader(updateBody))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(cookie)
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	assert.Equal(t, http.StatusBadRequest, w.Code, "update to duplicate email must be 400")
+	assert.Contains(t, w.Body.String(), "email_already_exists")
 }
 
 func TestUsers_AdminCannotDeleteSelf(t *testing.T) {

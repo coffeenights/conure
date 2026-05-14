@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -94,6 +95,10 @@ func (h *Handler) UpdateMe(c *gin.Context) {
 		user.Email = *req.Email
 	}
 	if err := user.Update(h.MongoDB); err != nil {
+		if errors.Is(err, conureerrors.ErrEmailAlreadyExists) {
+			conureerrors.AbortWithError(c, err)
+			return
+		}
 		conureerrors.AbortWithError(c, conureerrors.ErrDatabaseError)
 		return
 	}

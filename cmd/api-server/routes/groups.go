@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"context"
 	"log"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/health"
+	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/cmd/api-server/settings"
 	"github.com/coffeenights/conure/cmd/api-server/users"
 	"github.com/coffeenights/conure/cmd/api-server/variables"
@@ -26,6 +28,12 @@ func GenerateRouter() *gin.Engine {
 		log.Panic(err)
 	}
 	log.Println("Connected to MongoDB")
+	// Install schema-level invariants. Currently just the unique email
+	// index — without it, race conditions on signup/email-change could
+	// leave the collection with duplicate accounts.
+	if err := models.EnsureUserIndexes(context.Background(), mongo); err != nil {
+		log.Panicf("ensure user indexes: %v", err)
+	}
 	var keyStorage variables.SecretKeyStorage
 	switch conf.AESStorageStrategy {
 	case "k8s":
