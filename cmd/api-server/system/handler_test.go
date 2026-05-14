@@ -2,12 +2,14 @@ package system
 
 import (
 	"context"
-	"runtime"
+	"errors"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 )
@@ -52,21 +54,37 @@ func TestDetectPlatform_TieBrokenLexicographically(t *testing.T) {
 	}
 }
 
-func TestDetectPlatform_FallsBackToRuntime(t *testing.T) {
-	// No nodes — the fallback path should kick in.
+func TestDetectPlatform_NoNodesReturnsEmpty(t *testing.T) {
 	cs := &k8sUtils.GenericClientset{K8s: fake.NewSimpleClientset()}
-	got := detectPlatform(context.Background(), cs)
-	want := runtime.GOOS + "/" + runtime.GOARCH
-	if got != want {
-		t.Errorf("expected %s, got %s", want, got)
+	if got := detectPlatform(context.Background(), cs); got != "" {
+		t.Errorf("expected empty platform, got %s", got)
 	}
 }
 
-func TestDetectPlatform_NilClientReturnsFallback(t *testing.T) {
-	got := detectPlatform(context.Background(), nil)
-	want := runtime.GOOS + "/" + runtime.GOARCH
-	if got != want {
-		t.Errorf("expected %s, got %s", want, got)
+func TestDetectPlatform_NilClientReturnsEmpty(t *testing.T) {
+	if got := detectPlatform(context.Background(), nil); got != "" {
+		t.Errorf("expected empty platform, got %s", got)
+	}
+}
+
+func TestDetectPlatform_ListErrorReturnsEmpty(t *testing.T) {
+	// Simulates missing RBAC / API error: a "list nodes" call returning an
+	// error must NOT fall through to a confidently-wrong platform.
+	client := fake.NewSimpleClientset()
+	client.PrependReactor("list", "nodes", func(action k8stesting.Action) (bool, runtime.Object, error) {
+		return true, nil, errors.New("forbidden: cannot list nodes")
+	})
+	cs := &k8sUtils.GenericClientset{K8s: client}
+	if got := detectPlatform(context.Background(), cs); got != "" {
+		t.Errorf("expected empty platform on list error, got %s", got)
+	}
+}
+
+func TestDetectPlatform_AllNodesUnlabeledReturnsEmpty(t *testing.T) {
+	bare := &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: "bare"}}
+	cs := &k8sUtils.GenericClientset{K8s: fake.NewSimpleClientset(bare)}
+	if got := detectPlatform(context.Background(), cs); got != "" {
+		t.Errorf("expected empty platform when no nodes have arch/os labels, got %s", got)
 	}
 }
 

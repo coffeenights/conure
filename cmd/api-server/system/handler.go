@@ -7,7 +7,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"runtime"
 	"sort"
 
 	"github.com/gin-gonic/gin"
@@ -47,9 +46,11 @@ type InfoResponse struct {
 //   - List nodes, read `kubernetes.io/arch` (and `kubernetes.io/os`) labels.
 //   - Pick the most common (arch,os) pair across the listed nodes. Ties are
 //     broken by lexicographic order so the result is deterministic.
-//   - Fall back to runtime.GOARCH/runtime.GOOS only when the listing fails
-//     or returns no nodes, which is essentially impossible in a real
-//     cluster and indicates a misconfigured kubeconfig in tests.
+//   - On any failure (list error, missing RBAC, empty/unlabeled nodes)
+//     return "" so the CLI can surface the detection miss and fall back
+//     to its own arch — using the API server process arch here would be
+//     misleading (the api-server pod may be a different arch than the
+//     workload nodes).
 func (h *Handler) GetInfo(c *gin.Context) {
 	clientset, err := h.kubeClient()
 	if err != nil {
@@ -75,16 +76,20 @@ func (h *Handler) kubeClient() (*k8sUtils.GenericClientset, error) {
 }
 
 // detectPlatform walks every node and returns the most common
-// "<os>/<arch>" pair. Falls back to the API server process arch on any
-// error or empty result.
+// "<os>/<arch>" pair. Returns "" on any error or empty/unlabeled result so
+// the CLI sees a clear "unknown" signal instead of a confidently-wrong
+// answer derived from the api-server process arch.
 func detectPlatform(ctx context.Context, clientset *k8sUtils.GenericClientset) string {
-	fallback := runtime.GOOS + "/" + runtime.GOARCH
 	if clientset == nil || clientset.K8s == nil {
-		return fallback
+		return ""
 	}
 	nodes, err := clientset.K8s.CoreV1().Nodes().List(ctx, metav1.ListOptions{})
-	if err != nil || nodes == nil || len(nodes.Items) == 0 {
-		return fallback
+	if err != nil {
+		log.Printf("system/info: listing nodes for platform detection: %v", err)
+		return ""
+	}
+	if nodes == nil || len(nodes.Items) == 0 {
+		return ""
 	}
 	counts := map[string]int{}
 	for i := range nodes.Items {
@@ -97,7 +102,7 @@ func detectPlatform(ctx context.Context, clientset *k8sUtils.GenericClientset) s
 		counts[os+"/"+arch]++
 	}
 	if len(counts) == 0 {
-		return fallback
+		return ""
 	}
 	type entry struct {
 		key   string
