@@ -158,7 +158,7 @@ func (a *ApiHandler) GetComponent(c *gin.Context) {
 //
 // Path: POST /:orgID/a/:appID/c
 func (a *ApiHandler) CreateComponent(c *gin.Context) {
-	handler, err := getHandlerFromRoute(c, a.MongoDB)
+	handler, err := getHandlerFromRouteForWrite(c, a.MongoDB)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
@@ -231,7 +231,7 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 //
 // Path: DELETE /:orgID/a/:appID/c/:componentID
 func (a *ApiHandler) DeleteComponent(c *gin.Context) {
-	handler, err := getHandlerFromRoute(c, a.MongoDB)
+	handler, err := getHandlerFromRouteForWrite(c, a.MongoDB)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
@@ -292,7 +292,7 @@ func (a *ApiHandler) DeleteComponent(c *gin.Context) {
 //
 // Path: POST /:orgID/a/:appID/c/:componentID/promote
 func (a *ApiHandler) PromoteComponent(c *gin.Context) {
-	handler, err := getHandlerFromRoute(c, a.MongoDB)
+	handler, err := getHandlerFromRouteForWrite(c, a.MongoDB)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return

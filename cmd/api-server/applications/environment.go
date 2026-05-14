@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/middlewares"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
@@ -28,7 +29,7 @@ func (a *ApiHandler) CreateEnvironment(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 		return
 	}
-	if appHandler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+	if !middlewares.CanWriteOwned(c.MustGet("currentUser").(models.User), appHandler.Model.AccountID) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
@@ -52,7 +53,7 @@ func (a *ApiHandler) DeleteEnvironment(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 		return
 	}
-	if appHandler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+	if !middlewares.CanWriteOwned(c.MustGet("currentUser").(models.User), appHandler.Model.AccountID) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}

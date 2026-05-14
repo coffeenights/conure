@@ -26,3 +26,4 @@ __debug_bin
 secret.key
 .timoni/
 test
+__debug*

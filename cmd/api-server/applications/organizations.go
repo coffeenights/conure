@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/middlewares"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
@@ -17,7 +18,7 @@ func (a *ApiHandler) DetailOrganization(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 		return
 	}
-	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
+	if !middlewares.CanReadOrg(c.MustGet("currentUser").(models.User), &org) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
@@ -48,8 +49,14 @@ func (a *ApiHandler) CreateOrganization(c *gin.Context) {
 }
 
 func (a *ApiHandler) ListOrganization(c *gin.Context) {
-	uID := c.MustGet("currentUser").(models.User).ID
-	orgs, err := models.OrganizationList(a.MongoDB, uID.Hex())
+	user := c.MustGet("currentUser").(models.User)
+	var orgs []*models.Organization
+	var err error
+	if user.IsAdmin() {
+		orgs, err = models.OrganizationListAll(a.MongoDB)
+	} else {
+		orgs, err = models.OrganizationListForUser(a.MongoDB, user.ID, user.OrganizationID)
+	}
 	if err != nil {
 		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
 		return

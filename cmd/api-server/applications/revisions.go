@@ -168,6 +168,9 @@ func (a *ApiHandler) CreateRevision(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if abortIfCannotWriteApp(c, handler) {
+		return
+	}
 
 	var req CreateRevisionRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -222,8 +225,11 @@ func (a *ApiHandler) ListRevisions(c *gin.Context) {
 //
 // Path: PUT /:orgID/a/:appID/e/:env/c/:componentID/revisions/:revID
 func (a *ApiHandler) UpdateDraftRevision(c *gin.Context) {
-	_, component, env, ok := loadComponentEnv(c, a)
+	handler, component, env, ok := loadComponentEnv(c, a)
 	if !ok {
+		return
+	}
+	if abortIfCannotWriteApp(c, handler) {
 		return
 	}
 
@@ -259,6 +265,9 @@ func (a *ApiHandler) DeployRevision(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if abortIfCannotWriteApp(c, handler) {
+		return
+	}
 
 	ctx := c.Request.Context()
 	draft, err := models.LatestDraft(ctx, a.MongoDB, component.ID, env.ID)
@@ -288,6 +297,9 @@ func (a *ApiHandler) DeployRevision(c *gin.Context) {
 func (a *ApiHandler) DeployRevisionByID(c *gin.Context) {
 	handler, component, env, ok := loadComponentEnv(c, a)
 	if !ok {
+		return
+	}
+	if abortIfCannotWriteApp(c, handler) {
 		return
 	}
 
@@ -337,6 +349,9 @@ func (a *ApiHandler) RestartComponent(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if abortIfCannotWriteApp(c, handler) {
+		return
+	}
 
 	ctx := c.Request.Context()
 	deployed, err := models.LatestDeployed(ctx, a.MongoDB, component.ID, env.ID)
@@ -384,6 +399,9 @@ func (a *ApiHandler) UninstallFromEnv(c *gin.Context) {
 	if !ok {
 		return
 	}
+	if abortIfCannotWriteApp(c, handler) {
+		return
+	}
 
 	ctx := c.Request.Context()
 	provider := newConureProvider(handler.Model, env)
@@ -406,7 +424,7 @@ func (a *ApiHandler) UninstallFromEnv(c *gin.Context) {
 //
 // Path: POST /:orgID/a/:appID/e/:env/deploy
 func (a *ApiHandler) DeployEnvDrafts(c *gin.Context) {
-	handler, err := getHandlerFromRoute(c, a.MongoDB)
+	handler, err := getHandlerFromRouteForWrite(c, a.MongoDB)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return

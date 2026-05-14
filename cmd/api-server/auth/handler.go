@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -74,6 +75,33 @@ func (h *Handler) Login(c *gin.Context) {
 
 func (h *Handler) Me(c *gin.Context) {
 	user := c.MustGet("currentUser").(models.User)
+	c.JSON(http.StatusOK, user)
+}
+
+// UpdateMe lets a logged-in user edit fields they own — currently just
+// email. Role/OrganizationID changes go through the admin endpoint.
+func (h *Handler) UpdateMe(c *gin.Context) {
+	req := UpdateMeRequest{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+		return
+	}
+	user := c.MustGet("currentUser").(models.User)
+	if req.Email != nil {
+		if err := models.ValidateEmail(*req.Email); err != nil {
+			conureerrors.AbortWithError(c, err)
+			return
+		}
+		user.Email = *req.Email
+	}
+	if err := user.Update(h.MongoDB); err != nil {
+		if errors.Is(err, conureerrors.ErrEmailAlreadyExists) {
+			conureerrors.AbortWithError(c, err)
+			return
+		}
+		conureerrors.AbortWithError(c, conureerrors.ErrDatabaseError)
+		return
+	}
 	c.JSON(http.StatusOK, user)
 }
 
