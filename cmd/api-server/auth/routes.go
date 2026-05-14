@@ -9,6 +9,7 @@ func GenerateRoutes(relativePath string, r *gin.Engine, handler *Handler) {
 	{
 		paths.POST("/login", handler.Login)
 		paths.GET("/me", CheckCurrentUser(handler.Config, handler.MongoDB), handler.Me)
+		paths.PATCH("/me", CheckCurrentUser(handler.Config, handler.MongoDB), handler.UpdateMe)
 		paths.PATCH("/change-password", CheckCurrentUser(handler.Config, handler.MongoDB), handler.ChangePassword)
 	}
 }

@@ -48,7 +48,10 @@ func GetByID(ctx context.Context, db *database.MongoDB, ID string, model ModelIn
 	collection := db.Client.Database(db.DBName).Collection(model.GetCollectionName())
 	oID, err := primitive.ObjectIDFromHex(ID)
 	if err != nil {
-		return err
+		// Bad hex on the way in is a client error, not a DB error.
+		// Surface it as ErrInvalidRequest so handlers don't have to know
+		// about the ObjectID encoding to return a sensible 400.
+		return conureerrors.ErrInvalidRequest
 	}
 	filter := bson.M{"_id": oID, "deletedAt": bson.M{"$exists": false}}
 	err = collection.FindOne(ctx, filter).Decode(model)

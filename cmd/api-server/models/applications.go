@@ -41,12 +41,21 @@ func (o *Organization) GetCollectionName() string {
 	return OrganizationCollection
 }
 
-func OrganizationList(db *database.MongoDB, accountID string) ([]*Organization, error) {
-	aID, err := primitive.ObjectIDFromHex(accountID)
-	if err != nil {
-		return nil, err
+// OrganizationListAll returns every organization. Used by the admin
+// listing path which is not scoped to a single account.
+func OrganizationListAll(db *database.MongoDB) ([]*Organization, error) {
+	return List[*Organization](context.Background(), db, bson.M{}, &Organization{})
+}
+
+// OrganizationListForUser returns the orgs visible to a developer: ones
+// they own plus the org they were provisioned into (memberOrgID, may be
+// the zero ObjectID — in which case only owned orgs are returned).
+func OrganizationListForUser(db *database.MongoDB, accountID, memberOrgID primitive.ObjectID) ([]*Organization, error) {
+	or := []bson.M{{"accountId": accountID}}
+	if !memberOrgID.IsZero() {
+		or = append(or, bson.M{"_id": memberOrgID})
 	}
-	return List[*Organization](context.Background(), db, bson.M{"accountId": aID}, &Organization{})
+	return List[*Organization](context.Background(), db, bson.M{"$or": or}, &Organization{})
 }
 
 func (o *Organization) String() string {
