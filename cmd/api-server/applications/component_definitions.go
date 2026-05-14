@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/middlewares"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
@@ -35,7 +36,7 @@ func (a *ApiHandler) ListComponentDefinitions(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 		return
 	}
-	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
+	if !middlewares.CanReadOrg(c.MustGet("currentUser").(models.User), &org) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}

@@ -242,3 +242,52 @@ type CreateVariableRequest struct {
 	Value       string `json:"value" binding:"required"`
 	IsEncrypted bool   `json:"is_encrypted"`
 }
+
+// ----- Users (admin) and self-service account -----------------------------
+
+type User struct {
+	ID             string     `json:"id"`
+	Email          string     `json:"email"`
+	Role           string     `json:"role"`
+	OrganizationID string     `json:"organization_id,omitempty"`
+	IsActive       bool       `json:"is_active"`
+	LastLoginAt    *time.Time `json:"last_login_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+type UserListResponse struct {
+	Users []User `json:"users"`
+}
+
+type CreateUserRequest struct {
+	Email          string `json:"email"`
+	Password       string `json:"password"`
+	Role           string `json:"role,omitempty"`
+	OrganizationID string `json:"organization_id,omitempty"`
+}
+
+type UpdateUserRequest struct {
+	Email          *string `json:"email,omitempty"`
+	Role           *string `json:"role,omitempty"`
+	OrganizationID *string `json:"organization_id,omitempty"`
+	IsActive       *bool   `json:"is_active,omitempty"`
+}
+
+type ResetPasswordRequest struct {
+	Password string `json:"password,omitempty"`
+}
+
+type ResetPasswordResponse struct {
+	Password string `json:"password"`
+}
+
+type UpdateMeRequest struct {
+	Email *string `json:"email,omitempty"`
+}
+
+type ChangePasswordRequest struct {
+	OldPassword string `json:"old_password"`
+	Password    string `json:"password"`
+	Password2   string `json:"password2"`
+}

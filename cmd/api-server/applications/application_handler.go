@@ -5,6 +5,7 @@ import (
 
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/middlewares"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -45,28 +46,71 @@ func (ah *ApplicationHandler) GetApplicationByID(appID string) error {
 	return ah.Model.GetByID(ah.DB, appID)
 }
 
+// getHandlerFromRoute resolves the application referenced by the route
+// params and checks that the caller may read it. Read access is granted to
+// admins, the app's creator, and any developer whose home organization
+// matches the app's organization.
 func getHandlerFromRoute(c *gin.Context, db *database.MongoDB) (*ApplicationHandler, error) {
+	handler, _, err := resolveAppFromRoute(c, db)
+	if err != nil {
+		return nil, err
+	}
+	return handler, nil
+}
+
+// getHandlerFromRouteForWrite layers a write-tier check on top of the read
+// resolution: developers can only mutate apps they personally created,
+// admins can mutate anything.
+func getHandlerFromRouteForWrite(c *gin.Context, db *database.MongoDB) (*ApplicationHandler, error) {
+	handler, _, err := resolveAppFromRoute(c, db)
+	if err != nil {
+		return nil, err
+	}
+	if !middlewares.CanWriteOwned(c.MustGet("currentUser").(models.User), handler.Model.AccountID) {
+		return nil, conureerrors.ErrNotAllowed
+	}
+	return handler, nil
+}
+
+// abortIfCannotWriteApp emits a 403 and returns true when the current
+// user is not allowed to mutate the resolved application. Use after a read
+// resolution (loadComponentEnv / getHandlerFromRoute) on write paths.
+func abortIfCannotWriteApp(c *gin.Context, handler *ApplicationHandler) bool {
+	if handler == nil {
+		return false
+	}
+	if !middlewares.CanWriteOwned(c.MustGet("currentUser").(models.User), handler.Model.AccountID) {
+		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
+		return true
+	}
+	return false
+}
+
+func resolveAppFromRoute(c *gin.Context, db *database.MongoDB) (*ApplicationHandler, *models.Organization, error) {
 	if _, err := primitive.ObjectIDFromHex(c.Param("organizationID")); err != nil {
 		log.Printf("Error parsing organizationID: %v\n", err)
-		return nil, err
+		return nil, nil, err
 	}
 	if _, err := primitive.ObjectIDFromHex(c.Param("applicationID")); err != nil {
 		log.Printf("Error parsing applicationID: %v\n", err)
-		return nil, err
+		return nil, nil, err
 	}
 
 	handler, err := NewApplicationHandler(db)
 	if err != nil {
 		log.Printf("Error creating application handler: %v\n", err)
-		return nil, err
+		return nil, nil, err
 	}
 	if err = handler.GetApplicationByID(c.Param("applicationID")); err != nil {
 		log.Printf("Error getting application: %v\n", err)
-		return nil, conureerrors.ErrObjectNotFound
+		return nil, nil, conureerrors.ErrObjectNotFound
 	}
-	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
-		return nil, conureerrors.ErrNotAllowed
+	org := models.Organization{}
+	if _, err := org.GetById(db, handler.Model.OrganizationID.Hex()); err != nil {
+		return nil, nil, conureerrors.ErrObjectNotFound
 	}
-
-	return handler, nil
+	if !middlewares.CanReadOrg(c.MustGet("currentUser").(models.User), &org) {
+		return nil, nil, conureerrors.ErrNotAllowed
+	}
+	return handler, &org, nil
 }

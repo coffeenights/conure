@@ -27,6 +27,7 @@ func CreateSuperuser(db *database.MongoDB, email, password string) error {
 		Email:    email,
 		Password: hashedPassword,
 		Client:   superuserClient,
+		Role:     models.RoleAdmin,
 	}
 	if err := user.Create(db); err != nil {
 		if errors.Is(err, conureerrors.ErrEmailAlreadyExists) {

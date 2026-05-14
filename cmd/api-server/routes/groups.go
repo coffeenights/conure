@@ -13,6 +13,7 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/health"
 	"github.com/coffeenights/conure/cmd/api-server/settings"
+	"github.com/coffeenights/conure/cmd/api-server/users"
 	"github.com/coffeenights/conure/cmd/api-server/variables"
 	"github.com/coffeenights/conure/internal/config"
 )
@@ -59,10 +60,12 @@ func GenerateRouter() *gin.Engine {
 	authHandler := auth.NewAuthHandler(conf, mongo)
 	variablesHandler := variables.NewVariablesHandler(conf, mongo, keyStorage)
 	healthHandler := health.NewHandler(mongo)
+	usersHandler := users.NewHandler(conf, mongo)
 	auth.GenerateRoutes("/auth", router, authHandler)
 	apps.GenerateRoutes("/organizations", router, appHandler)
 	settings.GenerateRoutes("/settings", router, settingsHandler)
 	variables.GenerateRoutes("/variables", router, variablesHandler)
+	users.GenerateRoutes("/users", router, usersHandler)
 	health.GenerateRoutes(router, healthHandler)
 	return router
 }

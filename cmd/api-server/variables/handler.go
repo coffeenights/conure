@@ -12,6 +12,7 @@ import (
 	apiConfig "github.com/coffeenights/conure/cmd/api-server/config"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
+	"github.com/coffeenights/conure/cmd/api-server/middlewares"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
@@ -44,7 +45,7 @@ func (h *Handler) requireOrgOwnership(c *gin.Context) (primitive.ObjectID, bool)
 		conureerrors.AbortWithError(c, err)
 		return primitive.NilObjectID, false
 	}
-	if org.AccountID != user.ID {
+	if !middlewares.CanWriteOrg(user, &org) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return primitive.NilObjectID, false
 	}

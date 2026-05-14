@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/middlewares"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/cmd/api-server/variables"
 )
@@ -28,8 +29,8 @@ func (a *ApiHandler) CreateIntegration(c *gin.Context) {
 		return
 	}
 
-	uID := c.MustGet("currentUser").(models.User).ID
-	if org.AccountID != uID {
+	user := c.MustGet("currentUser").(models.User)
+	if !middlewares.CanWriteOrg(user, &org) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
@@ -117,7 +118,7 @@ func (a *ApiHandler) ListIntegrations(c *gin.Context) {
 		return
 
 	}
-	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
+	if !middlewares.CanReadOrg(c.MustGet("currentUser").(models.User), &org) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
@@ -152,7 +153,7 @@ func (a *ApiHandler) DeleteIntegration(c *gin.Context) {
 		return
 
 	}
-	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
+	if !middlewares.CanWriteOrg(c.MustGet("currentUser").(models.User), &org) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}

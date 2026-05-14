@@ -14,16 +14,50 @@ import (
 
 const UserCollection string = "users"
 
+// Role enumerates the two coarse-grained authorization tiers exposed by the
+// API. Admin is the superuser tier — sees and mutates everything across
+// organizations. Developer is the regular org-scoped tier — reads everything
+// inside its OrganizationID, writes only resources it created.
+type Role string
+
+const (
+	RoleAdmin     Role = "admin"
+	RoleDeveloper Role = "developer"
+)
+
+// SuperuserClient mirrors the historical sentinel set on User.Client by
+// CreateSuperuser. It's kept so EffectiveRole can promote legacy superuser
+// rows that predate the Role field.
+const SuperuserClient string = "conure"
+
 type User struct {
-	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Email       string             `bson:"email" json:"email"`
-	Password    string             `bson:"password" json:"-"`
-	IsActive    bool               `bson:"isActive" json:"is_active"`
-	LastLoginAt *time.Time         `bson:"lastLoginAt,omitempty" json:"last_login_at"`
-	CreatedAt   time.Time          `bson:"createdAt" json:"created_at"`
-	UpdatedAt   time.Time          `bson:"updatedAt" json:"updated_at"`
-	Client      string             `bson:"client,omitempty" json:"client"`
+	ID             primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Email          string             `bson:"email" json:"email"`
+	Password       string             `bson:"password" json:"-"`
+	IsActive       bool               `bson:"isActive" json:"is_active"`
+	LastLoginAt    *time.Time         `bson:"lastLoginAt,omitempty" json:"last_login_at"`
+	CreatedAt      time.Time          `bson:"createdAt" json:"created_at"`
+	UpdatedAt      time.Time          `bson:"updatedAt" json:"updated_at"`
+	Client         string             `bson:"client,omitempty" json:"client"`
+	Role           Role               `bson:"role,omitempty" json:"role"`
+	OrganizationID primitive.ObjectID `bson:"organizationId,omitempty" json:"organization_id,omitempty"`
 }
+
+// EffectiveRole resolves the user's role, falling back to the legacy
+// Client=="conure" sentinel for rows written before Role existed. Anything
+// else defaults to developer.
+func (u *User) EffectiveRole() Role {
+	if u.Role != "" {
+		return u.Role
+	}
+	if u.Client == SuperuserClient {
+		return RoleAdmin
+	}
+	return RoleDeveloper
+}
+
+// IsAdmin is shorthand used by authorization middleware and handlers.
+func (u *User) IsAdmin() bool { return u.EffectiveRole() == RoleAdmin }
 
 func (u *User) Create(mongo *database.MongoDB) error {
 	collection := mongo.Client.Database(mongo.DBName).Collection(UserCollection)
@@ -101,6 +135,43 @@ func (u *User) Delete(mongo *database.MongoDB) error {
 		return err
 	}
 	return nil
+}
+
+// Update writes mutable fields (email, role, organization, isActive) back to
+// the document. Password is intentionally excluded — use UpdatePassword.
+func (u *User) Update(mongo *database.MongoDB) error {
+	collection := mongo.Client.Database(mongo.DBName).Collection(UserCollection)
+	u.UpdatedAt = time.Now()
+	filter := bson.M{"_id": u.ID}
+	update := bson.M{"$set": bson.M{
+		"email":          u.Email,
+		"role":           u.Role,
+		"organizationId": u.OrganizationID,
+		"isActive":       u.IsActive,
+		"updatedAt":      u.UpdatedAt,
+	}}
+	_, err := collection.UpdateOne(context.Background(), filter, update)
+	return err
+}
+
+// ListUsers returns every user row. Used by the admin user-management
+// endpoints; not exposed to developers.
+func ListUsers(mongo *database.MongoDB) ([]User, error) {
+	collection := mongo.Client.Database(mongo.DBName).Collection(UserCollection)
+	cursor, err := collection.Find(context.Background(), bson.M{})
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close(context.Background())
+	var users []User
+	for cursor.Next(context.Background()) {
+		var u User
+		if err := cursor.Decode(&u); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	return users, cursor.Err()
 }
 
 func ValidateEmail(email string) error {

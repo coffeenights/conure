@@ -9,6 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/middlewares"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
@@ -28,7 +29,8 @@ func (a *ApiHandler) ListApplications(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
 		return
 	}
-	if org.AccountID != c.MustGet("currentUser").(models.User).ID {
+	user := c.MustGet("currentUser").(models.User)
+	if !middlewares.CanReadOrg(user, &org) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
@@ -82,7 +84,14 @@ func (a *ApiHandler) DetailApplication(c *gin.Context) {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	if handler.Model.AccountID != c.MustGet("currentUser").(models.User).ID {
+	// Read access is gated on org membership, not app ownership — any
+	// developer in the org can read apps created by their peers.
+	orgForApp := models.Organization{}
+	if _, err := orgForApp.GetById(a.MongoDB, handler.Model.OrganizationID.Hex()); err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
+		return
+	}
+	if !middlewares.CanReadOrg(c.MustGet("currentUser").(models.User), &orgForApp) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
@@ -101,8 +110,12 @@ func (a *ApiHandler) CreateApplication(c *gin.Context) {
 		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
 		return
 	}
-	uID := c.MustGet("currentUser").(models.User).ID
-	if org.AccountID != uID {
+	user := c.MustGet("currentUser").(models.User)
+	uID := user.ID
+	// Write access here means "create an app in this org" — a developer
+	// only needs to belong to the org (read access). Org-level mutations
+	// (rename, delete the org itself) are gated separately by CanWriteOrg.
+	if !middlewares.CanReadOrg(user, &org) {
 		conureerrors.AbortWithError(c, conureerrors.ErrNotAllowed)
 		return
 	}
