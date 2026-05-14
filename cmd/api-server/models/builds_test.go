@@ -78,6 +78,83 @@ func TestBuild_MarkTerminal_ClearsLease(t *testing.T) {
 	}
 }
 
+func TestBuild_MarkTerminalIfOwner_RejectsStaleWatcher(t *testing.T) {
+	db, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	b := newTestBuild()
+	if err := Create(ctx, db, b); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// Replica-A wins the lease.
+	ok, err := b.TryAcquireLease(ctx, db, "replica-A", 60*time.Second)
+	if err != nil || !ok {
+		t.Fatalf("acquire A: ok=%v err=%v", ok, err)
+	}
+
+	// Lease expires; replica-B steals it.
+	bB := *b
+	if _, err := db.Client.Database(db.DBName).Collection(BuildCollection).UpdateOne(ctx,
+		map[string]interface{}{"_id": b.ID},
+		map[string]interface{}{"$set": map[string]interface{}{"watcherExpiresAt": time.Now().Add(-time.Second)}},
+	); err != nil {
+		t.Fatal(err)
+	}
+	ok, err = bB.TryAcquireLease(ctx, db, "replica-B", 60*time.Second)
+	if err != nil || !ok {
+		t.Fatalf("acquire B: ok=%v err=%v", ok, err)
+	}
+
+	// Stale watcher (A) attempts to mark terminal — must be rejected and
+	// must NOT clear the new owner's (B's) lease.
+	wrote, err := b.MarkTerminalIfOwner(ctx, db, "replica-A", BuildStatusSucceeded, "ghcr.io/example/app:tag", "")
+	if err != nil {
+		t.Fatalf("stale mark: %v", err)
+	}
+	if wrote {
+		t.Errorf("stale watcher should NOT have written terminal state")
+	}
+	got, err := GetBuildByID(ctx, db, b.ID.Hex())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status == BuildStatusSucceeded {
+		t.Errorf("status should still be non-terminal, got %v", got.Status)
+	}
+	if got.WatcherID != "replica-B" {
+		t.Errorf("B's lease should be intact, got watcherID=%q", got.WatcherID)
+	}
+
+	// Rightful owner (B) writes terminal successfully.
+	wrote, err = bB.MarkTerminalIfOwner(ctx, db, "replica-B", BuildStatusSucceeded, "ghcr.io/example/app:tag", "")
+	if err != nil || !wrote {
+		t.Fatalf("B mark: wrote=%v err=%v", wrote, err)
+	}
+
+	// A second attempt by anyone (including B) must be rejected by the
+	// not-already-terminal guard.
+	wrote, err = bB.MarkTerminalIfOwner(ctx, db, "replica-B", BuildStatusFailed, "", "trying to overwrite")
+	if err != nil {
+		t.Fatalf("re-mark: %v", err)
+	}
+	if wrote {
+		t.Errorf("second terminal write should be rejected by the not-already-terminal guard")
+	}
+	got, err = GetBuildByID(ctx, db, b.ID.Hex())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != BuildStatusSucceeded {
+		t.Errorf("status should remain succeeded after rejected re-mark, got %v", got.Status)
+	}
+	if got.ErrorMessage != "" {
+		t.Errorf("errorMessage should not have been overwritten, got %q", got.ErrorMessage)
+	}
+}
+
 func TestBuild_MarkTerminal_PreservesOriginalFinishedAt(t *testing.T) {
 	db, err := SetupDB()
 	if err != nil {

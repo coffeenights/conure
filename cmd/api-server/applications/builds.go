@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -686,6 +687,10 @@ func (a *ApiHandler) watchBuildJob(ctx context.Context, build models.Build) {
 
 // pollBuildJobOnce is one polling step. Returns done=true when the build
 // has reached a terminal state and the watcher should exit.
+//
+// All terminal writes go through MarkTerminalIfOwner: if the lease was
+// stolen mid-poll (e.g. a slow deploy outran the 60s TTL), the rightful
+// owner will redo this work and we must not double-write.
 func (a *ApiHandler) pollBuildJobOnce(ctx context.Context, build *models.Build) (bool, error) {
 	cli, err := a.kubeClient()
 	if err != nil {
@@ -694,7 +699,7 @@ func (a *ApiHandler) pollBuildJobOnce(ctx context.Context, build *models.Build) 
 	job, err := cli.K8s.BatchV1().Jobs(build.JobNamespace).Get(ctx, build.JobName, metav1.GetOptions{})
 	if err != nil {
 		if k8sErrors.IsNotFound(err) {
-			_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", "build Job not found")
+			a.markBuildTerminalGuarded(ctx, build, models.BuildStatusFailed, "", "build Job not found")
 			return true, nil
 		}
 		return false, err
@@ -703,29 +708,43 @@ func (a *ApiHandler) pollBuildJobOnce(ctx context.Context, build *models.Build) 
 	if job.Status.Succeeded > 0 {
 		application := &models.Application{}
 		if err := application.GetByID(a.MongoDB, build.ApplicationID.Hex()); err != nil {
-			_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", fmt.Sprintf("loading application: %v", err))
+			a.markBuildTerminalGuarded(ctx, build, models.BuildStatusFailed, "", fmt.Sprintf("loading application: %v", err))
 			return true, nil
 		}
 		component := &models.Component{}
 		if err := component.GetByID(a.MongoDB, build.ComponentID.Hex()); err != nil {
-			_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", fmt.Sprintf("loading component: %v", err))
+			a.markBuildTerminalGuarded(ctx, build, models.BuildStatusFailed, "", fmt.Sprintf("loading component: %v", err))
 			return true, nil
 		}
 		envName := envNameByID(application, build.EnvironmentID)
 		if envName == "" {
-			_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", "environment not found")
+			a.markBuildTerminalGuarded(ctx, build, models.BuildStatusFailed, "", "environment not found")
 			return true, nil
 		}
 		envObj, err := application.GetEnvironmentByName(a.MongoDB, envName)
 		if err != nil || envObj == nil {
-			_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", "environment not found")
+			a.markBuildTerminalGuarded(ctx, build, models.BuildStatusFailed, "", "environment not found")
 			return true, nil
 		}
-		if err := deployBuildImage(ctx, a, application, envObj, component, build.ImageRef, build.CreatedBy); err != nil {
-			_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", fmt.Sprintf("deploying: %v", err))
+		// The deploy can outrun the 60s lease TTL (CRD apply + Mongo
+		// writes are not bounded). Keep the lease alive while it runs
+		// so the adoption scanner can't steal the build mid-deploy and
+		// produce duplicate deployed revisions.
+		stopHeartbeat := a.heartbeatDuringDeploy(ctx, build)
+		deployErr := deployBuildImage(ctx, a, application, envObj, component, build.ImageRef, build.CreatedBy)
+		stillOwner := stopHeartbeat()
+		if !stillOwner {
+			// Lease was stolen despite the keep-alive (e.g. Mongo
+			// outage froze the heartbeat). Don't touch terminal
+			// state — the new owner will redo the deploy.
+			log.Printf("watcher %s: lease lost during deploy; abandoning", build.ID.Hex())
 			return true, nil
 		}
-		_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusSucceeded, build.ImageRef, "")
+		if deployErr != nil {
+			a.markBuildTerminalGuarded(ctx, build, models.BuildStatusFailed, "", fmt.Sprintf("deploying: %v", deployErr))
+			return true, nil
+		}
+		a.markBuildTerminalGuarded(ctx, build, models.BuildStatusSucceeded, build.ImageRef, "")
 		return true, nil
 	}
 	if job.Status.Failed > 0 {
@@ -733,10 +752,68 @@ func (a *ApiHandler) pollBuildJobOnce(ctx context.Context, build *models.Build) 
 		if msg == "" {
 			msg = "build failed; see job logs"
 		}
-		_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", msg)
+		a.markBuildTerminalGuarded(ctx, build, models.BuildStatusFailed, "", msg)
 		return true, nil
 	}
 	return false, nil
+}
+
+// markBuildTerminalGuarded wraps MarkTerminalIfOwner with a uniform log
+// message. Tracks the "lease stolen mid-poll" case as a debug signal so
+// duplicate-write attempts are visible in production.
+func (a *ApiHandler) markBuildTerminalGuarded(ctx context.Context, build *models.Build, status models.BuildStatus, imageRef, errMsg string) {
+	ok, err := build.MarkTerminalIfOwner(ctx, a.MongoDB, a.WatcherID, status, imageRef, errMsg)
+	if err != nil {
+		log.Printf("watcher %s: marking terminal: %v", build.ID.Hex(), err)
+		return
+	}
+	if !ok {
+		log.Printf("watcher %s: skipped terminal write (lease lost or build already terminal)", build.ID.Hex())
+	}
+}
+
+// heartbeatDuringDeploy keeps the build's lease alive while a slow
+// in-handler operation runs. Returns a stop function that cancels the
+// heartbeat goroutine and reports whether the lease is still held.
+//
+// Heartbeats fire at buildHeartbeat (20s); the lease TTL is 60s, so a
+// single missed write is survivable. A stop() call returning false means
+// some heartbeat saw the lease was lost — the caller must NOT mutate
+// terminal state.
+func (a *ApiHandler) heartbeatDuringDeploy(ctx context.Context, build *models.Build) func() bool {
+	hbCtx, cancel := context.WithCancel(ctx)
+	lost := make(chan struct{})
+	var lostFlag atomic.Bool
+	go func() {
+		t := time.NewTicker(buildHeartbeat)
+		defer t.Stop()
+		for {
+			select {
+			case <-hbCtx.Done():
+				return
+			case <-t.C:
+				ok, err := build.Heartbeat(hbCtx, a.MongoDB, a.WatcherID, buildLeaseTTL)
+				if err != nil {
+					log.Printf("watcher %s: deploy-time heartbeat error: %v", build.ID.Hex(), err)
+					continue
+				}
+				if !ok {
+					lostFlag.Store(true)
+					close(lost)
+					return
+				}
+			}
+		}
+	}()
+	return func() bool {
+		cancel()
+		select {
+		case <-lost:
+			return false
+		default:
+			return !lostFlag.Load()
+		}
+	}
 }
 
 // envNameByID resolves env.ID → env.Name within an Application's

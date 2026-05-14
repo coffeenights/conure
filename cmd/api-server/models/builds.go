@@ -152,9 +152,51 @@ func GetBuildByID(ctx context.Context, db *database.MongoDB, id string) (*Build,
 // MarkTerminal flips a build to succeeded/failed and stamps FinishedAt. Also
 // clears the lease fields so a future scan never tries to adopt a finished
 // build. Safe to call more than once: the first call wins FinishedAt and
-// subsequent calls leave the original timestamp untouched even when the
-// status/imageRef/errMsg are re-supplied.
+// subsequent calls are filtered out by the not-already-terminal guard, so
+// repeated invocations are no-ops and the canonical fields can't be
+// rewritten by a second writer.
+//
+// Use MarkTerminalIfOwner from the watcher loop: this method does NOT check
+// watcherID, so the pre-watcher handler paths (which never acquired a
+// lease) can still record build-creation failures.
 func (b *Build) MarkTerminal(ctx context.Context, db *database.MongoDB, status BuildStatus, imageRef, errMsg string) error {
+	return b.markTerminalWithFilter(ctx, db, status, imageRef, errMsg, bson.M{"_id": b.ID})
+}
+
+// MarkTerminalIfOwner is the watcher-safe variant: it only flips the build
+// when (a) this watcher still owns the lease and (b) the build isn't
+// already terminal. A watcher whose lease expired during a slow deploy and
+// was stolen by another replica will get (false, nil) and must abandon
+// the rest of its work — the rightful owner will redo it.
+func (b *Build) MarkTerminalIfOwner(ctx context.Context, db *database.MongoDB, watcherID string, status BuildStatus, imageRef, errMsg string) (bool, error) {
+	filter := bson.M{
+		"_id":       b.ID,
+		"watcherID": watcherID,
+		"status":    bson.M{"$nin": []BuildStatus{BuildStatusSucceeded, BuildStatusFailed}},
+	}
+	return b.markTerminalWithFilterMatched(ctx, db, status, imageRef, errMsg, filter)
+}
+
+// markTerminalWithFilter is the shared core. The not-already-terminal guard
+// is layered on top of the caller's filter so a stale writer can't overwrite
+// canonical fields under any path.
+func (b *Build) markTerminalWithFilter(ctx context.Context, db *database.MongoDB, status BuildStatus, imageRef, errMsg string, filter bson.M) error {
+	guarded := bson.M{}
+	for k, v := range filter {
+		guarded[k] = v
+	}
+	if _, ok := guarded["status"]; !ok {
+		guarded["status"] = bson.M{"$nin": []BuildStatus{BuildStatusSucceeded, BuildStatusFailed}}
+	}
+	_, err := b.markTerminalWithFilterMatched(ctx, db, status, imageRef, errMsg, guarded)
+	return err
+}
+
+// markTerminalWithFilterMatched performs the conditional write and returns
+// whether a document actually transitioned. The pipeline preserves the
+// first-call FinishedAt via $ifNull, even though the guard usually rejects
+// re-marks before they reach the aggregation stage — defensive belt.
+func (b *Build) markTerminalWithFilterMatched(ctx context.Context, db *database.MongoDB, status BuildStatus, imageRef, errMsg string, filter bson.M) (bool, error) {
 	now := time.Now()
 	coll := db.Client.Database(db.DBName).Collection(BuildCollection)
 	set := bson.M{
@@ -169,9 +211,6 @@ func (b *Build) MarkTerminal(ctx context.Context, db *database.MongoDB, status B
 	if errMsg != "" {
 		set["errorMessage"] = errMsg
 	}
-	// Only stamp finishedAt the first time. $setOnInsert won't work here
-	// (this is an Update, not an Upsert), so use a conditional $set via
-	// an aggregation pipeline.
 	update := bson.A{
 		bson.M{"$set": set},
 		bson.M{"$set": bson.M{
@@ -180,12 +219,19 @@ func (b *Build) MarkTerminal(ctx context.Context, db *database.MongoDB, status B
 			},
 		}},
 	}
-	_, err := coll.UpdateOne(ctx, bson.M{"_id": b.ID}, update)
+	res, err := coll.UpdateOne(ctx, filter, update)
 	if err != nil {
-		return err
+		return false, err
 	}
-	// Refresh the in-memory copy. Re-read finishedAt so the caller sees
-	// the canonical first-call timestamp, not `now`.
+	if res.MatchedCount == 0 {
+		// Re-read so the in-memory copy reflects whoever actually owns
+		// the canonical state — callers may want to log it.
+		var refreshed Build
+		if rerr := coll.FindOne(ctx, bson.M{"_id": b.ID}).Decode(&refreshed); rerr == nil {
+			*b = refreshed
+		}
+		return false, nil
+	}
 	var refreshed Build
 	if err := coll.FindOne(ctx, bson.M{"_id": b.ID}).Decode(&refreshed); err == nil {
 		b.FinishedAt = refreshed.FinishedAt
@@ -201,7 +247,7 @@ func (b *Build) MarkTerminal(ctx context.Context, db *database.MongoDB, status B
 	if errMsg != "" {
 		b.ErrorMessage = errMsg
 	}
-	return nil
+	return true, nil
 }
 
 // SetJob records the BuildKit Job's identity on the build and flips status
