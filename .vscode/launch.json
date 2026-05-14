@@ -7,7 +7,7 @@
       "request": "launch",
       "mode": "auto",
       "program": "${workspaceFolder}/cmd/api-server",
-      "args": ["runserver"],
+      "args": ["runserver", "--port", "8085"],
       "envFile": "${workspaceFolder}/.env"
     },
     {
