@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
+	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 )
 
@@ -132,8 +133,18 @@ func (a *ApiHandler) TriggerBuild(c *gin.Context) {
 			conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
 			return
 		}
-		if err := build.SetJob(ctx, a.MongoDB, created.Name, created.Namespace); err != nil {
+		if err := setJobWithRetry(ctx, a.MongoDB, build, created.Name, created.Namespace); err != nil {
+			// Without jobName the adoption scanner can never pick this build
+			// up (see models.AdoptableBuilds: jobName must be non-empty), so
+			// the Job would run untracked forever. Best-effort delete the
+			// Job and mark the build failed.
 			log.Printf("recording job on build: %v", err)
+			if derr := clientset.K8s.BatchV1().Jobs(created.Namespace).Delete(ctx, created.Name, metav1.DeleteOptions{}); derr != nil && !k8sErrors.IsNotFound(derr) {
+				log.Printf("deleting untracked buildkit job %s/%s: %v", created.Namespace, created.Name, derr)
+			}
+			_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", fmt.Sprintf("recording Job on Build: %v", err))
+			conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
+			return
 		}
 		// Acquire lease + spawn watcher. If acquisition fails (very
 		// unlikely on a fresh build), the periodic scan will adopt it.
@@ -549,6 +560,26 @@ func dockerfileFrontendArgs() string {
 // Documented for forward-compatibility; remote builds reject this tool today.
 func railpackFrontendArgs() string {
 	return "--frontend gateway.v0 --opt source=ghcr.io/railwayapp/railpack-frontend:latest"
+}
+
+// setJobWithRetry retries Build.SetJob a few times on transient Mongo
+// errors. The Job already exists in the cluster by this point; if we never
+// persist jobName the adoption scanner can't see this build, so the work
+// runs untracked. Three attempts cover the typical transient blip without
+// holding the request open for long.
+func setJobWithRetry(ctx context.Context, db *database.MongoDB, build *models.Build, name, namespace string) error {
+	const attempts = 3
+	var err error
+	for i := 0; i < attempts; i++ {
+		if err = build.SetJob(ctx, db, name, namespace); err == nil {
+			return nil
+		}
+		if ctx.Err() != nil {
+			return err
+		}
+		time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+	}
+	return err
 }
 
 // shellQuote single-quotes a value for safe interpolation inside a sh -c
