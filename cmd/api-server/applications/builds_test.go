@@ -182,6 +182,32 @@ func TestRenderBuildJob_LabelsAndStructure(t *testing.T) {
 	}
 }
 
+func TestIsValidPlatform(t *testing.T) {
+	valid := []string{"", "linux/amd64", "linux/arm64", "linux/arm64/v8", "linux/386"}
+	for _, p := range valid {
+		if !isValidPlatform(p) {
+			t.Errorf("isValidPlatform(%q) = false, want true", p)
+		}
+	}
+	invalid := []string{
+		"linux/amd64; rm -rf /",
+		"linux/amd64 --opt evil=1",
+		"linux/amd64`id`",
+		"linux/amd64$IFS",
+		"linux",
+		"linux/",
+		"/amd64",
+		"linux//amd64",
+		"linux/amd64/v8/extra",
+		"linux/amd 64",
+	}
+	for _, p := range invalid {
+		if isValidPlatform(p) {
+			t.Errorf("isValidPlatform(%q) = true, want false", p)
+		}
+	}
+}
+
 func TestShellQuote(t *testing.T) {
 	cases := map[string]string{
 		"simple":  `'simple'`,

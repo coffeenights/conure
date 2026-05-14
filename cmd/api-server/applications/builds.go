@@ -291,6 +291,9 @@ func (r TriggerBuildRequest) validate() error {
 		if models.BuildTool(r.BuildTool) == models.BuildToolRailpack {
 			return conureerrors.ErrInvalidRequest
 		}
+		if !isValidPlatform(r.Platform) {
+			return conureerrors.ErrInvalidRequest
+		}
 	default:
 		return conureerrors.ErrInvalidRequest
 	}
@@ -410,7 +413,7 @@ func renderBuildJob(b *models.Build) *batchv1.Job {
 
 	platformArg := ""
 	if b.Platform != "" {
-		platformArg = fmt.Sprintf("--opt platform=%s ", b.Platform)
+		platformArg = fmt.Sprintf("--opt platform=%s ", shellQuote(b.Platform))
 	}
 
 	buildScript := fmt.Sprintf(`
@@ -536,6 +539,35 @@ func railpackFrontendArgs() string {
 // idiom.
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// isValidPlatform accepts BuildKit platform strings of the form
+// `os/arch[/variant]` (e.g. linux/amd64, linux/arm64/v8). Empty is
+// allowed — buildkitd then picks the worker's native platform.
+func isValidPlatform(p string) bool {
+	if p == "" {
+		return true
+	}
+	parts := strings.Split(p, "/")
+	if len(parts) < 2 || len(parts) > 3 {
+		return false
+	}
+	for _, part := range parts {
+		if part == "" {
+			return false
+		}
+		for _, r := range part {
+			switch {
+			case r >= 'a' && r <= 'z':
+			case r >= 'A' && r <= 'Z':
+			case r >= '0' && r <= '9':
+			case r == '.' || r == '_' || r == '-':
+			default:
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func ptrBool(b bool) *bool { return &b }
