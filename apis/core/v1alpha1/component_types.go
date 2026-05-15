@@ -145,6 +145,7 @@ const (
 //+kubebuilder:object:root=true
 //+kubebuilder:resource:scope=Cluster
 //+genclient
+//+genclient:nonNamespaced
 
 // ComponentDefinition is the Schema for the componentdefinitions API
 type ComponentDefinition struct {

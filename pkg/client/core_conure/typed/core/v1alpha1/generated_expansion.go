@@ -23,6 +23,8 @@ type ApplicationExpansion interface{}
 
 type ComponentExpansion interface{}
 
+type ComponentDefinitionExpansion interface{}
+
 type WorkflowExpansion interface{}
 
 type WorkflowRunExpansion interface{}

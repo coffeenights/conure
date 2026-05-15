@@ -2,8 +2,10 @@ package applications
 
 import (
 	"net/http"
+	"sort"
 
 	"github.com/gin-gonic/gin"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/middlewares"
@@ -28,7 +30,12 @@ type ComponentDefinitionListResponse struct {
 // ListComponentDefinitions returns the component types available for use in
 // the given organization. Used by the CLI wizard to populate the type picker.
 //
-// Path: GET /:orgID/component-definitions
+// Component definitions are cluster-scoped ComponentDefinition CRDs (the same
+// objects the controller resolves at render time), so this reads them live
+// from the cluster rather than from a per-org MongoDB collection. The org is
+// still resolved and authorized so the endpoint keeps its 404/403 contract.
+//
+// Path: GET /:organizationID/component-definitions
 func (a *ApiHandler) ListComponentDefinitions(c *gin.Context) {
 	organizationID := c.Param("organizationID")
 	org := models.Organization{}
@@ -41,24 +48,37 @@ func (a *ApiHandler) ListComponentDefinitions(c *gin.Context) {
 		return
 	}
 
-	specs, err := models.ComponentTypeSpecList(c.Request.Context(), a.MongoDB, organizationID)
+	clientset, err := a.kubeClient()
 	if err != nil {
 		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
 		return
 	}
 
-	defs := make([]ComponentDefinitionResponse, len(specs))
-	for i, s := range specs {
+	list, err := clientset.Conure.CoreV1alpha1().ComponentDefinitions().List(c.Request.Context(), metav1.ListOptions{})
+	if err != nil {
+		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
+		return
+	}
+
+	defs := make([]ComponentDefinitionResponse, len(list.Items))
+	for i := range list.Items {
+		cd := &list.Items[i]
 		defs[i] = ComponentDefinitionResponse{
-			ID:            s.ID.Hex(),
-			Name:          s.Name,
-			Type:          s.Type,
-			Engine:        s.Engine,
-			Description:   s.Description,
-			OCIRepository: s.OCIRepository,
-			OCITag:        s.OCITag,
-			IconURL:       s.IconURL,
+			ID:   cd.Name,
+			Name: cd.Name,
+			Type: cd.Spec.ComponentType,
+			// Engine is optional on the CRD; the CLI treats empty as timoni.
+			Engine:        string(cd.Spec.Engine),
+			Description:   cd.Spec.Description,
+			OCIRepository: cd.Spec.OCIRepository,
+			OCITag:        cd.Spec.OCITag,
+			// ComponentDefinition has no icon field; CLI handles a nil icon.
+			IconURL: nil,
 		}
 	}
+	// Stable order so the CLI picker doesn't reshuffle between calls
+	// (List does not guarantee ordering).
+	sort.Slice(defs, func(i, j int) bool { return defs[i].Name < defs[j].Name })
+
 	c.JSON(http.StatusOK, ComponentDefinitionListResponse{Definitions: defs})
 }

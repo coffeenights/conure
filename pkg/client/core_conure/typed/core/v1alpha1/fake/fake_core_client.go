@@ -28,23 +28,27 @@ type FakeCoreV1alpha1 struct {
 }
 
 func (c *FakeCoreV1alpha1) ActionDefinitions(namespace string) v1alpha1.ActionDefinitionInterface {
-	return &FakeActionDefinitions{c, namespace}
+	return newFakeActionDefinitions(c, namespace)
 }
 
 func (c *FakeCoreV1alpha1) Applications(namespace string) v1alpha1.ApplicationInterface {
-	return &FakeApplications{c, namespace}
+	return newFakeApplications(c, namespace)
 }
 
 func (c *FakeCoreV1alpha1) Components(namespace string) v1alpha1.ComponentInterface {
-	return &FakeComponents{c, namespace}
+	return newFakeComponents(c, namespace)
+}
+
+func (c *FakeCoreV1alpha1) ComponentDefinitions() v1alpha1.ComponentDefinitionInterface {
+	return newFakeComponentDefinitions(c)
 }
 
 func (c *FakeCoreV1alpha1) Workflows(namespace string) v1alpha1.WorkflowInterface {
-	return &FakeWorkflows{c, namespace}
+	return newFakeWorkflows(c, namespace)
 }
 
 func (c *FakeCoreV1alpha1) WorkflowRuns(namespace string) v1alpha1.WorkflowRunInterface {
-	return &FakeWorkflowRuns{c, namespace}
+	return newFakeWorkflowRuns(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

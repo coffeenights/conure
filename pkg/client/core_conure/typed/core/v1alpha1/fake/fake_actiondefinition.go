@@ -18,123 +18,34 @@ limitations under the License.
 package fake
 
 import (
-	"context"
-
 	v1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	labels "k8s.io/apimachinery/pkg/labels"
-	types "k8s.io/apimachinery/pkg/types"
-	watch "k8s.io/apimachinery/pkg/watch"
-	testing "k8s.io/client-go/testing"
+	corev1alpha1 "github.com/coffeenights/conure/pkg/client/core_conure/typed/core/v1alpha1"
+	gentype "k8s.io/client-go/gentype"
 )
 
-// FakeActionDefinitions implements ActionDefinitionInterface
-type FakeActionDefinitions struct {
+// fakeActionDefinitions implements ActionDefinitionInterface
+type fakeActionDefinitions struct {
+	*gentype.FakeClientWithList[*v1alpha1.ActionDefinition, *v1alpha1.ActionDefinitionList]
 	Fake *FakeCoreV1alpha1
-	ns   string
 }
 
-var actiondefinitionsResource = v1alpha1.SchemeGroupVersion.WithResource("actiondefinitions")
-
-var actiondefinitionsKind = v1alpha1.SchemeGroupVersion.WithKind("ActionDefinition")
-
-// Get takes name of the actionDefinition, and returns the corresponding actionDefinition object, and an error if there is any.
-func (c *FakeActionDefinitions) Get(ctx context.Context, name string, options v1.GetOptions) (result *v1alpha1.ActionDefinition, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewGetAction(actiondefinitionsResource, c.ns, name), &v1alpha1.ActionDefinition{})
-
-	if obj == nil {
-		return nil, err
+func newFakeActionDefinitions(fake *FakeCoreV1alpha1, namespace string) corev1alpha1.ActionDefinitionInterface {
+	return &fakeActionDefinitions{
+		gentype.NewFakeClientWithList[*v1alpha1.ActionDefinition, *v1alpha1.ActionDefinitionList](
+			fake.Fake,
+			namespace,
+			v1alpha1.SchemeGroupVersion.WithResource("actiondefinitions"),
+			v1alpha1.SchemeGroupVersion.WithKind("ActionDefinition"),
+			func() *v1alpha1.ActionDefinition { return &v1alpha1.ActionDefinition{} },
+			func() *v1alpha1.ActionDefinitionList { return &v1alpha1.ActionDefinitionList{} },
+			func(dst, src *v1alpha1.ActionDefinitionList) { dst.ListMeta = src.ListMeta },
+			func(list *v1alpha1.ActionDefinitionList) []*v1alpha1.ActionDefinition {
+				return gentype.ToPointerSlice(list.Items)
+			},
+			func(list *v1alpha1.ActionDefinitionList, items []*v1alpha1.ActionDefinition) {
+				list.Items = gentype.FromPointerSlice(items)
+			},
+		),
+		fake,
 	}
-	return obj.(*v1alpha1.ActionDefinition), err
-}
-
-// List takes label and field selectors, and returns the list of ActionDefinitions that match those selectors.
-func (c *FakeActionDefinitions) List(ctx context.Context, opts v1.ListOptions) (result *v1alpha1.ActionDefinitionList, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewListAction(actiondefinitionsResource, actiondefinitionsKind, c.ns, opts), &v1alpha1.ActionDefinitionList{})
-
-	if obj == nil {
-		return nil, err
-	}
-
-	label, _, _ := testing.ExtractFromListOptions(opts)
-	if label == nil {
-		label = labels.Everything()
-	}
-	list := &v1alpha1.ActionDefinitionList{ListMeta: obj.(*v1alpha1.ActionDefinitionList).ListMeta}
-	for _, item := range obj.(*v1alpha1.ActionDefinitionList).Items {
-		if label.Matches(labels.Set(item.Labels)) {
-			list.Items = append(list.Items, item)
-		}
-	}
-	return list, err
-}
-
-// Watch returns a watch.Interface that watches the requested actionDefinitions.
-func (c *FakeActionDefinitions) Watch(ctx context.Context, opts v1.ListOptions) (watch.Interface, error) {
-	return c.Fake.
-		InvokesWatch(testing.NewWatchAction(actiondefinitionsResource, c.ns, opts))
-
-}
-
-// Create takes the representation of a actionDefinition and creates it.  Returns the server's representation of the actionDefinition, and an error, if there is any.
-func (c *FakeActionDefinitions) Create(ctx context.Context, actionDefinition *v1alpha1.ActionDefinition, opts v1.CreateOptions) (result *v1alpha1.ActionDefinition, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewCreateAction(actiondefinitionsResource, c.ns, actionDefinition), &v1alpha1.ActionDefinition{})
-
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1alpha1.ActionDefinition), err
-}
-
-// Update takes the representation of a actionDefinition and updates it. Returns the server's representation of the actionDefinition, and an error, if there is any.
-func (c *FakeActionDefinitions) Update(ctx context.Context, actionDefinition *v1alpha1.ActionDefinition, opts v1.UpdateOptions) (result *v1alpha1.ActionDefinition, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateAction(actiondefinitionsResource, c.ns, actionDefinition), &v1alpha1.ActionDefinition{})
-
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1alpha1.ActionDefinition), err
-}
-
-// UpdateStatus was generated because the type contains a Status member.
-// Add a +genclient:noStatus comment above the type to avoid generating UpdateStatus().
-func (c *FakeActionDefinitions) UpdateStatus(ctx context.Context, actionDefinition *v1alpha1.ActionDefinition, opts v1.UpdateOptions) (*v1alpha1.ActionDefinition, error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewUpdateSubresourceAction(actiondefinitionsResource, "status", c.ns, actionDefinition), &v1alpha1.ActionDefinition{})
-
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1alpha1.ActionDefinition), err
-}
-
-// Delete takes name of the actionDefinition and deletes it. Returns an error if one occurs.
-func (c *FakeActionDefinitions) Delete(ctx context.Context, name string, opts v1.DeleteOptions) error {
-	_, err := c.Fake.
-		Invokes(testing.NewDeleteActionWithOptions(actiondefinitionsResource, c.ns, name, opts), &v1alpha1.ActionDefinition{})
-
-	return err
-}
-
-// DeleteCollection deletes a collection of objects.
-func (c *FakeActionDefinitions) DeleteCollection(ctx context.Context, opts v1.DeleteOptions, listOpts v1.ListOptions) error {
-	action := testing.NewDeleteCollectionAction(actiondefinitionsResource, c.ns, listOpts)
-
-	_, err := c.Fake.Invokes(action, &v1alpha1.ActionDefinitionList{})
-	return err
-}
-
-// Patch applies the patch and returns the patched actionDefinition.
-func (c *FakeActionDefinitions) Patch(ctx context.Context, name string, pt types.PatchType, data []byte, opts v1.PatchOptions, subresources ...string) (result *v1alpha1.ActionDefinition, err error) {
-	obj, err := c.Fake.
-		Invokes(testing.NewPatchSubresourceAction(actiondefinitionsResource, c.ns, name, pt, data, subresources...), &v1alpha1.ActionDefinition{})
-
-	if obj == nil {
-		return nil, err
-	}
-	return obj.(*v1alpha1.ActionDefinition), err
 }

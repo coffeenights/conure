@@ -46,6 +46,23 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+.PHONY: generate-client
+generate-client: client-gen ## Regenerate the typed clientset in pkg/client/core_conure from the +genclient-marked API types.
+	rm -rf $(TMPDIR_CLIENT_GEN)
+	mkdir -p $(TMPDIR_CLIENT_GEN)
+	$(CLIENT_GEN) \
+		--clientset-name core_conure \
+		--input-base github.com/coffeenights/conure/apis \
+		--input core/v1alpha1 \
+		--output-pkg github.com/coffeenights/conure/pkg/client \
+		--output-dir $(TMPDIR_CLIENT_GEN) \
+		--go-header-file hack/boilerplate.go.txt
+	rm -rf pkg/client/core_conure
+	cp -R $(TMPDIR_CLIENT_GEN)/core_conure pkg/client/core_conure
+	rm -rf $(TMPDIR_CLIENT_GEN)
+
+TMPDIR_CLIENT_GEN := $(shell pwd)/.client-gen-tmp
+
 .PHONY: fmt
 fmt: ## Run go fmt against code.
 	go fmt ./...
@@ -135,10 +152,14 @@ $(LOCALBIN):
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+CLIENT_GEN ?= $(LOCALBIN)/client-gen
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.0.0
 CONTROLLER_TOOLS_VERSION ?= v0.20.1
+# Keep CODE_GENERATOR_VERSION aligned with the k8s.io/client-go version in go.mod
+# so generated clients match the vendored client-go runtime.
+CODE_GENERATOR_VERSION ?= v0.36.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -160,3 +181,9 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+.PHONY: client-gen
+client-gen: $(CLIENT_GEN) ## Download client-gen locally if necessary. If wrong version is installed, it will be overwritten.
+$(CLIENT_GEN): $(LOCALBIN)
+	test -s $(LOCALBIN)/client-gen && $(LOCALBIN)/client-gen --version 2>/dev/null | grep -q $(CODE_GENERATOR_VERSION) || \
+	GOBIN=$(LOCALBIN) go install k8s.io/code-generator/cmd/client-gen@$(CODE_GENERATOR_VERSION)

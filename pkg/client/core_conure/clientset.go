@@ -18,8 +18,8 @@ limitations under the License.
 package core_conure
 
 import (
-	"fmt"
-	"net/http"
+	fmt "fmt"
+	http "net/http"
 
 	corev1alpha1 "github.com/coffeenights/conure/pkg/client/core_conure/typed/core/v1alpha1"
 	discovery "k8s.io/client-go/discovery"
