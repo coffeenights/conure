@@ -1,12 +1,14 @@
 package applications
 
 import (
+	"context"
 	"net/http"
 	"sort"
 
 	"github.com/gin-gonic/gin"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/middlewares"
 	"github.com/coffeenights/conure/cmd/api-server/models"
@@ -25,6 +27,23 @@ type ComponentDefinitionResponse struct {
 
 type ComponentDefinitionListResponse struct {
 	Definitions []ComponentDefinitionResponse `json:"definitions"`
+}
+
+// listClusterComponentDefinitions returns all ComponentDefinition CRDs in the
+// cluster. ComponentDefinitions are cluster-scoped (not per-org); this is the
+// single source of truth shared by the CLI type picker and engine resolution
+// on component create, replacing the old per-org MongoDB componenttypespecs
+// collection.
+func (a *ApiHandler) listClusterComponentDefinitions(ctx context.Context) ([]conurev1alpha1.ComponentDefinition, error) {
+	clientset, err := a.kubeClient()
+	if err != nil {
+		return nil, err
+	}
+	list, err := clientset.Conure.CoreV1alpha1().ComponentDefinitions().List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
 }
 
 // ListComponentDefinitions returns the component types available for use in
@@ -48,21 +67,15 @@ func (a *ApiHandler) ListComponentDefinitions(c *gin.Context) {
 		return
 	}
 
-	clientset, err := a.kubeClient()
+	items, err := a.listClusterComponentDefinitions(c.Request.Context())
 	if err != nil {
 		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
 		return
 	}
 
-	list, err := clientset.Conure.CoreV1alpha1().ComponentDefinitions().List(c.Request.Context(), metav1.ListOptions{})
-	if err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
-		return
-	}
-
-	defs := make([]ComponentDefinitionResponse, len(list.Items))
-	for i := range list.Items {
-		cd := &list.Items[i]
+	defs := make([]ComponentDefinitionResponse, len(items))
+	for i := range items {
+		cd := &items[i]
 		defs[i] = ComponentDefinitionResponse{
 			ID:   cd.Name,
 			Name: cd.Name,

@@ -9,7 +9,10 @@ import (
 )
 
 type GenericClientset struct {
-	Conure  *core_conure.Clientset
+	// Conure is the generated clientset interface (not the concrete type) so
+	// tests can substitute core_conure/fake.NewSimpleClientset. Production
+	// wiring in GetClientset assigns the real *core_conure.Clientset.
+	Conure  core_conure.Interface
 	K8s     kubernetes.Interface
 	Dynamic *dynamic.DynamicClient
 	Config  *rest.Config

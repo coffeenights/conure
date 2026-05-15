@@ -10,6 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 
+	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
@@ -24,31 +25,33 @@ import (
 //   - engine unset + exactly one definition matches the type → use its engine.
 //   - engine unset + multiple definitions match → ErrAmbiguousComponentEngine.
 //   - no definition at all for the type → return "" so the controller writes
-//     a useful Rendered=Failed condition (the Mongo path has no ComponentDefinition
-//     registry of its own to consult beyond this list).
-func resolveComponentEngine(ctx context.Context, db *database.MongoDB, organizationID, compType, requested string) (string, error) {
-	specs, err := models.ComponentTypeSpecList(ctx, db, organizationID)
+//     a useful Rendered=Failed condition.
+//
+// Definitions are read from the cluster's ComponentDefinition CRDs (the same
+// source the type picker uses), not from MongoDB.
+func (a *ApiHandler) resolveComponentEngine(ctx context.Context, compType, requested string) (string, error) {
+	defs, err := a.listClusterComponentDefinitions(ctx)
 	if err != nil {
 		return "", conureerrors.ErrInternalError
 	}
-	var matches []*models.ComponentTypeSpec
-	for _, s := range specs {
-		if s.Type != compType {
+	var matches []*conurev1alpha1.ComponentDefinition
+	for i := range defs {
+		d := &defs[i]
+		if d.Spec.ComponentType != compType {
 			continue
 		}
-		if requested != "" && s.Engine != "" && s.Engine != requested {
+		if requested != "" && d.Spec.Engine != "" && string(d.Spec.Engine) != requested {
 			continue
 		}
-		matches = append(matches, s)
+		matches = append(matches, d)
 	}
 	if requested != "" {
 		// Caller pinned the engine. Accept it even if no definition is
-		// known locally (admins might register definitions only on the
-		// cluster side), but if we DO have local definitions for the type
+		// known to the cluster, but if we DO have definitions for the type
 		// and none match, reject.
 		hasAnyForType := false
-		for _, s := range specs {
-			if s.Type == compType {
+		for i := range defs {
+			if defs[i].Spec.ComponentType == compType {
 				hasAnyForType = true
 				break
 			}
@@ -60,11 +63,11 @@ func resolveComponentEngine(ctx context.Context, db *database.MongoDB, organizat
 	}
 	switch len(matches) {
 	case 0:
-		// No matching definition known to the API; pass through and let
-		// the controller report the missing definition.
+		// No matching definition; pass through and let the controller
+		// report the missing definition.
 		return "", nil
 	case 1:
-		return matches[0].Engine, nil
+		return string(matches[0].Spec.Engine), nil
 	default:
 		return "", conureerrors.ErrAmbiguousComponentEngine
 	}
@@ -180,7 +183,7 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 	// Resolve which engine renders this component. The CRD lookup will run
 	// the same (type, engine) match later; we resolve here so the choice is
 	// persisted on the Component identity and reused across deploys.
-	engine, err := resolveComponentEngine(c.Request.Context(), a.MongoDB, handler.Model.OrganizationID.Hex(), request.Type, request.Engine)
+	engine, err := a.resolveComponentEngine(c.Request.Context(), request.Type, request.Engine)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return
