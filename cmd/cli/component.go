@@ -57,7 +57,7 @@ func init() {
 }
 
 func runComponentList(cmd *cobra.Command, _ []string) error {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func runComponentList(cmd *cobra.Command, _ []string) error {
 }
 
 func runComponentAdd(cmd *cobra.Command, _ []string) error {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return err
 	}
@@ -128,7 +128,7 @@ func runComponentAdd(cmd *cobra.Command, _ []string) error {
 }
 
 func runComponentRestart(cmd *cobra.Command, _ []string) error {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return err
 	}

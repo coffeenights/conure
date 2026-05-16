@@ -53,39 +53,9 @@ type linkedCtx struct {
 	Client  *apiclient.Client
 }
 
-// requireLinked is the canonical preamble for linked-component commands:
-// auth + link + env-flag resolution + ready API client.
-func requireLinked(cmd *cobra.Command) (*linkedCtx, error) {
-	cfg, prof, err := config.RequireAuth(serverFlag, profileFlag)
-	if err != nil {
-		return nil, err
-	}
-	resolved := profileFlag
-	if resolved == "" {
-		resolved = cfg.Active
-	}
-	l, err := link.Get(resolved)
-	if err != nil {
-		return nil, err
-	}
-	env := l.Environment
-	if cmd != nil && cmd.Flags().Lookup("env") != nil {
-		if v, _ := cmd.Flags().GetString("env"); v != "" {
-			env = v
-		}
-	}
-	return &linkedCtx{
-		Config:  cfg,
-		Profile: prof,
-		Link:    l,
-		Env:     env,
-		Client:  apiclient.New(prof.Server, prof.Token),
-	}, nil
-}
-
-// requireAuthClient is the lighter sibling of requireLinked: auth only,
-// no link file. Used by org/app/component commands that operate at org
-// scope.
+// requireAuthClient is auth only — no org, no link. Used by commands that
+// operate above org scope (login/profile/account/users) or do their own
+// org resolution.
 func requireAuthClient() (*config.Config, *config.Profile, *apiclient.Client, error) {
 	cfg, prof, err := config.RequireAuth(serverFlag, profileFlag)
 	if err != nil {

@@ -62,7 +62,7 @@ func init() {
 }
 
 func runDeploy(cmd *cobra.Command, _ []string) error {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return err
 	}

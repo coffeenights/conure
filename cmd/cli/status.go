@@ -97,7 +97,7 @@ func runDiff(cmd *cobra.Command, _ []string) error {
 }
 
 func loadComponentInEnv(cmd *cobra.Command) (*api.ComponentInEnvResponse, error) {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return nil, err
 	}

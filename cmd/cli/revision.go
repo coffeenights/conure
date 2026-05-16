@@ -175,7 +175,7 @@ func init() {
 }
 
 func runRevisionList(cmd *cobra.Command, _ []string) error {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return err
 	}
@@ -206,7 +206,7 @@ func runRevisionList(cmd *cobra.Command, _ []string) error {
 }
 
 func runRevisionRollback(cmd *cobra.Command, args []string) error {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return err
 	}
@@ -243,7 +243,7 @@ func runRevisionRollback(cmd *cobra.Command, args []string) error {
 }
 
 func runRevisionPromote(cmd *cobra.Command, _ []string) error {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return err
 	}
@@ -267,7 +267,7 @@ func runRevisionPromote(cmd *cobra.Command, _ []string) error {
 }
 
 func runRevisionDraftEdit(cmd *cobra.Command, _ []string) error {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return err
 	}
@@ -341,7 +341,7 @@ func runRevisionDraftEdit(cmd *cobra.Command, _ []string) error {
 }
 
 func runRevisionShow(cmd *cobra.Command, args []string) error {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return err
 	}
@@ -415,7 +415,7 @@ func pickRevision(cmd *cobra.Command, lc *linkedCtx, args []string) (*api.Compon
 }
 
 func runRevisionCreate(cmd *cobra.Command, _ []string) error {
-	lc, err := requireLinked(cmd)
+	lc, err := resolveTarget(cmd)
 	if err != nil {
 		return err
 	}

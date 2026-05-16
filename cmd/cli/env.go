@@ -8,7 +8,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/coffeenights/conure/internal/cli/apiclient"
-	"github.com/coffeenights/conure/internal/cli/link"
 	"github.com/coffeenights/conure/internal/cli/ui"
 	"github.com/coffeenights/conure/pkg/api"
 )
@@ -45,10 +44,8 @@ var envDeleteCmd = &cobra.Command{
 }
 
 func init() {
-	for _, c := range []*cobra.Command{envListCmd, envCreateCmd, envDeleteCmd} {
-		c.Flags().String("app", "",
-			"App ID or name (defaults to the linked app)")
-	}
+	// --app is a root persistent flag (see resolve.go); no per-command
+	// registration needed here.
 	envDeleteCmd.Flags().Bool("yes", false,
 		"Skip the confirmation prompt")
 
@@ -68,71 +65,17 @@ type appCtx struct {
 	App    *api.Application
 }
 
+// resolveApp resolves the org + app an `env` command should act on. It
+// reuses resolveAppScope so resolution is consistent everywhere: explicit
+// --org/--app (id or name) win, then the link, then an interactive picker.
+// Environments are always populated (resolveAppScope returns the detail
+// view), so `env list` needs no extra round-trip.
 func resolveApp(cmd *cobra.Command) (*appCtx, error) {
-	appFlag, _ := cmd.Flags().GetString("app")
-
-	// No --app: fall back to the link. We still allow running from a
-	// non-linked directory, in which case --app is required.
-	if appFlag == "" {
-		if !link.FileExists() {
-			return nil, fmt.Errorf("no .conure/link.json found and no --app provided — run 'conure init' or pass --app")
-		}
-		lc, err := requireLinked(cmd)
-		if err != nil {
-			return nil, err
-		}
-		app, err := lc.Client.GetApp(cmd.Context(), lc.Link.OrgID, lc.Link.AppID)
-		if err != nil {
-			return nil, fmt.Errorf("loading linked app: %w", err)
-		}
-		return &appCtx{Client: lc.Client, OrgID: lc.Link.OrgID, App: app}, nil
-	}
-
-	// --app given: need an active org (from link or profile) plus a
-	// listing to match the value against id-or-name.
-	orgID, client, err := resolveOrgClient(cmd)
+	orgID, app, client, err := resolveAppScope(cmd)
 	if err != nil {
 		return nil, err
 	}
-	apps, err := client.ListApps(cmd.Context(), orgID)
-	if err != nil {
-		return nil, fmt.Errorf("listing apps: %w", err)
-	}
-	var match *api.Application
-	for i, a := range apps {
-		if a.ID == appFlag || a.Name == appFlag {
-			match = &apps[i]
-			break
-		}
-	}
-	if match == nil {
-		return nil, fmt.Errorf("no app matches %q in org %s", appFlag, orgID)
-	}
-	// ListApps doesn't populate Environments — refetch the detail view so
-	// `env list` has them without a second round-trip in the caller.
-	full, err := client.GetApp(cmd.Context(), orgID, match.ID)
-	if err != nil {
-		return nil, fmt.Errorf("loading app %s: %w", match.Name, err)
-	}
-	return &appCtx{Client: client, OrgID: orgID, App: full}, nil
-}
-
-// resolveOrgClient picks the org for a command that doesn't rely on the
-// link's app. Preference order: linked org → active org. Mirrors the same
-// fallbacks used by `conure var --scope org`.
-func resolveOrgClient(cmd *cobra.Command) (string, *apiclient.Client, error) {
-	if link.FileExists() {
-		lc, err := requireLinked(cmd)
-		if err != nil {
-			return "", nil, err
-		}
-		return lc.Link.OrgID, lc.Client, nil
-	}
-	_, prof, client, err := requireActiveOrgClient()
-	if err != nil {
-		return "", nil, err
-	}
-	return prof.ActiveOrg, client, nil
+	return &appCtx{Client: client, OrgID: orgID, App: app}, nil
 }
 
 func runEnvList(cmd *cobra.Command, _ []string) error {

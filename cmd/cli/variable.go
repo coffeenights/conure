@@ -136,7 +136,7 @@ func resolveScope(cmd *cobra.Command) (*scopeCtx, error) {
 	}
 	switch scope {
 	case "component", "comp", "c":
-		lc, err := requireLinked(cmd)
+		lc, err := resolveTarget(cmd)
 		if err != nil {
 			return nil, err
 		}
@@ -151,41 +151,37 @@ func resolveScope(cmd *cobra.Command) (*scopeCtx, error) {
 			Label: fmt.Sprintf("component %s (env %s)", lc.Link.ComponentName, lc.Env),
 		}, nil
 	case "env", "environment", "e":
-		lc, err := requireLinked(cmd)
+		// Env scope needs org+app+env but no component — resolve the app
+		// scope, then pick the env (flag → link → picker) without forcing
+		// a component selection.
+		orgID, app, client, err := resolveAppScope(cmd)
 		if err != nil {
 			return nil, err
 		}
-		return &scopeCtx{
-			Client: lc.Client,
-			Scope: apiclient.VariableScope{
-				OrgID:         lc.Link.OrgID,
-				ApplicationID: lc.Link.AppID,
-				EnvironmentID: lc.Env,
-			},
-			Label: fmt.Sprintf("environment %s", lc.Env),
-		}, nil
-	case "org", "organization", "o":
-		// Org scope works without a link — fall back to the active org
-		// if the current directory isn't linked.
-		if link.FileExists() {
-			lc, err := requireLinked(cmd)
-			if err != nil {
-				return nil, err
-			}
-			return &scopeCtx{
-				Client: lc.Client,
-				Scope:  apiclient.VariableScope{OrgID: lc.Link.OrgID},
-				Label:  fmt.Sprintf("organization %s", lc.Link.OrgID),
-			}, nil
-		}
-		_, prof, client, err := requireActiveOrgClient()
+		env, err := resolveEnv(cmd, app, loadLinkForProfile())
 		if err != nil {
 			return nil, err
 		}
 		return &scopeCtx{
 			Client: client,
-			Scope:  apiclient.VariableScope{OrgID: prof.ActiveOrg},
-			Label:  fmt.Sprintf("organization %s", prof.ActiveOrg),
+			Scope: apiclient.VariableScope{
+				OrgID:         orgID,
+				ApplicationID: app.ID,
+				EnvironmentID: env,
+			},
+			Label: fmt.Sprintf("environment %s", env),
+		}, nil
+	case "org", "organization", "o":
+		// Org scope works without a link — --org / link / active org /
+		// picker, in that order.
+		orgID, client, err := resolveOrgScope(cmd)
+		if err != nil {
+			return nil, err
+		}
+		return &scopeCtx{
+			Client: client,
+			Scope:  apiclient.VariableScope{OrgID: orgID},
+			Label:  fmt.Sprintf("organization %s", orgID),
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown --scope %q (expected: component, env, org)", scope)
