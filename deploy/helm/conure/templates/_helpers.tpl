@@ -52,6 +52,13 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 {{- end }}
 
+{{/*
+selectorLabels MUST stay version-stable: these feed immutable fields
+(Deployment/StatefulSet .spec.selector, StatefulSet .spec.volumeClaimTemplates).
+Never add helm.sh/chart, app.kubernetes.io/version, or any per-release value
+here, and never substitute "conure.*.labels" at those sites — doing so makes
+`helm upgrade` fail with "updates to statefulset spec ... are forbidden".
+*/}}
 {{- define "conure.controller.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "conure.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
@@ -77,6 +84,8 @@ control-plane: controller-manager
 {{- end }}
 {{- end }}
 
+{{/* selectorLabels MUST stay version-stable — see note on
+conure.controller.selectorLabels above. */}}
 {{- define "conure.api.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "conure.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
@@ -132,6 +141,9 @@ apiServer.adminUser.rotate=true`.
 {{- printf "%s-mongodb" (include "conure.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
+{{/* selectorLabels MUST stay version-stable — see note on
+conure.controller.selectorLabels above. The mongodb StatefulSet's
+volumeClaimTemplates use this; any per-release label here breaks upgrades. */}}
 {{- define "conure.mongodb.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "conure.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}

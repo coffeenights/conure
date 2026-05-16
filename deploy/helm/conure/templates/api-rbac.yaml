@@ -29,6 +29,12 @@ rules:
   - apiGroups: [core.conure.io]
     resources: [applications/status, components/status]
     verbs: [get, update]
+  # componentdefinitions are cluster-scoped and read-only here: the API
+  # server lists them to populate the CLI type picker and resolve a
+  # component's rendering engine on create.
+  - apiGroups: [core.conure.io]
+    resources: [componentdefinitions]
+    verbs: [get, list]
   - apiGroups: [""]
     resources: [namespaces]
     verbs: [create]

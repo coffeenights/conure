@@ -92,6 +92,8 @@ metadata:
 spec:
   replicas: 1
   serviceName: {{ include "conure.mongodb.fullname" . }}-headless
+  # IMMUTABLE: .spec.selector cannot change after creation. Keep it on
+  # selectorLabels (version-stable) — never conure.mongodb.labels.
   selector:
     matchLabels:
       {{- include "conure.mongodb.selectorLabels" . | nindent 6 }}
@@ -167,6 +169,10 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
   {{- if .Values.mongodb.persistence.enabled }}
+  # IMMUTABLE: volumeClaimTemplates cannot be patched after creation. Its
+  # labels MUST be version-stable, so this uses selectorLabels, not
+  # conure.mongodb.labels (which carries helm.sh/chart + version and would
+  # change every release, making `helm upgrade` fail). Do not "enrich" these.
   volumeClaimTemplates:
     - metadata:
         name: data
