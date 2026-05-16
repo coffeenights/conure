@@ -339,7 +339,7 @@ func deployBuildImage(ctx context.Context, a *ApiHandler, app *models.Applicatio
 		return fmt.Errorf("malformed image_ref %q (need repo:tag)", imageRef)
 	}
 
-	resolver, err := a.resolveFieldRoles(ctx, component)
+	resolver, err := a.resolveFieldRoles(ctx, app.OrganizationID, component)
 	if err != nil {
 		return err
 	}

@@ -540,6 +540,22 @@ func applyRevisionToK8sWithAnnotations(ctx context.Context, a *ApiHandler, appli
 		}
 	}
 	provider := newConureProvider(application, env)
+
+	// Resolve the org's component definition from Mongo (the source of
+	// truth) and materialize it into the target cluster before applying the
+	// Component. This is what guarantees the CRD is present whenever a
+	// deploy happens — the controller resolves it by (type, engine) scoped
+	// to the org-id label and must never race a missing or stale row. A
+	// missing definition is a request error, surfaced up-front rather than
+	// as a later reconcile failure with no API-side signal.
+	def, err := models.ResolveOneForOrg(ctx, a.MongoDB, application.OrganizationID, component.Type, component.Engine)
+	if err != nil {
+		return err
+	}
+	if err = provider.EnsureComponentDefinition(ctx, def); err != nil {
+		return fmt.Errorf("materializing component definition for type %q: %w", component.Type, err)
+	}
+
 	return provider.ApplyComponent(ctx, app, componentCRD, cv)
 }
 

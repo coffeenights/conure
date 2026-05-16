@@ -180,6 +180,27 @@ apiServer:
     # omit on the next upgrade) to avoid rotating again.
     rotate: false
 
+  # Default ComponentDefinitions shipped with the chart. A post-install/
+  # post-upgrade Job upserts every YAML under files/component-definitions
+  # (plus any `extra` entries below) into MongoDB under the default-owner
+  # sentinel. Every organization inherits these until it overrides or hides
+  # one via the API. The seed is idempotent (keyed by type+engine), so it is
+  # safe to re-run on every upgrade. Set enabled=false to manage definitions
+  # entirely out-of-band.
+  componentDefinitions:
+    enabled: true
+    # extra: map of <filename> -> raw ComponentDefinition YAML, merged into
+    # the ConfigMap alongside the chart-shipped files. Use this to add or
+    # override defaults without forking the chart, e.g.:
+    #   extra:
+    #     mycomp.yaml: |
+    #       apiVersion: core.conure.io/v1alpha1
+    #       kind: ComponentDefinition
+    #       spec:
+    #         type: mycomp
+    #         ...
+    extra: {}
+
 # -----------------------------------------------------------------------------
 # MongoDB — bundled inline (single replica, dev/test grade).
 # Disabled by default: most installs should target an external MongoDB.
