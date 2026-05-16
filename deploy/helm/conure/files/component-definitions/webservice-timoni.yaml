@@ -1,0 +1,28 @@
+apiVersion: core.conure.io/v1alpha1
+kind: ComponentDefinition
+metadata:
+  name: default-webservice-timoni
+spec:
+  type: webservice
+  engine: timoni
+  description: "A web service component that deploys a container with network exposure"
+  ociRepository: "ghcr.io/coffeenights/conure-templates/components/webservice"
+  ociTag: "0.2.1"
+  ociDigest: "sha256:ce53da1c24aa96b68f3c927c92e46eabd52b35d450358fd5111c01d2c9db8f41"
+  # conure can build this component's image. The per-component
+  # source.sourceType discriminator ("git" -> build, "oci" -> deploy a
+  # prebuilt image) decides whether a given instance actually builds.
+  buildable: true
+  # Where conure's well-known field roles live in this definition's
+  # #Config (templates/config.cue). conure owns the role names; this
+  # maps them to webservice's `source.*` schema. No fallback: a role
+  # conure needs but that is absent here is a hard error.
+  fieldRoles:
+    sourceType: "source.sourceType"
+    image.repository: "source.ociRepository"
+    image.tag: "source.tag"
+    git.repository: "source.gitRepository"
+    git.branch: "source.gitBranch"
+    build.tool: "source.buildTool"
+    build.location: "source.buildLocation"
+    build.dockerfile: "source.dockerfilePath"

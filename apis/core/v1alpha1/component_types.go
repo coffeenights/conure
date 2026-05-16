@@ -175,6 +175,36 @@ type ComponentDefinitionSpec struct {
 	// values typing falls back to whatever values.schema.json the chart ships.
 	// +optional
 	Helm *HelmEngineSpec `json:"helm,omitempty"`
+	// Buildable declares that conure can build the component's container
+	// image (vs. only deploying a prebuilt one). When false (or unset),
+	// conure never attempts a build for components of this type and
+	// `conure deploy` is promote-only. When true, the per-component
+	// discriminator at FieldRoles["sourceType"] decides whether a given
+	// component instance builds ("git") or deploys a prebuilt image ("oci").
+	// +optional
+	Buildable bool `json:"buildable,omitempty"`
+	// FieldRoles maps conure's well-known field roles to dotted paths into
+	// the component's values. conure owns the role vocabulary; the
+	// definition owns where each role lives in its own #Config schema.
+	// There is no default/fallback: a role read when it is needed but
+	// absent here is a hard error (this platform is pre-1.0; definitions
+	// must declare the roles their components use).
+	//
+	// Reserved roles:
+	//   sourceType        discriminator; value is "git" (build) or "oci"
+	//                     (deploy prebuilt). conure fixes this vocabulary.
+	//   image.repository  application image repository (built or pulled)
+	//   image.tag         application image tag
+	//   git.repository    git URL to clone for a remote build (sourceType=git)
+	//   git.branch        git branch to build
+	//   build.tool        "dockerfile" | "railpack"
+	//   build.location    "remote" | "local"
+	//   build.dockerfile  path to the Dockerfile within the build context
+	//
+	// image.* is required whenever Buildable is true. git.*/build.* are
+	// read only when a component's sourceType resolves to "git".
+	// +optional
+	FieldRoles map[string]string `json:"fieldRoles,omitempty"`
 }
 
 // HelmEngineSpec carries Helm-specific render options. All fields are optional.

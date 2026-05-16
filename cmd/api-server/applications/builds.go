@@ -21,6 +21,7 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/internal/fieldroles"
 )
 
 // SystemNamespace is the namespace BuildKit Jobs run in. Mirrors the const
@@ -338,11 +339,19 @@ func deployBuildImage(ctx context.Context, a *ApiHandler, app *models.Applicatio
 		return fmt.Errorf("malformed image_ref %q (need repo:tag)", imageRef)
 	}
 
+	resolver, err := a.resolveFieldRoles(ctx, app.OrganizationID, component)
+	if err != nil {
+		return err
+	}
+
 	baseValues, draft, err := baseValuesForBuild(ctx, a, component, env)
 	if err != nil {
 		return err
 	}
-	values := mergeImageIntoValues(baseValues, repo, tag)
+	values, err := mergeImageIntoValues(resolver, baseValues, repo, tag)
+	if err != nil {
+		return err
+	}
 
 	if err := applyRevisionToK8s(ctx, a, app, env, component, values); err != nil {
 		return err
@@ -402,21 +411,22 @@ func cloneValues(in map[string]interface{}) map[string]interface{} {
 	return out
 }
 
-// mergeImageIntoValues writes the pushed image into the well-known
-// `source.{ociRepository,tag}` path that the webservice template consumes.
-// Other top-level value keys (env, replicas, resources, …) are preserved.
-func mergeImageIntoValues(values map[string]interface{}, repo, tag string) map[string]interface{} {
+// mergeImageIntoValues writes the pushed image into the paths the
+// component's ComponentDefinition declares for the image.repository and
+// image.tag field roles. The definition owns where the image lives in its
+// own #Config schema; there is no hardcoded `source.*` fallback. Other
+// value keys (env, replicas, resources, …) are preserved.
+func mergeImageIntoValues(r *fieldroles.Resolver, values map[string]interface{}, repo, tag string) (map[string]interface{}, error) {
 	if values == nil {
 		values = map[string]interface{}{}
 	}
-	src, _ := values["source"].(map[string]interface{})
-	if src == nil {
-		src = map[string]interface{}{}
+	if err := r.Set(values, fieldroles.RoleImageRepository, repo); err != nil {
+		return nil, fmt.Errorf("writing built image repository: %w", err)
 	}
-	src["ociRepository"] = repo
-	src["tag"] = tag
-	values["source"] = src
-	return values
+	if err := r.Set(values, fieldroles.RoleImageTag, tag); err != nil {
+		return nil, fmt.Errorf("writing built image tag: %w", err)
+	}
+	return values, nil
 }
 
 // splitImageRef splits "registry/repo:tag" into ("registry/repo", "tag").

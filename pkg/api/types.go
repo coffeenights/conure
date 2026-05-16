@@ -139,8 +139,13 @@ type DriftEntry struct {
 }
 
 type ComponentInEnvResponse struct {
-	ComponentID      string                 `json:"component_id"`
-	Name             string                 `json:"name"`
+	ComponentID string `json:"component_id"`
+	Name        string `json:"name"`
+	// Type/Engine identify the component's ComponentDefinition (join key:
+	// type + optional engine). The CLI needs them here to resolve the
+	// definition's fieldRoles from this single call.
+	Type             string                 `json:"type"`
+	Engine           string                 `json:"engine,omitempty"`
 	EnvironmentID    string                 `json:"environment_id"`
 	EnvironmentName  string                 `json:"environment_name"`
 	LiveValues       map[string]interface{} `json:"live_values,omitempty"`
@@ -210,10 +215,56 @@ type ComponentDefinition struct {
 	OCIRepository string  `json:"oci_repository"`
 	OCITag        string  `json:"oci_tag"`
 	IconURL       *string `json:"icon_url"`
+	// Buildable reports whether conure can build the component's image.
+	// When false, `conure deploy` is promote-only for this type.
+	Buildable bool `json:"buildable"`
+	// FieldRoles maps conure's well-known field roles (sourceType,
+	// image.repository, git.repository, …) to dotted paths into a
+	// component's values. The CLI and server resolve image/build fields
+	// through this instead of hardcoding the schema; there is no fallback.
+	FieldRoles map[string]string `json:"field_roles,omitempty"`
+	// Source is "default" for a row inherited from the platform's shipped
+	// defaults and "organization" for one this org created or overrode. The
+	// admin CLI surfaces it so operators can tell inherited from customized.
+	Source string `json:"source,omitempty"`
 }
 
 type ComponentDefinitionListResponse struct {
 	Definitions []ComponentDefinition `json:"definitions"`
+}
+
+// ComponentDefinitionRequest is the create/override body for an org-scoped
+// component definition (POST .../component-definitions). Type is required and,
+// with Engine (optional, empty == timoni), is the lookup key. Posting for a
+// (type, engine) the org already has updates it in place (and un-hides a
+// tombstone); otherwise it creates a new org-owned override.
+//
+// Every non-key field is a pointer so the server can distinguish "omitted"
+// from "set to zero": a nil field is left at whatever the org's resolved
+// definition already has (inherited default or existing override), so a
+// one-flag edit patches instead of wiping field_roles/buildable. The
+// --from-file path fills every field, which naturally yields a full replace.
+type ComponentDefinitionRequest struct {
+	Type   string `json:"type"`
+	Engine string `json:"engine,omitempty"`
+
+	Description        *string            `json:"description,omitempty"`
+	OCIRepository      *string            `json:"oci_repository,omitempty"`
+	OCITag             *string            `json:"oci_tag,omitempty"`
+	OCIDigest          *string            `json:"oci_digest,omitempty"`
+	OCIRegistry        *string            `json:"oci_registry,omitempty"`
+	RegistrySecretName *string            `json:"registry_secret_name,omitempty"`
+	Buildable          *bool              `json:"buildable,omitempty"`
+	FieldRoles         *map[string]string `json:"field_roles,omitempty"`
+	IconURL            *string            `json:"icon_url,omitempty"`
+}
+
+// HideComponentDefinitionRequest is the tombstone body (POST
+// .../component-definitions/hide). It suppresses the inherited default for a
+// (type, engine) within the org; reversible by deleting the resulting row.
+type HideComponentDefinitionRequest struct {
+	Type   string `json:"type"`
+	Engine string `json:"engine,omitempty"`
 }
 
 // ----- Variables (and secrets) -------------------------------------------

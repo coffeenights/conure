@@ -1,0 +1,27 @@
+{{- if and .Values.apiServer.enabled .Values.apiServer.componentDefinitions.enabled -}}
+{{/*
+Ships the platform's default ComponentDefinitions as a ConfigMap. The seed
+Job (api-component-definitions-job.yaml) mounts this and upserts each document
+into MongoDB under the default-owner sentinel, so every org inherits them
+until it overrides or hides one. Editing these files (or adding more under
+files/component-definitions, or overriding via
+.Values.apiServer.componentDefinitions.extra) and running `helm upgrade`
+reconciles the shipped set in place — the seed is idempotent on (type, engine).
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "conure.api.fullname" . }}-component-definitions
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "conure.api.labels" . | nindent 4 }}
+data:
+{{- range $path, $_ := .Files.Glob "files/component-definitions/*.yaml" }}
+  {{ base $path }}: |
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+{{- range $name, $content := .Values.apiServer.componentDefinitions.extra }}
+  {{ $name }}: |
+{{ $content | indent 4 }}
+{{- end }}
+{{- end }}

@@ -14,6 +14,7 @@ import (
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/controller/core/common"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/coffeenights/conure/internal/render"
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -151,9 +152,23 @@ func (c *ComponentHandler) renderComponent() error {
 // also agree on engine (timoni vs helm); otherwise a single type match wins
 // and finding more than one match is reported as an ambiguity the user must
 // resolve by setting spec.engine.
+//
+// ComponentDefinitions are cluster-scoped and a definition's spec.type is not
+// unique across orgs (two orgs can each ship a "webservice"). The Component
+// carries its org id as a label; the API materializes each org's definitions
+// with the same OrganizationIDLabel. Scoping the list by that label is what
+// keeps one org's reconcile from matching another org's definition and
+// failing as a false "ambiguous" — the controller stays org-unaware, it only
+// propagates a label it already received onto the lookup. An empty/absent
+// label falls back to a cluster-wide list, preserving behavior for any
+// Component not created by the API.
 func (c *ComponentHandler) lookupComponentDefinition() (*conurev1alpha1.ComponentDefinition, error) {
 	compDefList := &conurev1alpha1.ComponentDefinitionList{}
-	if err := c.Reconciler.List(c.Ctx, compDefList); err != nil {
+	var listOpts []client.ListOption
+	if orgID := c.Component.GetLabels()[k8sUtils.OrganizationIDLabel]; orgID != "" {
+		listOpts = append(listOpts, client.MatchingLabels{k8sUtils.OrganizationIDLabel: orgID})
+	}
+	if err := c.Reconciler.List(c.Ctx, compDefList, listOpts...); err != nil {
 		return nil, fmt.Errorf("failed to list component definitions: %w", err)
 	}
 

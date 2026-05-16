@@ -77,6 +77,21 @@ func migrateComponents(dryRun bool) {
 	}
 }
 
+func seedDefaultComponentDefinitions(dir string) {
+	conf := config.LoadConfig(apiConfig.Config{})
+	mongo, err := database.ConnectToMongoDB(conf.MongoDBURI, conf.MongoDBName)
+	if err != nil {
+		log.Fatalf("connect to MongoDB: %v", err)
+	}
+	counters, err := migratecli.RunSeedComponentDefinitions(context.Background(), mongo, dir)
+	if counters != nil {
+		log.Printf("seed summary: files=%d upserted=%d skipped=%d", counters.FilesRead, counters.Upserted, counters.Skipped)
+	}
+	if err != nil {
+		log.Fatalf("seeddefaultcomponentdefinitions: %v", err)
+	}
+}
+
 func resetSuperUserPassword(email, password string) {
 	conf := config.LoadConfig(apiConfig.Config{})
 	log.Println("Connecting to MongoDB")
@@ -96,6 +111,7 @@ func main() {
 		createsuperuserCmd        = flag.NewFlagSet("createsuperuser", flag.ExitOnError)
 		resetSuperUserPasswordCmd = flag.NewFlagSet("resetsuperuserpassword", flag.ExitOnError)
 		migrateComponentsCmd      = flag.NewFlagSet("migrate-components", flag.ExitOnError)
+		seedComponentDefsCmd      = flag.NewFlagSet("seeddefaultcomponentdefinitions", flag.ExitOnError)
 		subcommand                string
 	)
 
@@ -106,6 +122,7 @@ func main() {
 	emailSuperuserReset := resetSuperUserPasswordCmd.String("email", "", "The email of the superuser")
 	passwordSuperuserReset := resetSuperUserPasswordCmd.String("password", "", "The new password (random if empty)")
 	migrateDryRun := migrateComponentsCmd.Bool("dry-run", false, "Plan the migration without writing")
+	seedDefsDir := seedComponentDefsCmd.String("dir", "/etc/conure/component-definitions", "Directory of ComponentDefinition YAML files to seed as defaults")
 
 	flag.Usage = func() {
 		fmt.Printf("Usage: \n")
@@ -116,6 +133,7 @@ func main() {
 		fmt.Printf("\tresetsuperuserpassword  Reset the super user password\n")
 		fmt.Printf("\tcreatesecretkey  Create the secret key for your account\n")
 		fmt.Printf("\tmigrate-components  Promote K8s to source of truth and seed component_revisions\n")
+		fmt.Printf("\tseeddefaultcomponentdefinitions  Upsert shipped ComponentDefinition YAML as org-inherited defaults\n")
 	}
 	if len(os.Args) >= 2 {
 		subcommand = os.Args[1]
@@ -157,6 +175,11 @@ func main() {
 			log.Fatal(err)
 		}
 		migrateComponents(*migrateDryRun)
+	case "seeddefaultcomponentdefinitions":
+		if err := seedComponentDefsCmd.Parse(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		seedDefaultComponentDefinitions(*seedDefsDir)
 	default:
 		flag.Usage()
 	}

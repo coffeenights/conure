@@ -11,6 +11,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/coffeenights/conure/pkg/api"
 )
 
 // recorder captures everything the client sent so the test can assert on
@@ -173,6 +175,55 @@ func TestClient_Endpoints(t *testing.T) {
 					t.Errorf("ListComponentDefinitions result = %+v", defs)
 				}
 				return nil
+			},
+		},
+		{
+			name:        "SetComponentDefinition",
+			bodyReturn:  `{"id":"d2","type":"worker","engine":"timoni","source":"organization"}`,
+			wantMethod:  http.MethodPost,
+			wantPath:    "/organizations/o1/component-definitions",
+			wantReqBody: `{"type":"worker","oci_repository":"ghcr.io/acme/worker"}`,
+			run: func(c *Client) error {
+				repo := "ghcr.io/acme/worker"
+				def, err := c.SetComponentDefinition(context.Background(), "o1", api.ComponentDefinitionRequest{
+					Type:          "worker",
+					OCIRepository: &repo,
+				})
+				if err != nil {
+					return err
+				}
+				if def.ID != "d2" || def.Source != "organization" {
+					t.Errorf("SetComponentDefinition result = %+v", def)
+				}
+				return nil
+			},
+		},
+		{
+			name:        "HideComponentDefinition",
+			bodyReturn:  `{"id":"d3","type":"web-service","engine":"timoni","source":"organization"}`,
+			wantMethod:  http.MethodPost,
+			wantPath:    "/organizations/o1/component-definitions/hide",
+			wantReqBody: `{"type":"web-service"}`,
+			run: func(c *Client) error {
+				def, err := c.HideComponentDefinition(context.Background(), "o1", api.HideComponentDefinitionRequest{
+					Type: "web-service",
+				})
+				if err != nil {
+					return err
+				}
+				if def.ID != "d3" {
+					t.Errorf("HideComponentDefinition result = %+v", def)
+				}
+				return nil
+			},
+		},
+		{
+			name:       "DeleteComponentDefinition",
+			bodyReturn: ``,
+			wantMethod: http.MethodDelete,
+			wantPath:   "/organizations/o1/component-definitions/d3",
+			run: func(c *Client) error {
+				return c.DeleteComponentDefinition(context.Background(), "o1", "d3")
 			},
 		},
 		{

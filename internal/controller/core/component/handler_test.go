@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 	"github.com/coffeenights/conure/internal/render"
 	"github.com/fluxcd/pkg/ssa"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -739,6 +740,82 @@ func TestLookupComponentDefinition_DisambiguatesByEngine(t *testing.T) {
 			}
 			if got.Name != tc.wantDefName {
 				t.Fatalf("expected def %q, got %q", tc.wantDefName, got.Name)
+			}
+		})
+	}
+}
+
+// TestLookupComponentDefinition_PerOrgIsolation is the cross-org collision
+// regression. Two orgs each ship a "webservice" ComponentDefinition (distinct
+// object names, distinct OrganizationIDLabel). Before label scoping the
+// controller listed cluster-wide and both matched spec.type "webservice", so
+// every reconcile failed as falsely "ambiguous". With the Component's org-id
+// label driving a MatchingLabels list, each org's Component must resolve to
+// its own definition — the controller stays org-unaware, it only propagates a
+// label it already carries.
+func TestLookupComponentDefinition_PerOrgIsolation(t *testing.T) {
+	const orgA, orgB = "aaaaaaaaaaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbbbbbbbbbb"
+
+	defA := &conurev1alpha1.ComponentDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   orgA + "-webservice-timoni",
+			Labels: map[string]string{k8sUtils.OrganizationIDLabel: orgA},
+		},
+		Spec: conurev1alpha1.ComponentDefinitionSpec{
+			ComponentType: "webservice",
+			Engine:        conurev1alpha1.EngineTimoni,
+			OCIRepository: "ghcr.io/a/web",
+		},
+	}
+	defB := &conurev1alpha1.ComponentDefinition{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   orgB + "-webservice-timoni",
+			Labels: map[string]string{k8sUtils.OrganizationIDLabel: orgB},
+		},
+		Spec: conurev1alpha1.ComponentDefinitionSpec{
+			ComponentType: "webservice",
+			Engine:        conurev1alpha1.EngineTimoni,
+			OCIRepository: "ghcr.io/b/web",
+		},
+	}
+
+	cases := []struct {
+		name     string
+		orgID    string
+		wantRepo string
+		wantErr  string
+	}{
+		{name: "orgA resolves its own def", orgID: orgA, wantRepo: "ghcr.io/a/web"},
+		{name: "orgB resolves its own def", orgID: orgB, wantRepo: "ghcr.io/b/web"},
+		{name: "unlabeled component (no API) still cluster-wide → ambiguous", orgID: "", wantErr: "disambiguate"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			comp := newTestComponent("web", "default", "webservice")
+			if tc.orgID != "" {
+				comp.Labels = map[string]string{k8sUtils.OrganizationIDLabel: tc.orgID}
+			}
+			r := &ComponentReconciler{
+				Client: newFakeClient(defA, defB),
+				Scheme: newTestScheme(),
+			}
+			h := &ComponentHandler{Component: comp, Reconciler: r, Ctx: ctx}
+
+			got, err := h.lookupComponentDefinition()
+			if tc.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Spec.OCIRepository != tc.wantRepo {
+				t.Fatalf("org %q resolved to wrong definition: got repo %q, want %q",
+					tc.orgID, got.Spec.OCIRepository, tc.wantRepo)
 			}
 		})
 	}

@@ -1,0 +1,78 @@
+{{- if and .Values.apiServer.enabled .Values.apiServer.componentDefinitions.enabled -}}
+{{/*
+Seeds the shipped ComponentDefinitions into MongoDB as org-inherited
+defaults. Runs on both install and upgrade because the seed is idempotent
+(upsert keyed by (type, engine)) — re-running just reconciles the shipped set
+to whatever this chart version carries. The Component controller never reads
+this; the API resolves definitions org-scoped from MongoDB and materializes
+the right one into the cluster at deploy time.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "conure.api.fullname" . }}-seed-component-definitions
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "conure.api.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    # After the admin user (weight 5) so a fresh install has its DB ready.
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "conure.api.selectorLabels" . | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "conure.api.serviceAccountName" . }}
+      {{- with .Values.apiServer.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: seed-component-definitions
+          image: "{{ .Values.apiServer.image.repository }}:{{ .Values.apiServer.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.apiServer.image.pullPolicy }}
+          command: ["/app/conure_api"]
+          args:
+            - "seeddefaultcomponentdefinitions"
+            - "-dir=/etc/conure/component-definitions"
+          envFrom:
+            - configMapRef:
+                name: {{ include "conure.api.configMapName" . }}
+            - secretRef:
+                name: {{ include "conure.api.secretName" . }}
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          volumeMounts:
+            - name: component-definitions
+              mountPath: /etc/conure/component-definitions
+              readOnly: true
+          {{- with .Values.apiServer.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: component-definitions
+          configMap:
+            name: {{ include "conure.api.fullname" . }}-component-definitions
+      {{- with .Values.apiServer.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.apiServer.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.apiServer.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

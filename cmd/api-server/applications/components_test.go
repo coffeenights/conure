@@ -9,13 +9,8 @@ import (
 	"testing"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 
-	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/cmd/api-server/models"
-	k8sUtils "github.com/coffeenights/conure/internal/k8s"
-	core_conure_fake "github.com/coffeenights/conure/pkg/client/core_conure/fake"
 )
 
 // orgWithApp seeds an org + app + (optionally) one environment, returning
@@ -76,37 +71,41 @@ func doJSON(t *testing.T, method, url string, body interface{}) *httptest.Respon
 	return resp
 }
 
-// componentDef builds a ComponentDefinition CRD object for the fake cluster.
-// Component definitions are cluster-scoped, so name is the metadata.name and
-// there's no org binding (unlike the old ComponentTypeSpec).
-func componentDef(name, compType, engine string) *conurev1alpha1.ComponentDefinition {
-	return &conurev1alpha1.ComponentDefinition{
-		ObjectMeta: metav1.ObjectMeta{Name: name},
-		Spec: conurev1alpha1.ComponentDefinitionSpec{
-			ComponentType: compType,
-			Description:   "seeded by test",
-			Engine:        conurev1alpha1.ComponentEngine(engine),
-			OCIRepository: "example.test/" + name,
-			OCITag:        "0.1.0",
-		},
-	}
+// seededDef is a test-local description of a component definition to write
+// into the org-scoped Mongo source of truth.
+type seededDef struct {
+	compType string
+	engine   string
 }
 
-// withComponentDefs wires a fake Conure clientset onto the shared handler,
-// pre-seeded with the given ComponentDefinition CRDs, for the duration of one
-// test. Mirrors withFakeKube; tests in this package run sequentially so
-// mutating the shared handler is safe. Replaces the old Mongo-backed
-// seedComponentTypeSpec now that definitions live in the cluster.
-func withComponentDefs(t *testing.T, defs ...*conurev1alpha1.ComponentDefinition) {
+func def(compType, engine string) seededDef { return seededDef{compType, engine} }
+
+// withComponentDefs seeds the org-scoped MongoDB component definitions for one
+// org for the duration of a test. Definitions are no longer cluster-scoped
+// CRDs read live: they are org-scoped Mongo rows (the source of truth) that
+// the API resolves and materializes into the cluster at deploy time. Engine
+// and field-role resolution on component create read the same rows, so tests
+// seed them here per org. Rows are cleaned up after the test.
+func withComponentDefs(t *testing.T, org *models.Organization, defs ...seededDef) {
 	t.Helper()
-	objs := make([]runtime.Object, 0, len(defs))
 	for _, d := range defs {
-		objs = append(objs, d)
+		row := &models.ComponentDefinition{
+			OrganizationID: org.ID,
+			Type:           d.compType,
+			Engine:         d.engine,
+			OCIRepository:  "example.test/" + d.compType + "-" + d.engine,
+			OCITag:         "0.1.0",
+		}
+		if _, err := row.Create(context.Background(), testConf.app.MongoDB); err != nil {
+			t.Fatalf("seed component definition %s/%s: %v", d.compType, d.engine, err)
+		}
+		rowID := row.ID
+		t.Cleanup(func() {
+			d := &models.ComponentDefinition{}
+			d.SetID(rowID)
+			_ = d.Delete(context.Background(), testConf.app.MongoDB)
+		})
 	}
-	testConf.app.Kube = &k8sUtils.GenericClientset{
-		Conure: core_conure_fake.NewSimpleClientset(objs...),
-	}
-	t.Cleanup(func() { testConf.app.Kube = nil })
 }
 
 func TestCreateComponent_AppWide(t *testing.T) {
@@ -147,7 +146,7 @@ func TestCreateComponent_AppWide(t *testing.T) {
 // didn't pin one. This is the common "user just picks a type" path.
 func TestCreateComponent_ResolvesEngineFromSingleDef(t *testing.T) {
 	org, app, env := orgWithApp(t, "TestCreateComponent_ResolvesEngineFromSingleDef", "staging")
-	withComponentDefs(t, componentDef("webservice-timoni", "webservice", "timoni"))
+	withComponentDefs(t, org, def("webservice", "timoni"))
 
 	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
 	resp := doJSON(t, "POST", url, map[string]interface{}{
@@ -174,9 +173,9 @@ func TestCreateComponent_ResolvesEngineFromSingleDef(t *testing.T) {
 // request must return ErrAmbiguousComponentEngine, not silently pick one.
 func TestCreateComponent_AmbiguousEngineIsRejected(t *testing.T) {
 	org, app, env := orgWithApp(t, "TestCreateComponent_AmbiguousEngineIsRejected", "staging")
-	withComponentDefs(t,
-		componentDef("webservice-timoni", "webservice", "timoni"),
-		componentDef("webservice-helm", "webservice", "helm"),
+	withComponentDefs(t, org,
+		def("webservice", "timoni"),
+		def("webservice", "helm"),
 	)
 
 	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
@@ -205,9 +204,9 @@ func TestCreateComponent_AmbiguousEngineIsRejected(t *testing.T) {
 // tagged with the requested engine — proving the disambiguation knob works.
 func TestCreateComponent_PinnedEnginePicksMatch(t *testing.T) {
 	org, app, env := orgWithApp(t, "TestCreateComponent_PinnedEnginePicksMatch", "staging")
-	withComponentDefs(t,
-		componentDef("webservice-timoni", "webservice", "timoni"),
-		componentDef("webservice-helm", "webservice", "helm"),
+	withComponentDefs(t, org,
+		def("webservice", "timoni"),
+		def("webservice", "helm"),
 	)
 
 	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
@@ -235,7 +234,7 @@ func TestCreateComponent_PinnedEnginePicksMatch(t *testing.T) {
 // pin an engine no registered definition implements for the type.
 func TestCreateComponent_PinnedEngineWithoutMatchingDef(t *testing.T) {
 	org, app, env := orgWithApp(t, "TestCreateComponent_PinnedEngineWithoutMatchingDef", "staging")
-	withComponentDefs(t, componentDef("webservice-timoni", "webservice", "timoni"))
+	withComponentDefs(t, org, def("webservice", "timoni"))
 
 	url := "/organizations/" + org.ID.Hex() + "/a/" + app.ID.Hex() + "/c"
 	resp := doJSON(t, "POST", url, map[string]interface{}{

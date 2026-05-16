@@ -3,6 +3,7 @@ package applications
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -10,10 +11,10 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/internal/fieldroles"
 )
 
 // resolveComponentEngine determines which rendering engine should own a new
@@ -27,35 +28,33 @@ import (
 //   - no definition at all for the type → return "" so the controller writes
 //     a useful Rendered=Failed condition.
 //
-// Definitions are read from the cluster's ComponentDefinition CRDs (the same
-// source the type picker uses), not from MongoDB.
-func (a *ApiHandler) resolveComponentEngine(ctx context.Context, compType, requested string) (string, error) {
-	defs, err := a.listClusterComponentDefinitions(ctx)
+// Definitions are resolved org-scoped from MongoDB (shipped defaults overlaid
+// with the org's overrides/tombstones — models.ResolveForOrg), the same
+// source the type picker and the deploy-time materialization use, so the
+// engine persisted on the Component identity matches what the controller
+// ultimately renders.
+func (a *ApiHandler) resolveComponentEngine(ctx context.Context, organizationID primitive.ObjectID, compType, requested string) (string, error) {
+	defs, err := models.ResolveForOrg(ctx, a.MongoDB, organizationID)
 	if err != nil {
 		return "", conureerrors.ErrInternalError
 	}
-	var matches []*conurev1alpha1.ComponentDefinition
+	var matches []models.ComponentDefinition
+	hasAnyForType := false
 	for i := range defs {
-		d := &defs[i]
-		if d.Spec.ComponentType != compType {
+		d := defs[i]
+		if d.Type != compType {
 			continue
 		}
-		if requested != "" && d.Spec.Engine != "" && string(d.Spec.Engine) != requested {
+		hasAnyForType = true
+		if requested != "" && d.EngineKey() != requested {
 			continue
 		}
 		matches = append(matches, d)
 	}
 	if requested != "" {
 		// Caller pinned the engine. Accept it even if no definition is
-		// known to the cluster, but if we DO have definitions for the type
+		// known for this org, but if we DO have definitions for the type
 		// and none match, reject.
-		hasAnyForType := false
-		for i := range defs {
-			if defs[i].Spec.ComponentType == compType {
-				hasAnyForType = true
-				break
-			}
-		}
 		if hasAnyForType && len(matches) == 0 {
 			return "", conureerrors.ErrUnsupportedComponentEngine
 		}
@@ -67,10 +66,37 @@ func (a *ApiHandler) resolveComponentEngine(ctx context.Context, compType, reque
 		// report the missing definition.
 		return "", nil
 	case 1:
-		return string(matches[0].Spec.Engine), nil
+		return matches[0].EngineKey(), nil
 	default:
 		return "", conureerrors.ErrAmbiguousComponentEngine
 	}
+}
+
+// resolveFieldRoles finds the ComponentDefinition for a component (join key:
+// component.Type + optional component.Engine) and returns a fieldroles
+// Resolver built from its Buildable flag and FieldRoles map.
+//
+// This platform is pre-1.0: there is no fallback. A component whose type is
+// not backed by a ComponentDefinition (or is ambiguous because several
+// definitions share the type and the component pins no engine) is a hard
+// error — the caller cannot know where the image/build fields live.
+//
+// Definitions are resolved org-scoped from MongoDB (the source of truth),
+// applying the same default→override / tombstone rule the deploy path uses,
+// so the roles read here match the definition the controller renders with.
+func (a *ApiHandler) resolveFieldRoles(ctx context.Context, organizationID primitive.ObjectID, component *models.Component) (*fieldroles.Resolver, error) {
+	def, err := models.ResolveOneForOrg(ctx, a.MongoDB, organizationID, component.Type, component.Engine)
+	if err != nil {
+		switch err {
+		case conureerrors.ErrComponentNotFound:
+			return nil, fmt.Errorf("no ComponentDefinition for component type %q (engine %q); cannot resolve field roles", component.Type, component.Engine)
+		case conureerrors.ErrAmbiguousComponentEngine:
+			return nil, fmt.Errorf("multiple ComponentDefinitions match type %q; set the component's engine to disambiguate", component.Type)
+		default:
+			return nil, conureerrors.ErrInternalError
+		}
+	}
+	return fieldroles.New(def.Buildable, def.FieldRoles), nil
 }
 
 func getComponentFromRoute(c *gin.Context, db *database.MongoDB) (*models.Component, error) {
@@ -183,7 +209,7 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 	// Resolve which engine renders this component. The CRD lookup will run
 	// the same (type, engine) match later; we resolve here so the choice is
 	// persisted on the Component identity and reused across deploys.
-	engine, err := a.resolveComponentEngine(c.Request.Context(), request.Type, request.Engine)
+	engine, err := a.resolveComponentEngine(c.Request.Context(), handler.Model.OrganizationID, request.Type, request.Engine)
 	if err != nil {
 		conureerrors.AbortWithError(c, err)
 		return

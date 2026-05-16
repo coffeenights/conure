@@ -71,8 +71,12 @@ type ComponentRevisionListResponse struct {
 // ComponentInEnvResponse is the env-scoped detail view: live K8s values, the
 // last-deployed revision snapshot, and a structured drift diff.
 type ComponentInEnvResponse struct {
-	ComponentID      string                    `json:"component_id"`
-	Name             string                    `json:"name"`
+	ComponentID string `json:"component_id"`
+	Name        string `json:"name"`
+	// Type/Engine identify the component's ComponentDefinition so the CLI
+	// can resolve its fieldRoles (join key: type + optional engine).
+	Type             string                    `json:"type"`
+	Engine           string                    `json:"engine,omitempty"`
 	EnvironmentID    string                    `json:"environment_id"`
 	EnvironmentName  string                    `json:"environment_name"`
 	LiveValues       map[string]interface{}    `json:"live_values,omitempty"`
