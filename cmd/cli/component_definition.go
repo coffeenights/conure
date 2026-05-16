@@ -105,7 +105,7 @@ and cannot be deleted — hide them instead.`,
 }
 
 func init() {
-	componentDefSetCmd.Flags().StringVar(&cdSetFile, "from-file", "", "ComponentDefinition YAML file (CRD shape; same as the Helm seed files)")
+	componentDefSetCmd.Flags().StringVarP(&cdSetFile, "from-file", "f", "", "ComponentDefinition YAML file (CRD shape; same as the Helm seed files)")
 	componentDefSetCmd.Flags().StringVar(&cdSetEngine, "engine", "", "Rendering engine (timoni or helm; defaults to timoni)")
 	componentDefSetCmd.Flags().StringVar(&cdSetDescription, "description", "", "Human-readable description")
 	componentDefSetCmd.Flags().StringVar(&cdSetOCIRepository, "oci-repository", "", "OCI repository for the module/chart")
