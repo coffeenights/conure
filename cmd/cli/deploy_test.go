@@ -70,23 +70,88 @@ func TestFirstNonEmpty(t *testing.T) {
 	}
 }
 
-func TestStringFromValues(t *testing.T) {
-	m := map[string]interface{}{
-		"a":   "yes",
-		"num": 3,
-		"nil": nil,
+func TestDecideDeployAction(t *testing.T) {
+	cases := []struct {
+		name       string
+		spec       componentSourceSpec
+		flagImage  string
+		wantAction deployAction
+		wantImage  string
+		wantErr    bool
+	}{
+		{
+			name:       "not buildable, no flag -> promote",
+			spec:       componentSourceSpec{Buildable: false},
+			wantAction: deployActionPromote,
+		},
+		{
+			name:       "buildable git with spec image -> build from spec",
+			spec:       componentSourceSpec{Buildable: true, SourceType: "git", OCIRepository: "ghcr.io/me/app", Tag: "v1"},
+			wantAction: deployActionBuild,
+			wantImage:  "ghcr.io/me/app:v1",
+		},
+		{
+			name:    "buildable git but spec image incomplete -> error",
+			spec:    componentSourceSpec{Buildable: true, SourceType: "git", OCIRepository: "ghcr.io/me/app"},
+			wantErr: true,
+		},
+		{
+			name:       "buildable oci, no flag -> promote (deploy prebuilt)",
+			spec:       componentSourceSpec{Buildable: true, SourceType: "oci", OCIRepository: "ghcr.io/me/app", Tag: "v1"},
+			wantAction: deployActionPromote,
+		},
+		{
+			name:       "flag image overrides oci -> build",
+			spec:       componentSourceSpec{Buildable: true, SourceType: "oci"},
+			flagImage:  "ghcr.io/me/app:override",
+			wantAction: deployActionBuild,
+			wantImage:  "ghcr.io/me/app:override",
+		},
+		{
+			name:       "flag image wins over spec image",
+			spec:       componentSourceSpec{Buildable: true, SourceType: "git", OCIRepository: "ghcr.io/me/app", Tag: "spec"},
+			flagImage:  "ghcr.io/me/app:flag",
+			wantAction: deployActionBuild,
+			wantImage:  "ghcr.io/me/app:flag",
+		},
+		{
+			name:      "flag image on non-buildable -> error",
+			spec:      componentSourceSpec{Buildable: false},
+			flagImage: "ghcr.io/me/app:x",
+			wantErr:   true,
+		},
 	}
-	if stringFromValues(m, "a") != "yes" {
-		t.Errorf("expected yes")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			action, image, err := decideDeployAction(tc.spec, tc.flagImage, "mycomp")
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got action=%v image=%q", action, image)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if action != tc.wantAction {
+				t.Errorf("action = %v, want %v", action, tc.wantAction)
+			}
+			if image != tc.wantImage {
+				t.Errorf("image = %q, want %q", image, tc.wantImage)
+			}
+		})
 	}
-	if stringFromValues(m, "num") != "" {
-		t.Errorf("non-string should yield empty")
+}
+
+func TestComponentSourceSpec_ImageRef(t *testing.T) {
+	if got := (componentSourceSpec{OCIRepository: "r", Tag: "t"}).ImageRef(); got != "r:t" {
+		t.Errorf("ImageRef = %q, want r:t", got)
 	}
-	if stringFromValues(m, "missing") != "" {
-		t.Errorf("missing key should yield empty")
+	if got := (componentSourceSpec{OCIRepository: "r"}).ImageRef(); got != "" {
+		t.Errorf("ImageRef with no tag = %q, want empty", got)
 	}
-	if stringFromValues(m, "nil") != "" {
-		t.Errorf("nil value should yield empty")
+	if got := (componentSourceSpec{Tag: "t"}).ImageRef(); got != "" {
+		t.Errorf("ImageRef with no repo = %q, want empty", got)
 	}
 }
 

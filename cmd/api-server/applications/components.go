@@ -3,6 +3,7 @@ package applications
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/internal/fieldroles"
 )
 
 // resolveComponentEngine determines which rendering engine should own a new
@@ -70,6 +72,41 @@ func (a *ApiHandler) resolveComponentEngine(ctx context.Context, compType, reque
 		return string(matches[0].Spec.Engine), nil
 	default:
 		return "", conureerrors.ErrAmbiguousComponentEngine
+	}
+}
+
+// resolveFieldRoles finds the ComponentDefinition for a component (join key:
+// component.Type + optional component.Engine) and returns a fieldroles
+// Resolver built from its Buildable flag and FieldRoles map.
+//
+// This platform is pre-1.0: there is no fallback. A component whose type is
+// not backed by a ComponentDefinition (or is ambiguous because several
+// definitions share the type and the component pins no engine) is a hard
+// error — the caller cannot know where the image/build fields live.
+func (a *ApiHandler) resolveFieldRoles(ctx context.Context, component *models.Component) (*fieldroles.Resolver, error) {
+	defs, err := a.listClusterComponentDefinitions(ctx)
+	if err != nil {
+		return nil, conureerrors.ErrInternalError
+	}
+	var matches []*conurev1alpha1.ComponentDefinition
+	for i := range defs {
+		d := &defs[i]
+		if d.Spec.ComponentType != component.Type {
+			continue
+		}
+		if component.Engine != "" && d.Spec.Engine != "" && string(d.Spec.Engine) != component.Engine {
+			continue
+		}
+		matches = append(matches, d)
+	}
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("no ComponentDefinition for component type %q (engine %q); cannot resolve field roles", component.Type, component.Engine)
+	case 1:
+		def := matches[0]
+		return fieldroles.New(def.Spec.Buildable, def.Spec.FieldRoles), nil
+	default:
+		return nil, fmt.Errorf("%d ComponentDefinitions match type %q; set the component's engine to disambiguate", len(matches), component.Type)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/internal/fieldroles"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -99,6 +100,15 @@ func TestSplitImageRef(t *testing.T) {
 	}
 }
 
+// webserviceImageResolver mirrors the in-repo webservice ComponentDefinition:
+// buildable, image.* mapped into the `source.*` block.
+func webserviceImageResolver() *fieldroles.Resolver {
+	return fieldroles.New(true, map[string]string{
+		fieldroles.RoleImageRepository: "source.ociRepository",
+		fieldroles.RoleImageTag:        "source.tag",
+	})
+}
+
 func TestMergeImageIntoValues_PreservesOtherKeys(t *testing.T) {
 	values := map[string]interface{}{
 		"resources": map[string]interface{}{"replicas": 3},
@@ -108,7 +118,10 @@ func TestMergeImageIntoValues_PreservesOtherKeys(t *testing.T) {
 			"command":       []string{"sleep", "1"},
 		},
 	}
-	out := mergeImageIntoValues(values, "new/img", "v2")
+	out, err := mergeImageIntoValues(webserviceImageResolver(), values, "new/img", "v2")
+	if err != nil {
+		t.Fatalf("mergeImageIntoValues: %v", err)
+	}
 	src := out["source"].(map[string]interface{})
 	if src["ociRepository"] != "new/img" || src["tag"] != "v2" {
 		t.Errorf("unexpected source: %v", src)
@@ -122,13 +135,40 @@ func TestMergeImageIntoValues_PreservesOtherKeys(t *testing.T) {
 }
 
 func TestMergeImageIntoValues_EmptyMap(t *testing.T) {
-	out := mergeImageIntoValues(nil, "repo", "tag")
+	out, err := mergeImageIntoValues(webserviceImageResolver(), nil, "repo", "tag")
+	if err != nil {
+		t.Fatalf("mergeImageIntoValues: %v", err)
+	}
 	src, ok := out["source"].(map[string]interface{})
 	if !ok {
 		t.Fatalf("source missing: %v", out)
 	}
 	if src["ociRepository"] != "repo" || src["tag"] != "tag" {
 		t.Errorf("got %+v", src)
+	}
+}
+
+func TestMergeImageIntoValues_CustomPath(t *testing.T) {
+	// A definition that maps the image somewhere other than source.*.
+	r := fieldroles.New(true, map[string]string{
+		fieldroles.RoleImageRepository: "image.repository",
+		fieldroles.RoleImageTag:        "image.tag",
+	})
+	out, err := mergeImageIntoValues(r, map[string]interface{}{}, "ghcr.io/x/y", "sha-1")
+	if err != nil {
+		t.Fatalf("mergeImageIntoValues: %v", err)
+	}
+	img := out["image"].(map[string]interface{})
+	if img["repository"] != "ghcr.io/x/y" || img["tag"] != "sha-1" {
+		t.Errorf("custom path not honored: %+v", img)
+	}
+}
+
+func TestMergeImageIntoValues_UndeclaredRoleErrors(t *testing.T) {
+	// Definition omits the image roles entirely — strict, no fallback.
+	r := fieldroles.New(true, map[string]string{})
+	if _, err := mergeImageIntoValues(r, map[string]interface{}{}, "repo", "tag"); err == nil {
+		t.Fatal("expected an error when image roles are undeclared")
 	}
 }
 

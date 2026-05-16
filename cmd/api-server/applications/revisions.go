@@ -549,6 +549,8 @@ func buildEnvDetail(ctx context.Context, a *ApiHandler, component *models.Compon
 	resp := ComponentInEnvResponse{
 		ComponentID:     component.ID.Hex(),
 		Name:            component.Name,
+		Type:            component.Type,
+		Engine:          component.Engine,
 		EnvironmentID:   env.ID,
 		EnvironmentName: env.Name,
 	}

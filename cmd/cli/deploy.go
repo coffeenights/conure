@@ -14,6 +14,7 @@ import (
 
 	"github.com/coffeenights/conure/internal/cli/apiclient"
 	"github.com/coffeenights/conure/internal/cli/ui"
+	"github.com/coffeenights/conure/internal/fieldroles"
 	"github.com/coffeenights/conure/pkg/api"
 )
 
@@ -67,9 +68,35 @@ func runDeploy(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	imageRef, _ := cmd.Flags().GetString("image-ref")
-	if imageRef == "" {
-		// Backwards-compatible: no image, just promote latest draft.
+	flagImageRef, _ := cmd.Flags().GetString("image-ref")
+	flagLocation, _ := cmd.Flags().GetString("build-location")
+	flagBuildTool, _ := cmd.Flags().GetString("build-tool")
+	platform, _ := cmd.Flags().GetString("platform")
+	flagGitRepo, _ := cmd.Flags().GetString("git-repository")
+	flagGitBranch, _ := cmd.Flags().GetString("git-branch")
+	ctxDir, _ := cmd.Flags().GetString("context")
+
+	// Resolve the component's ComponentDefinition and read its build spec
+	// BEFORE deciding build-vs-promote. The definition owns whether this
+	// component type can build (Buildable) and where the image/build
+	// fields live in its values (fieldRoles); the per-component sourceType
+	// discriminator decides whether this instance builds. This is the
+	// source of truth — flags only override individual fields for one
+	// deploy. There is no fallback: an unresolvable definition is fatal
+	// (this platform is pre-1.0; definitions must declare their roles).
+	spec, err := readComponentSourceSpec(cmd, lc)
+	if err != nil {
+		return err
+	}
+
+	action, imageRef, err := decideDeployAction(spec, flagImageRef, lc.Link.ComponentName)
+	if err != nil {
+		return err
+	}
+	if action == deployActionPromote {
+		// Promote-only: push the latest draft to deployed. Correct for
+		// non-buildable components and prebuilt-image (sourceType=oci)
+		// components with no explicit --image-ref override.
 		sp := ui.StartSpinner(fmt.Sprintf("Deploying `%s` to `%s`…", lc.Link.ComponentName, lc.Env))
 		rev, err := lc.Client.DeployLatestDraft(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
 		ui.StopSpinner(sp)
@@ -79,20 +106,6 @@ func runDeploy(cmd *cobra.Command, _ []string) error {
 		ui.Success("✓ Deployed v%d (%s) to %s\n", rev.Version, rev.ID, lc.Env)
 		return nil
 	}
-
-	flagLocation, _ := cmd.Flags().GetString("build-location")
-	flagBuildTool, _ := cmd.Flags().GetString("build-tool")
-	platform, _ := cmd.Flags().GetString("platform")
-	flagGitRepo, _ := cmd.Flags().GetString("git-repository")
-	flagGitBranch, _ := cmd.Flags().GetString("git-branch")
-	ctxDir, _ := cmd.Flags().GetString("context")
-
-	// Read the component's spec from the latest revision; it's the source
-	// of truth for buildTool/buildLocation/gitRepository/gitBranch. Flags,
-	// when set, override the spec for this one deploy. Failures here are
-	// non-fatal: we fall back to flag-only resolution and a hardcoded
-	// dockerfile/remote default.
-	spec := readComponentSourceSpec(cmd, lc)
 
 	buildTool := firstNonEmpty(flagBuildTool, spec.BuildTool, "dockerfile")
 	location := firstNonEmpty(flagLocation, spec.BuildLocation)
@@ -164,7 +177,7 @@ func runDeploy(cmd *cobra.Command, _ []string) error {
 
 	case "remote":
 		if gitRepo == "" {
-			return errors.New("--build-location=remote requires --git-repository (the server clones it inside the build Job)")
+			return errors.New("remote build needs a git repository (the server clones it inside the build Job): set the component spec's git.repository field role or pass --git-repository")
 		}
 		if buildTool == "railpack" {
 			return errors.New("railpack is local-only (the remote BuildKit Job ships only the dockerfile frontend). Use --build-tool=dockerfile or --build-location=local.")
@@ -342,41 +355,183 @@ func tailRemoteBuild(cmd *cobra.Command, lc *linkedCtx, buildID string) error {
 	}
 }
 
-// componentSourceSpec carries the build-related fields the CLI cares
-// about from a component's latest revision values. Empty fields mean
-// "not set on the spec" — fall back to flags or hardcoded defaults.
+// componentSourceSpec carries the build-related fields the CLI resolves
+// from a component's values via its ComponentDefinition's fieldRoles.
+// Buildable/SourceType drive the build-vs-promote decision; the rest
+// feed the build request. A field is empty only when the spec genuinely
+// doesn't set it (the field role is declared but unset in values) —
+// never because a role was missing, which is a hard error instead.
 type componentSourceSpec struct {
+	Buildable     bool
+	SourceType    string // "git" | "oci" | "" (only when not buildable)
+	OCIRepository string
+	Tag           string
 	BuildTool     string
 	BuildLocation string
 	GitRepository string
 	GitBranch     string
 }
 
-// readComponentSourceSpec fetches the linked component's env-scoped view
-// and extracts `source.{buildTool,buildLocation,gitRepository,gitBranch}`
-// from the values blob. Preference order: latest draft (the user may
-// have prepped non-image edits there) → deployed revision. Errors are
-// logged at info level and produce a zero spec so the caller can fall
-// back to flag-only defaults — `conure deploy --image-ref` must keep
-// working even when the API is temporarily unreachable.
-func readComponentSourceSpec(cmd *cobra.Command, lc *linkedCtx) componentSourceSpec {
-	view, err := lc.Client.GetComponentInEnv(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
-	if err != nil || view == nil {
-		if err != nil {
-			ui.Info("Could not read component spec for defaults: %v\n", err)
+// deployAction is the build-vs-promote decision for one `conure deploy`.
+type deployAction int
+
+const (
+	// deployActionPromote: no build; push the latest draft to deployed.
+	deployActionPromote deployAction = iota
+	// deployActionBuild: build/record an image, then deploy it.
+	deployActionBuild
+)
+
+// decideDeployAction is the pure core of `conure deploy`'s build-vs-promote
+// branch, factored out so the matrix is unit-testable without an API client.
+//
+//   - flagImageRef set: build (explicit override). Fatal if the component
+//     isn't buildable — the user asked for something the type can't do.
+//   - not buildable: promote-only.
+//   - buildable + sourceType=git: build; image-ref is the spec's
+//     image.repository:image.tag (must be set — nothing to push to otherwise).
+//   - buildable + sourceType=oci: promote-only (the prebuilt image is
+//     already named in the spec; there is nothing to build).
+//
+// Returns the action and, for a build, the resolved image-ref.
+func decideDeployAction(spec componentSourceSpec, flagImageRef, componentName string) (deployAction, string, error) {
+	if flagImageRef != "" {
+		if !spec.Buildable {
+			return 0, "", fmt.Errorf("component type %q is not buildable, but --image-ref was given; remove --image-ref to promote the latest draft, or use a buildable component definition", componentName)
 		}
-		return componentSourceSpec{}
+		return deployActionBuild, flagImageRef, nil
 	}
+	if !spec.Buildable {
+		return deployActionPromote, "", nil
+	}
+	if spec.SourceType != fieldroles.SourceTypeGit {
+		// sourceType=oci: deploy the prebuilt image via promote.
+		return deployActionPromote, "", nil
+	}
+	imageRef := spec.ImageRef()
+	if imageRef == "" {
+		return 0, "", errors.New("component spec does not set the image (image.repository + image.tag field roles) and no --image-ref was given; cannot build without a target image")
+	}
+	return deployActionBuild, imageRef, nil
+}
+
+// ImageRef returns the spec's image as `ociRepository:tag`, or "" when
+// either half is unset (an incomplete spec can't name an image).
+func (s componentSourceSpec) ImageRef() string {
+	if s.OCIRepository == "" || s.Tag == "" {
+		return ""
+	}
+	return s.OCIRepository + ":" + s.Tag
+}
+
+// readComponentSourceSpec fetches the linked component's env-scoped view,
+// resolves its ComponentDefinition (join key: type + optional engine) to
+// learn whether it's buildable and where its build/image fields live, and
+// reads those fields through the fieldroles resolver.
+//
+// There is no graceful degradation: an unreachable API, an unresolvable
+// definition, an undeclared role that we need, or a malformed sourceType
+// is fatal. The platform is pre-1.0 — silently falling back to a guessed
+// `source.*` layout is exactly the bug this change removes.
+func readComponentSourceSpec(cmd *cobra.Command, lc *linkedCtx) (componentSourceSpec, error) {
+	view, err := lc.Client.GetComponentInEnv(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
+	if err != nil {
+		return componentSourceSpec{}, fmt.Errorf("reading component spec: %w", err)
+	}
+	if view == nil {
+		return componentSourceSpec{}, errors.New("reading component spec: empty response")
+	}
+
+	resolver, err := resolveComponentFieldRoles(cmd, lc, view)
+	if err != nil {
+		return componentSourceSpec{}, err
+	}
+
 	values := pickValues(view)
-	src, _ := values["source"].(map[string]interface{})
-	if src == nil {
-		return componentSourceSpec{}
+	if values == nil {
+		values = map[string]interface{}{}
 	}
-	return componentSourceSpec{
-		BuildTool:     stringFromValues(src, "buildTool"),
-		BuildLocation: stringFromValues(src, "buildLocation"),
-		GitRepository: stringFromValues(src, "gitRepository"),
-		GitBranch:     stringFromValues(src, "gitBranch"),
+
+	spec := componentSourceSpec{Buildable: resolver.Buildable()}
+	if !resolver.Buildable() {
+		// Nothing to read: a non-buildable definition need not declare
+		// image/build roles, and the caller will promote-only.
+		return spec, nil
+	}
+
+	spec.SourceType, err = resolver.SourceType(values)
+	if err != nil {
+		return componentSourceSpec{}, fmt.Errorf("component %q: %w", lc.Link.ComponentName, err)
+	}
+
+	// image.* is always meaningful for a buildable component (git builds
+	// push here; oci deploys pull from here). Read leniently: a declared
+	// role with an unset value is fine (the user may pass --image-ref).
+	if spec.OCIRepository, err = getRole(resolver, values, fieldroles.RoleImageRepository); err != nil {
+		return componentSourceSpec{}, err
+	}
+	if spec.Tag, err = getRole(resolver, values, fieldroles.RoleImageTag); err != nil {
+		return componentSourceSpec{}, err
+	}
+
+	// git.*/build.* only matter for a git build. For an oci component the
+	// definition may not declare them at all, so don't read them.
+	if spec.SourceType == fieldroles.SourceTypeGit {
+		if spec.GitRepository, err = getRole(resolver, values, fieldroles.RoleGitRepository); err != nil {
+			return componentSourceSpec{}, err
+		}
+		if spec.GitBranch, err = getRole(resolver, values, fieldroles.RoleGitBranch); err != nil {
+			return componentSourceSpec{}, err
+		}
+		if spec.BuildTool, err = getRole(resolver, values, fieldroles.RoleBuildTool); err != nil {
+			return componentSourceSpec{}, err
+		}
+		if spec.BuildLocation, err = getRole(resolver, values, fieldroles.RoleBuildLocation); err != nil {
+			return componentSourceSpec{}, err
+		}
+	}
+	return spec, nil
+}
+
+// getRole reads a role's value, treating "declared but unset in values"
+// as an empty string (the caller layers flags/defaults on top) but a
+// missing role declaration or a type/shape error as fatal.
+func getRole(r *fieldroles.Resolver, values map[string]interface{}, role string) (string, error) {
+	v, _, err := r.Get(values, role)
+	if err != nil {
+		return "", fmt.Errorf("field role %q: %w", role, err)
+	}
+	return v, nil
+}
+
+// resolveComponentFieldRoles finds the ComponentDefinition backing the
+// component (matched by view.Type + optional view.Engine) and builds a
+// fieldroles resolver from its Buildable flag and FieldRoles map.
+func resolveComponentFieldRoles(cmd *cobra.Command, lc *linkedCtx, view *api.ComponentInEnvResponse) (*fieldroles.Resolver, error) {
+	if view.Type == "" {
+		return nil, fmt.Errorf("component %q has no type recorded; cannot resolve its ComponentDefinition", lc.Link.ComponentName)
+	}
+	defs, err := lc.Client.ListComponentDefinitions(cmd.Context(), lc.Link.OrgID)
+	if err != nil {
+		return nil, fmt.Errorf("listing component definitions: %w", err)
+	}
+	var matches []api.ComponentDefinition
+	for _, d := range defs {
+		if d.Type != view.Type {
+			continue
+		}
+		if view.Engine != "" && d.Engine != "" && d.Engine != view.Engine {
+			continue
+		}
+		matches = append(matches, d)
+	}
+	switch len(matches) {
+	case 0:
+		return nil, fmt.Errorf("no ComponentDefinition for component type %q (engine %q); cannot resolve field roles", view.Type, view.Engine)
+	case 1:
+		return fieldroles.New(matches[0].Buildable, matches[0].FieldRoles), nil
+	default:
+		return nil, fmt.Errorf("%d ComponentDefinitions match type %q; the component must pin an engine to disambiguate", len(matches), view.Type)
 	}
 }
 
@@ -391,13 +546,6 @@ func pickValues(view *api.ComponentInEnvResponse) map[string]interface{} {
 		return view.DeployedRevision.Values
 	}
 	return nil
-}
-
-func stringFromValues(m map[string]interface{}, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
-	}
-	return ""
 }
 
 // firstNonEmpty returns the first non-empty argument. Used to layer

@@ -16,14 +16,16 @@ import (
 )
 
 type ComponentDefinitionResponse struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	Type          string  `json:"type"`
-	Engine        string  `json:"engine"`
-	Description   string  `json:"description"`
-	OCIRepository string  `json:"oci_repository"`
-	OCITag        string  `json:"oci_tag"`
-	IconURL       *string `json:"icon_url"`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	Type          string            `json:"type"`
+	Engine        string            `json:"engine"`
+	Description   string            `json:"description"`
+	OCIRepository string            `json:"oci_repository"`
+	OCITag        string            `json:"oci_tag"`
+	IconURL       *string           `json:"icon_url"`
+	Buildable     bool              `json:"buildable"`
+	FieldRoles    map[string]string `json:"field_roles,omitempty"`
 }
 
 type ComponentDefinitionListResponse struct {
@@ -88,7 +90,9 @@ func (a *ApiHandler) ListComponentDefinitions(c *gin.Context) {
 			OCIRepository: cd.Spec.OCIRepository,
 			OCITag:        cd.Spec.OCITag,
 			// ComponentDefinition has no icon field; CLI handles a nil icon.
-			IconURL: nil,
+			IconURL:    nil,
+			Buildable:  cd.Spec.Buildable,
+			FieldRoles: cd.Spec.FieldRoles,
 		}
 	}
 	// Stable order so the CLI picker doesn't reshuffle between calls

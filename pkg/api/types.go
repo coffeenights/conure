@@ -139,8 +139,13 @@ type DriftEntry struct {
 }
 
 type ComponentInEnvResponse struct {
-	ComponentID      string                 `json:"component_id"`
-	Name             string                 `json:"name"`
+	ComponentID string `json:"component_id"`
+	Name        string `json:"name"`
+	// Type/Engine identify the component's ComponentDefinition (join key:
+	// type + optional engine). The CLI needs them here to resolve the
+	// definition's fieldRoles from this single call.
+	Type             string                 `json:"type"`
+	Engine           string                 `json:"engine,omitempty"`
 	EnvironmentID    string                 `json:"environment_id"`
 	EnvironmentName  string                 `json:"environment_name"`
 	LiveValues       map[string]interface{} `json:"live_values,omitempty"`
@@ -210,6 +215,14 @@ type ComponentDefinition struct {
 	OCIRepository string  `json:"oci_repository"`
 	OCITag        string  `json:"oci_tag"`
 	IconURL       *string `json:"icon_url"`
+	// Buildable reports whether conure can build the component's image.
+	// When false, `conure deploy` is promote-only for this type.
+	Buildable bool `json:"buildable"`
+	// FieldRoles maps conure's well-known field roles (sourceType,
+	// image.repository, git.repository, …) to dotted paths into a
+	// component's values. The CLI and server resolve image/build fields
+	// through this instead of hardcoding the schema; there is no fallback.
+	FieldRoles map[string]string `json:"field_roles,omitempty"`
 }
 
 type ComponentDefinitionListResponse struct {
