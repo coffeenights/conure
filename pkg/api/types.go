@@ -234,23 +234,29 @@ type ComponentDefinitionListResponse struct {
 }
 
 // ComponentDefinitionRequest is the create/override body for an org-scoped
-// component definition (POST .../component-definitions). Type is required;
-// Engine is optional and defaults to timoni server-side. Posting for a
+// component definition (POST .../component-definitions). Type is required and,
+// with Engine (optional, empty == timoni), is the lookup key. Posting for a
 // (type, engine) the org already has updates it in place (and un-hides a
-// tombstone); otherwise it creates a new org-owned override that shadows the
-// shipped default for this org only.
+// tombstone); otherwise it creates a new org-owned override.
+//
+// Every non-key field is a pointer so the server can distinguish "omitted"
+// from "set to zero": a nil field is left at whatever the org's resolved
+// definition already has (inherited default or existing override), so a
+// one-flag edit patches instead of wiping field_roles/buildable. The
+// --from-file path fills every field, which naturally yields a full replace.
 type ComponentDefinitionRequest struct {
-	Type               string            `json:"type"`
-	Description        string            `json:"description,omitempty"`
-	Engine             string            `json:"engine,omitempty"`
-	OCIRepository      string            `json:"oci_repository,omitempty"`
-	OCITag             string            `json:"oci_tag,omitempty"`
-	OCIDigest          string            `json:"oci_digest,omitempty"`
-	OCIRegistry        string            `json:"oci_registry,omitempty"`
-	RegistrySecretName string            `json:"registry_secret_name,omitempty"`
-	Buildable          bool              `json:"buildable,omitempty"`
-	FieldRoles         map[string]string `json:"field_roles,omitempty"`
-	IconURL            *string           `json:"icon_url,omitempty"`
+	Type   string `json:"type"`
+	Engine string `json:"engine,omitempty"`
+
+	Description        *string            `json:"description,omitempty"`
+	OCIRepository      *string            `json:"oci_repository,omitempty"`
+	OCITag             *string            `json:"oci_tag,omitempty"`
+	OCIDigest          *string            `json:"oci_digest,omitempty"`
+	OCIRegistry        *string            `json:"oci_registry,omitempty"`
+	RegistrySecretName *string            `json:"registry_secret_name,omitempty"`
+	Buildable          *bool              `json:"buildable,omitempty"`
+	FieldRoles         *map[string]string `json:"field_roles,omitempty"`
+	IconURL            *string            `json:"icon_url,omitempty"`
 }
 
 // HideComponentDefinitionRequest is the tombstone body (POST

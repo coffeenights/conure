@@ -240,3 +240,67 @@ func TestComponentDefinitions_UpsertSeedIdempotent(t *testing.T) {
 		t.Fatalf("re-seed did not update the row: %+v", got[0])
 	}
 }
+
+// TestComponentDefinitions_EmptyEngineIsFindable is the regression for the
+// engine-storage bug: a row created with Engine:"" was persisted with the
+// field omitted, so GetOwnRow (and the upsert filter) — which match
+// engine=="timoni" — could never find it again, producing duplicate rows on
+// every subsequent set/hide/seed. Storage is now normalized on write, so the
+// empty form and the explicit "timoni" form are the same row.
+func TestComponentDefinitions_EmptyEngineIsFindable(t *testing.T) {
+	db, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	org := primitive.NewObjectID()
+	t.Cleanup(func() { clearDefs(ctx, db, DefaultComponentDefinitionOwner, org) })
+
+	// Org override created with the engine left unset.
+	created := &ComponentDefinition{OrganizationID: org, Type: "webservice", OCIRepository: "ghcr.io/e/web"}
+	if _, err := created.Create(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if created.Engine != "timoni" {
+		t.Fatalf("Create did not normalize empty engine, stored %q", created.Engine)
+	}
+
+	// Found by empty engine ("" → timoni)…
+	var byEmpty ComponentDefinition
+	if err := byEmpty.GetOwnRow(ctx, db, org, "webservice", ""); err != nil {
+		t.Fatalf("GetOwnRow(engine=\"\") could not find the row: %v", err)
+	}
+	// …and by the explicit "timoni" form — same row.
+	var byTimoni ComponentDefinition
+	if err := byTimoni.GetOwnRow(ctx, db, org, "webservice", "timoni"); err != nil {
+		t.Fatalf("GetOwnRow(engine=\"timoni\") could not find the row: %v", err)
+	}
+	if byEmpty.ID != created.ID || byTimoni.ID != created.ID {
+		t.Fatalf("empty and timoni forms resolved to different rows: created=%s empty=%s timoni=%s",
+			created.ID.Hex(), byEmpty.ID.Hex(), byTimoni.ID.Hex())
+	}
+
+	// A default seeded with empty engine reconciles a "timoni" default in
+	// place rather than creating a second row (the original duplication).
+	seedDef(t, ctx, db, "worker", "timoni", "ghcr.io/e/worker", "1.0.0")
+	emptyEngineSeed := &ComponentDefinition{Type: "worker", OCIRepository: "ghcr.io/e/worker", OCITag: "2.0.0"}
+	if err := emptyEngineSeed.UpsertSeed(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	defs, err := ResolveForOrg(ctx, db, DefaultComponentDefinitionOwner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workers := 0
+	for _, d := range defs {
+		if d.Type == "worker" {
+			workers++
+			if d.OCITag != "2.0.0" {
+				t.Fatalf("empty-engine re-seed did not update in place: %+v", d)
+			}
+		}
+	}
+	if workers != 1 {
+		t.Fatalf("empty-engine seed duplicated the timoni default: got %d worker rows", workers)
+	}
+}

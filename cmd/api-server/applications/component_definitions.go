@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/middlewares"
@@ -31,20 +32,29 @@ type ComponentDefinitionListResponse struct {
 	Definitions []ComponentDefinitionResponse `json:"definitions"`
 }
 
-// componentDefinitionRequest is the create/update body. Engine is optional and
-// defaults to timoni (matching the CRD). Type is required.
+// componentDefinitionRequest is the create/override body.
+//
+// Type is required and, with Engine, is the lookup key (Engine optional,
+// empty == timoni). Every other field is a pointer so the server can tell
+// "field omitted" from "field set to its zero value": a nil pointer means
+// "leave whatever the org's resolved definition already has". That makes
+// `set <type> --oci-tag X` a one-field patch instead of a destructive full
+// replace that silently drops field_roles/buildable, while `--from-file`
+// (which parses a complete document, so every field is populated) still
+// replaces wholesale — same merge, no mode flag.
 type componentDefinitionRequest struct {
-	Type               string                   `json:"type" binding:"required"`
-	Description        string                   `json:"description"`
-	Engine             string                   `json:"engine"`
-	OCIRepository      string                   `json:"oci_repository"`
-	OCITag             string                   `json:"oci_tag"`
-	OCIDigest          string                   `json:"oci_digest"`
-	OCIRegistry        string                   `json:"oci_registry"`
-	RegistrySecretName string                   `json:"registry_secret_name"`
+	Type   string `json:"type" binding:"required"`
+	Engine string `json:"engine"`
+
+	Description        *string                  `json:"description"`
+	OCIRepository      *string                  `json:"oci_repository"`
+	OCITag             *string                  `json:"oci_tag"`
+	OCIDigest          *string                  `json:"oci_digest"`
+	OCIRegistry        *string                  `json:"oci_registry"`
+	RegistrySecretName *string                  `json:"registry_secret_name"`
 	Helm               *models.ComponentDefHelm `json:"helm"`
-	Buildable          bool                     `json:"buildable"`
-	FieldRoles         map[string]string        `json:"field_roles"`
+	Buildable          *bool                    `json:"buildable"`
+	FieldRoles         *map[string]string       `json:"field_roles"`
 	IconURL            *string                  `json:"icon_url"`
 }
 
@@ -145,7 +155,27 @@ func (a *ApiHandler) CreateComponentDefinition(c *gin.Context) {
 		return
 	}
 
+	// Pick the merge base:
+	//   - the org already has a row → patch that row in place;
+	//   - no org row but a default is inherited → start from the resolved
+	//     definition so omitted fields keep the default's values (field_roles,
+	//     buildable, …) instead of being zeroed into a broken override;
+	//   - brand-new type → empty base.
+	// Either way applyRequest only overwrites fields the caller actually sent,
+	// so a one-flag edit patches and a full --from-file document replaces.
+	if !exists {
+		if base, rerr := models.ResolveOneForOrg(c.Request.Context(), a.MongoDB, org.ID, req.Type, req.Engine); rerr == nil {
+			cd = *base
+		}
+	}
+
 	applyRequest(&cd, &req)
+	// Identity is owned by this org regardless of where the base came from;
+	// clearing the inherited row's id makes the "override an inherited
+	// default" path an insert, not an in-place edit of the shared default.
+	if !exists {
+		cd.ID = primitive.NilObjectID
+	}
 	cd.OrganizationID = org.ID
 	cd.Hidden = false
 
@@ -240,20 +270,43 @@ func (a *ApiHandler) HideComponentDefinition(c *gin.Context) {
 	c.JSON(http.StatusCreated, toComponentDefinitionResponse(&cd))
 }
 
-// applyRequest copies the request body onto a definition row, preserving the
-// row's identity fields (ID/OrganizationID/timestamps) so it works for both
-// create and update.
+// applyRequest merges the request body onto a definition row. Type and Engine
+// are the lookup key and are always set; every other field is applied only
+// when the caller actually sent it (non-nil pointer), so omitted fields keep
+// whatever the merge base (existing override or inherited default) had. It
+// preserves the row's identity fields (ID/OrganizationID/timestamps) so it
+// works for both create and update.
 func applyRequest(cd *models.ComponentDefinition, req *componentDefinitionRequest) {
 	cd.Type = req.Type
-	cd.Description = req.Description
 	cd.Engine = req.Engine
-	cd.OCIRepository = req.OCIRepository
-	cd.OCITag = req.OCITag
-	cd.OCIDigest = req.OCIDigest
-	cd.OCIRegistry = req.OCIRegistry
-	cd.RegistrySecretName = req.RegistrySecretName
-	cd.Helm = req.Helm
-	cd.Buildable = req.Buildable
-	cd.FieldRoles = req.FieldRoles
-	cd.IconURL = req.IconURL
+	if req.Description != nil {
+		cd.Description = *req.Description
+	}
+	if req.OCIRepository != nil {
+		cd.OCIRepository = *req.OCIRepository
+	}
+	if req.OCITag != nil {
+		cd.OCITag = *req.OCITag
+	}
+	if req.OCIDigest != nil {
+		cd.OCIDigest = *req.OCIDigest
+	}
+	if req.OCIRegistry != nil {
+		cd.OCIRegistry = *req.OCIRegistry
+	}
+	if req.RegistrySecretName != nil {
+		cd.RegistrySecretName = *req.RegistrySecretName
+	}
+	if req.Helm != nil {
+		cd.Helm = req.Helm
+	}
+	if req.Buildable != nil {
+		cd.Buildable = *req.Buildable
+	}
+	if req.FieldRoles != nil {
+		cd.FieldRoles = *req.FieldRoles
+	}
+	if req.IconURL != nil {
+		cd.IconURL = req.IconURL
+	}
 }

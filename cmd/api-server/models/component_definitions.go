@@ -48,9 +48,14 @@ type ComponentDefinition struct {
 	Hidden bool `bson:"hidden,omitempty" json:"hidden,omitempty"`
 
 	// --- spec, mirrors conurev1alpha1.ComponentDefinitionSpec ---
-	Type          string `bson:"type" json:"type"`
-	Description   string `bson:"description,omitempty" json:"description,omitempty"`
-	Engine        string `bson:"engine,omitempty" json:"engine,omitempty"`
+	Type        string `bson:"type" json:"type"`
+	Description string `bson:"description,omitempty" json:"description,omitempty"`
+	// Engine is always persisted as a concrete value ("timoni" when the
+	// caller left it unset — see normalizeEngine). It deliberately has no
+	// omitempty: a missing-vs-"" -vs-"timoni" trichotomy is exactly what made
+	// rows un-findable, so storage is normalized on write and every read path
+	// can do a plain exact match.
+	Engine        string `bson:"engine" json:"engine,omitempty"`
 	OCIRepository string `bson:"ociRepository,omitempty" json:"oci_repository,omitempty"`
 	OCITag        string `bson:"ociTag,omitempty" json:"oci_tag,omitempty"`
 	OCIDigest     string `bson:"ociDigest,omitempty" json:"oci_digest,omitempty"`
@@ -77,18 +82,33 @@ func (cd *ComponentDefinition) GetCollectionName() string {
 	return ComponentDefinitionCollection
 }
 
+// normalizeEngineValue is the single definition of "the empty engine means
+// timoni". Storage and lookups both route through it so a row written with no
+// engine and one written as "timoni" are byte-identical on disk and an exact
+// match finds either.
+func normalizeEngineValue(engine string) string {
+	if engine == "" {
+		return "timoni"
+	}
+	return engine
+}
+
 // EngineKey normalizes the engine for keying/lookup: an empty engine is
 // equivalent to "timoni" (the CRD default), so a definition stored with no
 // engine and one stored as "timoni" collide for the same type, exactly as
 // they would at the controller's (type, engine) resolution.
 func (cd *ComponentDefinition) EngineKey() string {
-	if cd.Engine == "" {
-		return "timoni"
-	}
-	return cd.Engine
+	return normalizeEngineValue(cd.Engine)
+}
+
+// normalizeEngine pins Engine to a concrete value before any write, so the
+// stored field is never missing/empty (see the Engine field doc).
+func (cd *ComponentDefinition) normalizeEngine() {
+	cd.Engine = normalizeEngineValue(cd.Engine)
 }
 
 func (cd *ComponentDefinition) Create(ctx context.Context, db *database.MongoDB) (string, error) {
+	cd.normalizeEngine()
 	if err := Create(ctx, db, cd); err != nil {
 		return "", err
 	}
@@ -103,6 +123,7 @@ func (cd *ComponentDefinition) GetById(ctx context.Context, db *database.MongoDB
 }
 
 func (cd *ComponentDefinition) Update(ctx context.Context, db *database.MongoDB) error {
+	cd.normalizeEngine()
 	return Update(ctx, db, cd)
 }
 
@@ -220,21 +241,14 @@ func ResolveOneForOrg(ctx context.Context, db *database.MongoDB, organizationID 
 // GetOwnRow fetches one org-owned row (override or tombstone) by (type,
 // engine), without applying default fallback. Used by the CRUD endpoints to
 // decide create-vs-update and by the seed command for idempotency. engine ""
-// is normalized to "timoni" before matching so callers don't have to.
+// is normalized to "timoni" before matching so callers don't have to; since
+// storage is normalized on write too, this is a plain exact match.
 func (cd *ComponentDefinition) GetOwnRow(ctx context.Context, db *database.MongoDB, organizationID primitive.ObjectID, compType, engine string) error {
-	if engine == "" {
-		engine = "timoni"
-	}
 	collection := db.Client.Database(db.DBName).Collection(ComponentDefinitionCollection)
-	// Match both the empty and explicit "timoni" storage forms.
-	engineFilter := bson.M{"$in": []string{engine}}
-	if engine == "timoni" {
-		engineFilter = bson.M{"$in": []string{"", "timoni"}}
-	}
 	filter := bson.M{
 		"organizationId": organizationID,
 		"type":           compType,
-		"engine":         engineFilter,
+		"engine":         normalizeEngineValue(engine),
 		"deletedAt":      bson.M{"$exists": false},
 	}
 	err := collection.FindOne(ctx, filter).Decode(cd)
@@ -250,12 +264,12 @@ func (cd *ComponentDefinition) GetOwnRow(ctx context.Context, db *database.Mongo
 func (cd *ComponentDefinition) UpsertSeed(ctx context.Context, db *database.MongoDB) error {
 	cd.OrganizationID = DefaultComponentDefinitionOwner
 	cd.Hidden = false
+	cd.normalizeEngine()
 	collection := db.Client.Database(db.DBName).Collection(ComponentDefinitionCollection)
-	engine := cd.EngineKey()
 	filter := bson.M{
 		"organizationId": DefaultComponentDefinitionOwner,
 		"type":           cd.Type,
-		"engine":         bson.M{"$in": []string{"", engine}},
+		"engine":         cd.Engine,
 	}
 	now := time.Now()
 	set := bson.M{

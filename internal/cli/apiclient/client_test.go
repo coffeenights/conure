@@ -184,9 +184,10 @@ func TestClient_Endpoints(t *testing.T) {
 			wantPath:    "/organizations/o1/component-definitions",
 			wantReqBody: `{"type":"worker","oci_repository":"ghcr.io/acme/worker"}`,
 			run: func(c *Client) error {
+				repo := "ghcr.io/acme/worker"
 				def, err := c.SetComponentDefinition(context.Background(), "o1", api.ComponentDefinitionRequest{
 					Type:          "worker",
-					OCIRepository: "ghcr.io/acme/worker",
+					OCIRepository: &repo,
 				})
 				if err != nil {
 					return err

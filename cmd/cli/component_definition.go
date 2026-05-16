@@ -193,18 +193,37 @@ func runComponentDefSet(cmd *cobra.Command, args []string) error {
 		if len(args) != 1 {
 			return fmt.Errorf("a <type> argument is required unless --from-file is given")
 		}
+		// Only flags the user actually passed become non-nil, so the server
+		// patches just those and leaves everything else at the org's resolved
+		// definition (inherited default or existing override) — sending the
+		// flag's zero value would otherwise wipe field_roles/buildable.
 		req = api.ComponentDefinitionRequest{
-			Type:               args[0],
-			Engine:             cdSetEngine,
-			Description:        cdSetDescription,
-			OCIRepository:      cdSetOCIRepository,
-			OCITag:             cdSetOCITag,
-			OCIDigest:          cdSetOCIDigest,
-			OCIRegistry:        cdSetOCIRegistry,
-			RegistrySecretName: cdSetRegistrySecret,
-			Buildable:          cdSetBuildable,
+			Type:   args[0],
+			Engine: cdSetEngine,
 		}
-		if cdSetIconURL != "" {
+		f := cmd.Flags()
+		if f.Changed("description") {
+			req.Description = &cdSetDescription
+		}
+		if f.Changed("oci-repository") {
+			req.OCIRepository = &cdSetOCIRepository
+		}
+		if f.Changed("oci-tag") {
+			req.OCITag = &cdSetOCITag
+		}
+		if f.Changed("oci-digest") {
+			req.OCIDigest = &cdSetOCIDigest
+		}
+		if f.Changed("oci-registry") {
+			req.OCIRegistry = &cdSetOCIRegistry
+		}
+		if f.Changed("registry-secret") {
+			req.RegistrySecretName = &cdSetRegistrySecret
+		}
+		if f.Changed("buildable") {
+			req.Buildable = &cdSetBuildable
+		}
+		if f.Changed("icon-url") {
 			req.IconURL = &cdSetIconURL
 		}
 	}
@@ -276,6 +295,11 @@ func runComponentDefDelete(cmd *cobra.Command, args []string) error {
 // `seeddefaultcomponentdefinitions` consumes) and projects it onto the API
 // request body, so a hand-authored default file and an org override are
 // interchangeable source material.
+//
+// Every field is populated (non-nil): a file is a complete definition, so
+// applying it is a full replace — fields absent from the YAML are sent as
+// their zero value, not left to inherit. That's the deliberate difference
+// from flag edits, which send only changed fields.
 func componentDefRequestFromFile(path string) (api.ComponentDefinitionRequest, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -291,19 +315,27 @@ func componentDefRequestFromFile(path string) (api.ComponentDefinitionRequest, e
 	if crd.Spec.ComponentType == "" {
 		return api.ComponentDefinitionRequest{}, fmt.Errorf("%s has no spec.type", path)
 	}
-	req := api.ComponentDefinitionRequest{
-		Type:          crd.Spec.ComponentType,
-		Description:   crd.Spec.Description,
-		Engine:        string(crd.Spec.Engine),
-		OCIRepository: crd.Spec.OCIRepository,
-		OCITag:        crd.Spec.OCITag,
-		OCIDigest:     crd.Spec.OCIDigest,
-		OCIRegistry:   crd.Spec.OCIRegistry,
-		Buildable:     crd.Spec.Buildable,
-		FieldRoles:    crd.Spec.FieldRoles,
-	}
+	registrySecret := ""
 	if crd.Spec.RegistrySecretRef != nil {
-		req.RegistrySecretName = crd.Spec.RegistrySecretRef.Name
+		registrySecret = crd.Spec.RegistrySecretRef.Name
 	}
-	return req, nil
+	desc := crd.Spec.Description
+	ociRepo := crd.Spec.OCIRepository
+	ociTag := crd.Spec.OCITag
+	ociDigest := crd.Spec.OCIDigest
+	ociRegistry := crd.Spec.OCIRegistry
+	buildable := crd.Spec.Buildable
+	fieldRoles := crd.Spec.FieldRoles
+	return api.ComponentDefinitionRequest{
+		Type:               crd.Spec.ComponentType,
+		Engine:             string(crd.Spec.Engine),
+		Description:        &desc,
+		OCIRepository:      &ociRepo,
+		OCITag:             &ociTag,
+		OCIDigest:          &ociDigest,
+		OCIRegistry:        &ociRegistry,
+		RegistrySecretName: &registrySecret,
+		Buildable:          &buildable,
+		FieldRoles:         &fieldRoles,
+	}, nil
 }
