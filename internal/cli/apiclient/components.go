@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 
 	"github.com/coffeenights/conure/pkg/api"
 )
@@ -18,6 +19,48 @@ func (c *Client) ListComponentDefinitions(ctx context.Context, orgID string) ([]
 		return nil, err
 	}
 	return resp.Definitions, nil
+}
+
+// SetComponentDefinition creates or overrides the org's definition for a
+// (type, engine). The server upserts: posting for a key the org already has
+// updates it in place (and un-hides a tombstone), otherwise it inserts a new
+// org-owned override that shadows the shipped default for this org only. It
+// returns the resulting definition.
+func (c *Client) SetComponentDefinition(ctx context.Context, orgID string, req api.ComponentDefinitionRequest) (*api.ComponentDefinition, error) {
+	data, err := c.post(ctx, fmt.Sprintf("/organizations/%s/component-definitions", orgID), req)
+	if err != nil {
+		return nil, err
+	}
+	var def api.ComponentDefinition
+	if err := json.Unmarshal(data, &def); err != nil {
+		return nil, err
+	}
+	return &def, nil
+}
+
+// HideComponentDefinition writes a tombstone for a (type, engine) in the org,
+// suppressing the inherited shipped default. Reversible via
+// DeleteComponentDefinition on the returned row's id.
+func (c *Client) HideComponentDefinition(ctx context.Context, orgID string, req api.HideComponentDefinitionRequest) (*api.ComponentDefinition, error) {
+	data, err := c.post(ctx, fmt.Sprintf("/organizations/%s/component-definitions/hide", orgID), req)
+	if err != nil {
+		return nil, err
+	}
+	var def api.ComponentDefinition
+	if err := json.Unmarshal(data, &def); err != nil {
+		return nil, err
+	}
+	return &def, nil
+}
+
+// DeleteComponentDefinition removes an org-owned row by id. Deleting an
+// override restores the inherited default; deleting a tombstone un-hides it.
+// Shipped defaults (source "default") are shared and cannot be deleted here —
+// hide them instead.
+func (c *Client) DeleteComponentDefinition(ctx context.Context, orgID, definitionID string) error {
+	_, _, err := c.do(ctx, http.MethodDelete,
+		fmt.Sprintf("/organizations/%s/component-definitions/%s", orgID, definitionID), nil)
+	return err
 }
 
 func (c *Client) ListAppComponents(ctx context.Context, orgID, appID string) ([]api.Component, error) {

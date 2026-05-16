@@ -223,10 +223,42 @@ type ComponentDefinition struct {
 	// component's values. The CLI and server resolve image/build fields
 	// through this instead of hardcoding the schema; there is no fallback.
 	FieldRoles map[string]string `json:"field_roles,omitempty"`
+	// Source is "default" for a row inherited from the platform's shipped
+	// defaults and "organization" for one this org created or overrode. The
+	// admin CLI surfaces it so operators can tell inherited from customized.
+	Source string `json:"source,omitempty"`
 }
 
 type ComponentDefinitionListResponse struct {
 	Definitions []ComponentDefinition `json:"definitions"`
+}
+
+// ComponentDefinitionRequest is the create/override body for an org-scoped
+// component definition (POST .../component-definitions). Type is required;
+// Engine is optional and defaults to timoni server-side. Posting for a
+// (type, engine) the org already has updates it in place (and un-hides a
+// tombstone); otherwise it creates a new org-owned override that shadows the
+// shipped default for this org only.
+type ComponentDefinitionRequest struct {
+	Type               string            `json:"type"`
+	Description        string            `json:"description,omitempty"`
+	Engine             string            `json:"engine,omitempty"`
+	OCIRepository      string            `json:"oci_repository,omitempty"`
+	OCITag             string            `json:"oci_tag,omitempty"`
+	OCIDigest          string            `json:"oci_digest,omitempty"`
+	OCIRegistry        string            `json:"oci_registry,omitempty"`
+	RegistrySecretName string            `json:"registry_secret_name,omitempty"`
+	Buildable          bool              `json:"buildable,omitempty"`
+	FieldRoles         map[string]string `json:"field_roles,omitempty"`
+	IconURL            *string           `json:"icon_url,omitempty"`
+}
+
+// HideComponentDefinitionRequest is the tombstone body (POST
+// .../component-definitions/hide). It suppresses the inherited default for a
+// (type, engine) within the org; reversible by deleting the resulting row.
+type HideComponentDefinitionRequest struct {
+	Type   string `json:"type"`
+	Engine string `json:"engine,omitempty"`
 }
 
 // ----- Variables (and secrets) -------------------------------------------
