@@ -2,6 +2,7 @@ package applications
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"sort"
 
@@ -69,6 +70,7 @@ func (a *ApiHandler) ListComponentDefinitions(c *gin.Context) {
 
 	items, err := a.listClusterComponentDefinitions(c.Request.Context())
 	if err != nil {
+		log.Printf("Error listing component definitions from cluster: %v\n", err)
 		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
 		return
 	}
