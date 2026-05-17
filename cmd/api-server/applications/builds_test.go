@@ -174,7 +174,7 @@ func TestMergeImageIntoValues_UndeclaredRoleErrors(t *testing.T) {
 	}
 }
 
-func TestBaseValuesForBuild_DraftIsReturnedForPromotion(t *testing.T) {
+func TestBaseValuesForBuild_PrefersDraftValues(t *testing.T) {
 	_, app, env := orgWithApp(t, "TestBaseValuesForBuild_Draft", "staging")
 
 	component := &models.Component{
@@ -187,28 +187,35 @@ func TestBaseValuesForBuild_DraftIsReturnedForPromotion(t *testing.T) {
 	}
 	cleanupComponent(t, component)
 
+	// A deployed baseline plus a newer draft: the build must layer the image
+	// onto the draft's values (the user's prepped non-image edits win).
+	deployed := &models.ComponentRevision{
+		ComponentID:   component.ID,
+		EnvironmentID: env.ID,
+		Values:        map[string]interface{}{"replicas": float64(1)},
+	}
+	if err := deployed.CreateDeployed(context.Background(), testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
 	draft := &models.ComponentRevision{
 		ComponentID:   component.ID,
 		EnvironmentID: env.ID,
 		Values:        map[string]interface{}{"replicas": float64(3)},
 	}
-	if err := draft.CreateDraft(context.Background(), testConf.app.MongoDB); err != nil {
+	if err := draft.UpsertDraft(context.Background(), testConf.app.MongoDB); err != nil {
 		t.Fatal(err)
 	}
 
-	values, returnedDraft, err := baseValuesForBuild(context.Background(), testConf.app, component, env)
+	values, err := baseValuesForBuild(context.Background(), testConf.app, component, env)
 	if err != nil {
 		t.Fatalf("baseValuesForBuild err: %v", err)
 	}
-	if returnedDraft == nil || returnedDraft.ID != draft.ID {
-		t.Fatalf("expected draft to be returned for caller-side promotion, got %v", returnedDraft)
-	}
 	if got, ok := values["replicas"].(float64); !ok || got != 3 {
-		t.Errorf("draft values not copied: %+v", values)
+		t.Errorf("expected draft values to be preferred, got %+v", values)
 	}
 }
 
-func TestBaseValuesForBuild_DeployedFallback_NoDraftReturned(t *testing.T) {
+func TestBaseValuesForBuild_DeployedFallback(t *testing.T) {
 	_, app, env := orgWithApp(t, "TestBaseValuesForBuild_Deployed", "staging")
 
 	component := &models.Component{
@@ -230,12 +237,9 @@ func TestBaseValuesForBuild_DeployedFallback_NoDraftReturned(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	values, returnedDraft, err := baseValuesForBuild(context.Background(), testConf.app, component, env)
+	values, err := baseValuesForBuild(context.Background(), testConf.app, component, env)
 	if err != nil {
 		t.Fatalf("baseValuesForBuild err: %v", err)
-	}
-	if returnedDraft != nil {
-		t.Errorf("expected nil draft when only a deployed revision exists, got %v", returnedDraft)
 	}
 	if got, ok := values["replicas"].(float64); !ok || got != 5 {
 		t.Errorf("deployed values not copied: %+v", values)

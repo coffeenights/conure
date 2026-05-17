@@ -188,7 +188,7 @@ func (a *ApiHandler) CreateRevision(c *gin.Context) {
 		Comment:       req.Comment,
 		CreatedBy:     uID,
 	}
-	if err := rev.CreateDraft(c.Request.Context(), a.MongoDB); err != nil {
+	if err := rev.UpsertDraft(c.Request.Context(), a.MongoDB); err != nil {
 		log.Printf("Error creating revision: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
@@ -258,8 +258,10 @@ func (a *ApiHandler) UpdateDraftRevision(c *gin.Context) {
 	c.JSON(http.StatusOK, rev)
 }
 
-// DeployRevision applies the latest draft for (component, env) to K8s and
-// flips it to deployed. The status transition is one-way and final.
+// DeployRevision applies the latest draft for (component, env) to K8s,
+// records a fresh deployed revision from its values, and supersedes all
+// drafts. Deployed history is always new immutable rows — drafts are never
+// promoted in place — so the version trail stays a clean append-only log.
 //
 // Path: POST /:orgID/a/:appID/e/:env/c/:componentID/deploy
 func (a *ApiHandler) DeployRevision(c *gin.Context) {
@@ -283,12 +285,25 @@ func (a *ApiHandler) DeployRevision(c *gin.Context) {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	if err := draft.MarkDeployed(ctx, a.MongoDB); err != nil {
-		log.Printf("Error marking deployed: %v\n", err)
+	uID := c.MustGet("currentUser").(models.User).ID
+	deployed := &models.ComponentRevision{
+		ComponentID:   component.ID,
+		EnvironmentID: env.ID,
+		Values:        draft.Values,
+		Comment:       draft.Comment,
+		CreatedBy:     uID,
+	}
+	if err := deployed.CreateDeployed(ctx, a.MongoDB); err != nil {
+		log.Printf("Error inserting deployed revision: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, draft)
+	if _, err := models.SupersedeDrafts(ctx, a.MongoDB, component.ID, env.ID); err != nil {
+		log.Printf("Error superseding drafts: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, deployed)
 }
 
 // DeployRevisionByID is the rollback / redeploy primitive: load revision
@@ -333,6 +348,13 @@ func (a *ApiHandler) DeployRevisionByID(c *gin.Context) {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
+	// Rollback/redeploy changes live state, so any pending draft (which was
+	// prepped against the pre-rollback values) is now stale.
+	if _, err := models.SupersedeDrafts(ctx, a.MongoDB, component.ID, env.ID); err != nil {
+		log.Printf("Error superseding drafts: %v\n", err)
+		conureerrors.AbortWithError(c, err)
+		return
+	}
 	c.JSON(http.StatusOK, newRev)
 }
 
@@ -344,6 +366,10 @@ func (a *ApiHandler) DeployRevisionByID(c *gin.Context) {
 //
 // Component types without a pod template are a silent no-op: the annotation
 // lands on the Component but the rendered manifests have nowhere to put it.
+//
+// A restart re-applies the latest deployed values unchanged, so it does NOT
+// supersede drafts: a pending draft is still validly prepped against the same
+// deployed baseline and must survive a pod bounce.
 //
 // Path: POST /:orgID/a/:appID/e/:env/c/:componentID/restart
 func (a *ApiHandler) RestartComponent(c *gin.Context) {
@@ -412,7 +438,7 @@ func (a *ApiHandler) UninstallFromEnv(c *gin.Context) {
 		conureerrors.AbortWithError(c, err)
 		return
 	}
-	if _, err := models.DeleteDraftsForPair(ctx, a.MongoDB, component.ID, env.ID); err != nil {
+	if _, err := models.SupersedeDrafts(ctx, a.MongoDB, component.ID, env.ID); err != nil {
 		log.Printf("Error deleting drafts: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
@@ -474,13 +500,25 @@ func (a *ApiHandler) DeployEnvDrafts(c *gin.Context) {
 			response.Failed = append(response.Failed, entry)
 			continue
 		}
-		if err := draft.MarkDeployed(ctx, a.MongoDB); err != nil {
-			entry.Error = fmt.Sprintf("marking deployed: %v", err)
+		deployed := &models.ComponentRevision{
+			ComponentID:   component.ID,
+			EnvironmentID: env.ID,
+			Values:        draft.Values,
+			Comment:       draft.Comment,
+			CreatedBy:     draft.CreatedBy,
+		}
+		if err := deployed.CreateDeployed(ctx, a.MongoDB); err != nil {
+			entry.Error = fmt.Sprintf("inserting deployed revision: %v", err)
 			response.Failed = append(response.Failed, entry)
 			continue
 		}
-		entry.RevisionID = draft.ID.Hex()
-		entry.Version = draft.Version
+		if _, err := models.SupersedeDrafts(ctx, a.MongoDB, component.ID, env.ID); err != nil {
+			entry.Error = fmt.Sprintf("superseding drafts: %v", err)
+			response.Failed = append(response.Failed, entry)
+			continue
+		}
+		entry.RevisionID = deployed.ID.Hex()
+		entry.Version = deployed.Version
 		response.Deployed = append(response.Deployed, entry)
 	}
 	c.JSON(http.StatusOK, response)

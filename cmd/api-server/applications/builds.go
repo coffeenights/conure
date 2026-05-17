@@ -405,7 +405,7 @@ func deployBuildImage(ctx context.Context, a *ApiHandler, app *models.Applicatio
 		return err
 	}
 
-	baseValues, draft, err := baseValuesForBuild(ctx, a, component, env)
+	baseValues, err := baseValuesForBuild(ctx, a, component, env)
 	if err != nil {
 		return err
 	}
@@ -427,10 +427,13 @@ func deployBuildImage(ctx context.Context, a *ApiHandler, app *models.Applicatio
 	if err := rev.CreateDeployed(ctx, a.MongoDB); err != nil {
 		return err
 	}
-	if draft != nil {
-		if err := draft.MarkDeployed(ctx, a.MongoDB); err != nil && !errors.Is(err, conureerrors.ErrObjectNotFound) {
-			return err
-		}
+	// The build is the new truth: drop every pending draft for the pair
+	// (its non-image edits were already merged into `values` above). Without
+	// this, a draft would either linger as an orphan or — under the old
+	// MarkDeployed path — get promoted into a second phantom deployed row at
+	// the same timestamp as `rev`.
+	if _, err := models.SupersedeDrafts(ctx, a.MongoDB, component.ID, env.ID); err != nil {
+		return err
 	}
 	return nil
 }
@@ -440,25 +443,25 @@ func deployBuildImage(ctx context.Context, a *ApiHandler, app *models.Applicatio
 // non-image edits there) → latest deployed (steady state) → empty map (no
 // history yet — first build).
 //
-// The returned *ComponentRevision is non-nil only when values came from a
-// draft; callers use it to mark the draft deployed once the build rolls out,
-// so it doesn't linger as a stale pending revision pointing at the old image.
-func baseValuesForBuild(ctx context.Context, a *ApiHandler, component *models.Component, env *models.Environment) (map[string]interface{}, *models.ComponentRevision, error) {
+// Only the draft's *values* are carried forward; the draft row itself is
+// superseded by deployBuildImage once the build rolls out (a deploy is the
+// new truth, so all pending drafts are stale).
+func baseValuesForBuild(ctx context.Context, a *ApiHandler, component *models.Component, env *models.Environment) (map[string]interface{}, error) {
 	draft, err := models.LatestDraft(ctx, a.MongoDB, component.ID, env.ID)
 	if err == nil && draft != nil {
-		return cloneValues(draft.Values), draft, nil
+		return cloneValues(draft.Values), nil
 	}
 	if err != nil && !errors.Is(err, conureerrors.ErrObjectNotFound) {
-		return nil, nil, err
+		return nil, err
 	}
 	deployed, err := models.LatestDeployed(ctx, a.MongoDB, component.ID, env.ID)
 	if err == nil && deployed != nil {
-		return cloneValues(deployed.Values), nil, nil
+		return cloneValues(deployed.Values), nil
 	}
 	if err != nil && !errors.Is(err, conureerrors.ErrObjectNotFound) {
-		return nil, nil, err
+		return nil, err
 	}
-	return map[string]interface{}{}, nil, nil
+	return map[string]interface{}{}, nil
 }
 
 func cloneValues(in map[string]interface{}) map[string]interface{} {
@@ -488,7 +491,7 @@ func resolveBuildCredentialSecrets(ctx context.Context, a *ApiHandler, clientset
 	if err != nil {
 		return "", "", err
 	}
-	baseValues, _, err := baseValuesForBuild(ctx, a, component, env)
+	baseValues, err := baseValuesForBuild(ctx, a, component, env)
 	if err != nil {
 		return "", "", err
 	}

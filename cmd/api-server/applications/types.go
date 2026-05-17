@@ -43,7 +43,6 @@ type EnvironmentPresence struct {
 	EnvironmentName       string `json:"environment_name"`
 	Active                bool   `json:"active"`
 	HasDraft              bool   `json:"has_draft"`
-	LatestDraftVersion    int    `json:"latest_draft_version,omitempty"`
 	LatestDeployedVersion int    `json:"latest_deployed_version,omitempty"`
 	Drifted               bool   `json:"drifted"`
 }

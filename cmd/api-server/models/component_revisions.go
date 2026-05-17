@@ -39,8 +39,15 @@ type ComponentRevision struct {
 	CreatedAt     time.Time               `bson:"createdAt" json:"created_at"`
 }
 
-// EnsureComponentRevisionIndexes creates the unique and lookup indexes for
-// the component_revisions collection. Safe to call repeatedly.
+// EnsureComponentRevisionIndexes creates the indexes for the
+// component_revisions collection. Safe to call repeatedly.
+//
+// Deployed revisions and drafts use SEPARATE version sequences:
+//   - deployed history is a dense, append-only 1,2,3… trail; the unique
+//     index is PARTIAL (status=deployed) so it never sees draft rows
+//   - a draft is "the pending edit", not a numbered version: it carries
+//     version 0 and there is AT MOST ONE per (componentID, environmentID),
+//     enforced by a partial unique index on the pair filtered to status=draft
 func EnsureComponentRevisionIndexes(ctx context.Context, db *database.MongoDB) error {
 	coll := db.Client.Database(db.DBName).Collection(ComponentRevisionCollection)
 	_, err := coll.Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -50,7 +57,20 @@ func EnsureComponentRevisionIndexes(ctx context.Context, db *database.MongoDB) e
 				{Key: "environmentID", Value: 1},
 				{Key: "version", Value: 1},
 			},
-			Options: options.Index().SetUnique(true).SetName("componentID_environmentID_version"),
+			Options: options.Index().
+				SetUnique(true).
+				SetName("componentID_environmentID_deployedVersion").
+				SetPartialFilterExpression(bson.M{"status": RevisionStatusDeployed}),
+		},
+		{
+			Keys: bson.D{
+				{Key: "componentID", Value: 1},
+				{Key: "environmentID", Value: 1},
+			},
+			Options: options.Index().
+				SetUnique(true).
+				SetName("componentID_environmentID_singleDraft").
+				SetPartialFilterExpression(bson.M{"status": RevisionStatusDraft}),
 		},
 		{
 			Keys: bson.D{
@@ -78,13 +98,17 @@ func EnsureComponentIndexes(ctx context.Context, db *database.MongoDB) error {
 	return err
 }
 
-func nextVersion(ctx context.Context, db *database.MongoDB, componentID primitive.ObjectID, environmentID string) (int, error) {
+// nextDeployedVersion returns max(version)+1 over DEPLOYED rows only, so the
+// deployed history is a dense 1,2,3… trail unaffected by drafts (which carry
+// version 0 and are not part of this sequence).
+func nextDeployedVersion(ctx context.Context, db *database.MongoDB, componentID primitive.ObjectID, environmentID string) (int, error) {
 	coll := db.Client.Database(db.DBName).Collection(ComponentRevisionCollection)
 	opts := options.FindOne().SetSort(bson.D{{Key: "version", Value: -1}})
 	var latest ComponentRevision
 	err := coll.FindOne(ctx, bson.M{
 		"componentID":   componentID,
 		"environmentID": environmentID,
+		"status":        RevisionStatusDeployed,
 	}, opts).Decode(&latest)
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		return 1, nil
@@ -95,17 +119,74 @@ func nextVersion(ctx context.Context, db *database.MongoDB, componentID primitiv
 	return latest.Version + 1, nil
 }
 
-// CreateDraft inserts a new draft revision at the next version for
-// (componentID, environmentID). Returns conureerrors.ErrInvalidRequest when a
-// non-draft status is passed.
-func (r *ComponentRevision) CreateDraft(ctx context.Context, db *database.MongoDB) error {
+// UpsertDraft makes r the single pending draft for (componentID,
+// environmentID): if a draft already exists it is updated in place with r's
+// values and comment; otherwise a new draft is inserted. A draft is "the
+// pending edit", not a numbered version — it always has version 0 and there
+// is never more than one per pair. On return r reflects the persisted row
+// (ID, CreatedAt) so callers can echo it back.
+func (r *ComponentRevision) UpsertDraft(ctx context.Context, db *database.MongoDB) error {
 	if r.Status == "" {
 		r.Status = RevisionStatusDraft
 	}
 	if r.Status != RevisionStatusDraft {
 		return conureerrors.ErrInvalidRequest
 	}
-	version, err := nextVersion(ctx, db, r.ComponentID, r.EnvironmentID)
+	if r.Values == nil {
+		r.Values = map[string]interface{}{}
+	}
+	coll := db.Client.Database(db.DBName).Collection(ComponentRevisionCollection)
+
+	existing, err := LatestDraft(ctx, db, r.ComponentID, r.EnvironmentID)
+	if err != nil && !errors.Is(err, conureerrors.ErrObjectNotFound) {
+		return err
+	}
+	if existing != nil {
+		res, err := coll.UpdateOne(ctx,
+			bson.M{"_id": existing.ID, "status": RevisionStatusDraft},
+			bson.M{"$set": bson.M{"values": r.Values, "comment": r.Comment}},
+		)
+		if err != nil {
+			return err
+		}
+		if res.MatchedCount == 0 {
+			return conureerrors.ErrObjectNotFound
+		}
+		r.ID = existing.ID
+		r.Version = 0
+		r.CreatedAt = existing.CreatedAt
+		return nil
+	}
+
+	r.Version = 0
+	r.CreatedAt = time.Now()
+	if r.ID.IsZero() {
+		r.ID = primitive.NewObjectID()
+	}
+	_, err = coll.InsertOne(ctx, r)
+	if err != nil {
+		var we mongo.WriteException
+		if errors.As(err, &we) && len(we.WriteErrors) > 0 && we.WriteErrors[0].Code == 11000 {
+			// Lost a race to a concurrent UpsertDraft — the single-draft
+			// partial unique index fired. Surface as already-exists; the
+			// caller's retry will take the update branch.
+			return conureerrors.ErrObjectAlreadyExists
+		}
+		return err
+	}
+	return nil
+}
+
+// CreateDeployed inserts a new deployed revision at the next dense deployed
+// version (drafts do not consume numbers). Used by every deploy path plus the
+// migration / auto-import flows where the revision is born deployed.
+func (r *ComponentRevision) CreateDeployed(ctx context.Context, db *database.MongoDB) error {
+	r.Status = RevisionStatusDeployed
+	if r.DeployedAt == nil {
+		now := time.Now()
+		r.DeployedAt = &now
+	}
+	version, err := nextDeployedVersion(ctx, db, r.ComponentID, r.EnvironmentID)
 	if err != nil {
 		return err
 	}
@@ -129,37 +210,23 @@ func (r *ComponentRevision) CreateDraft(ctx context.Context, db *database.MongoD
 	return nil
 }
 
-// CreateDeployed inserts a new deployed revision at the next version. Used by
-// the migration / auto-import paths and DeployRevisionByID rollback logic
-// where the new revision is born deployed.
-func (r *ComponentRevision) CreateDeployed(ctx context.Context, db *database.MongoDB) error {
-	r.Status = RevisionStatusDeployed
-	if r.DeployedAt == nil {
-		now := time.Now()
-		r.DeployedAt = &now
-	}
-	version, err := nextVersion(ctx, db, r.ComponentID, r.EnvironmentID)
-	if err != nil {
-		return err
-	}
-	r.Version = version
-	r.CreatedAt = time.Now()
-	if r.ID.IsZero() {
-		r.ID = primitive.NewObjectID()
-	}
-	if r.Values == nil {
-		r.Values = map[string]interface{}{}
-	}
+// SupersedeDrafts removes every draft revision for (componentID,
+// environmentID). Called after any successful deploy/build: a deploy is the
+// new truth for the pair, so all pending drafts are stale by definition.
+// This is the single rule that keeps the version trail clean — deployed
+// history is always fresh immutable rows, drafts never linger or get promoted
+// into history. Returns the number of drafts removed; zero is not an error.
+func SupersedeDrafts(ctx context.Context, db *database.MongoDB, componentID primitive.ObjectID, environmentID string) (int64, error) {
 	coll := db.Client.Database(db.DBName).Collection(ComponentRevisionCollection)
-	_, err = coll.InsertOne(ctx, r)
+	res, err := coll.DeleteMany(ctx, bson.M{
+		"componentID":   componentID,
+		"environmentID": environmentID,
+		"status":        RevisionStatusDraft,
+	})
 	if err != nil {
-		var we mongo.WriteException
-		if errors.As(err, &we) && len(we.WriteErrors) > 0 && we.WriteErrors[0].Code == 11000 {
-			return conureerrors.ErrObjectAlreadyExists
-		}
-		return err
+		return 0, err
 	}
-	return nil
+	return res.DeletedCount, nil
 }
 
 // UpdateDraft replaces values and comment on an existing draft revision.
@@ -181,26 +248,6 @@ func (r *ComponentRevision) UpdateDraft(ctx context.Context, db *database.MongoD
 	}
 	r.Values = values
 	r.Comment = comment
-	return nil
-}
-
-// MarkDeployed flips a draft revision to deployed and stamps DeployedAt.
-// Rejects revisions that are already deployed.
-func (r *ComponentRevision) MarkDeployed(ctx context.Context, db *database.MongoDB) error {
-	now := time.Now()
-	coll := db.Client.Database(db.DBName).Collection(ComponentRevisionCollection)
-	res, err := coll.UpdateOne(ctx,
-		bson.M{"_id": r.ID, "status": RevisionStatusDraft},
-		bson.M{"$set": bson.M{"status": RevisionStatusDeployed, "deployedAt": now}},
-	)
-	if err != nil {
-		return err
-	}
-	if res.MatchedCount == 0 {
-		return conureerrors.ErrObjectNotFound
-	}
-	r.Status = RevisionStatusDeployed
-	r.DeployedAt = &now
 	return nil
 }
 
@@ -283,21 +330,6 @@ func EnvironmentsWithRevisions(ctx context.Context, db *database.MongoDB, compon
 		}
 	}
 	return envs, nil
-}
-
-// DeleteDraftsForPair removes all draft revisions for (componentID, environmentID).
-// Used by the uninstall path. Deployed revisions are preserved as history.
-func DeleteDraftsForPair(ctx context.Context, db *database.MongoDB, componentID primitive.ObjectID, environmentID string) (int64, error) {
-	coll := db.Client.Database(db.DBName).Collection(ComponentRevisionCollection)
-	res, err := coll.DeleteMany(ctx, bson.M{
-		"componentID":   componentID,
-		"environmentID": environmentID,
-		"status":        RevisionStatusDraft,
-	})
-	if err != nil {
-		return 0, err
-	}
-	return res.DeletedCount, nil
 }
 
 // DeleteAllRevisionsForComponent removes every revision (draft and deployed) for
