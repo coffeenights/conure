@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -168,21 +169,24 @@ func runDeploy(cmd *cobra.Command, _ []string) error {
 
 	switch resolvedLocation {
 	case "local":
-		// Railpack-as-local is allowed. Dockerfile-as-local uses buildx.
-		// Both produce a pushed image at imageRef.
+		// Both tools ultimately shell out to `docker buildx build` to
+		// produce and push the image at imageRef. Railpack does not push
+		// itself (the `railpack build` CLI has no --push/--tag); instead
+		// `railpack prepare` emits a plan that the railpack BuildKit
+		// frontend consumes via buildx — same buildx push path as the
+		// dockerfile tool. So both need Docker + buildx; railpack
+		// additionally needs the `railpack` CLI to generate the plan.
 		if buildTool == "railpack" && !commandExists("railpack") {
 			return fmt.Errorf("--build-tool=railpack requires the `railpack` CLI on PATH; install from https://railpack.com or use --build-tool=dockerfile")
 		}
-		if buildTool == "dockerfile" {
-			if !commandExists("docker") {
-				return fmt.Errorf("--build-tool=dockerfile requires Docker on PATH")
-			}
-			// runLocalBuild always invokes `docker buildx build`, so the
-			// plugin must be present even on same-arch hosts. Surface this
-			// up front instead of letting docker emit a cryptic error.
-			if !hasBuildx() {
-				return fmt.Errorf("--build-tool=dockerfile (local) requires the Docker buildx plugin; install it (https://docs.docker.com/build/buildx/install/) or use --build-location=remote")
-			}
+		if !commandExists("docker") {
+			return fmt.Errorf("--build-tool=%s (local) requires Docker on PATH; install Docker or use --build-location=remote", buildTool)
+		}
+		// runLocalBuild always invokes `docker buildx build`, so the
+		// plugin must be present even on same-arch hosts. Surface this
+		// up front instead of letting docker emit a cryptic error.
+		if !hasBuildx() {
+			return fmt.Errorf("--build-tool=%s (local) requires the Docker buildx plugin; install it (https://docs.docker.com/build/buildx/install/) or use --build-location=remote", buildTool)
 		}
 		if err := runLocalBuild(cmd, buildTool, ctxDir, imageRef, platform); err != nil {
 			return err
@@ -307,21 +311,62 @@ func hasBuildx() bool {
 	return strings.Contains(strings.ToLower(string(out)), "buildx")
 }
 
-// runLocalBuild shells out to the chosen builder. Output is streamed to
-// stdout/stderr so the user sees the build progress in real time.
+// railpackFrontendImage is the BuildKit gateway frontend Railpack ships.
+// It must match the server-side remote-build frontend (see
+// railpackFrontendArgs in cmd/api-server/applications/builds.go) so local
+// and remote railpack builds resolve the same builder.
+const railpackFrontendImage = "ghcr.io/railwayapp/railpack-frontend:latest"
+
+// runLocalBuild shells out to the chosen builder, producing and pushing the
+// image at imageRef. Output is streamed to stdout/stderr so the user sees
+// build progress in real time.
+//
+// dockerfile builds with `docker buildx build` directly. railpack does not
+// push itself — the `railpack build` CLI only loads into the local image
+// store and has no --push/--tag. The supported build-and-push path is
+// `railpack prepare` to emit a plan, then the same `docker buildx build
+// --push` using Railpack's BuildKit gateway frontend. From the user's side
+// this is still a single `conure deploy`; the two steps are internal.
 func runLocalBuild(cmd *cobra.Command, tool, ctxDir, imageRef, platform string) error {
-	var args []string
-	var bin string
 	switch tool {
 	case "dockerfile":
-		bin = "docker"
-		args = []string{"buildx", "build", "--platform", platform, "--push", "-t", imageRef, ctxDir}
+		args := []string{"buildx", "build", "--platform", platform, "--push", "-t", imageRef, ctxDir}
+		return streamCmd(cmd, "docker", args...)
 	case "railpack":
-		bin = "railpack"
-		args = []string{"build", ctxDir, "--push", "--tag", imageRef, "--platform", platform}
+		// 1. Generate the build plan railpack's frontend consumes. Keep
+		//    the plan next to a temp dir so we don't litter the context.
+		planDir, err := os.MkdirTemp("", "conure-railpack-")
+		if err != nil {
+			return fmt.Errorf("local build failed: cannot create temp dir for railpack plan: %w", err)
+		}
+		defer os.RemoveAll(planDir)
+		planPath := filepath.Join(planDir, "railpack-plan.json")
+		infoPath := filepath.Join(planDir, "railpack-info.json")
+		if err := streamCmd(cmd, "railpack", "prepare", ctxDir,
+			"--plan-out", planPath, "--info-out", infoPath); err != nil {
+			return err
+		}
+		// 2. Build & push via buildx using the railpack frontend. This is
+		//    the same buildx push path as the dockerfile tool, only with
+		//    the plan as the "Dockerfile" and the railpack frontend syntax.
+		args := []string{
+			"buildx", "build",
+			"--build-arg", "BUILDKIT_SYNTAX=" + railpackFrontendImage,
+			"-f", planPath,
+			"--platform", platform,
+			"--push", "-t", imageRef,
+			ctxDir,
+		}
+		return streamCmd(cmd, "docker", args...)
 	default:
 		return fmt.Errorf("unknown build tool %q", tool)
 	}
+}
+
+// streamCmd runs bin with args, streaming combined output to the user's
+// terminal so build progress is visible live. Errors are wrapped so the
+// caller can surface a single "local build failed" message.
+func streamCmd(cmd *cobra.Command, bin string, args ...string) error {
 	ui.Info("Running: %s %s\n", bin, strings.Join(args, " "))
 	c := exec.CommandContext(cmd.Context(), bin, args...)
 	c.Stdout = os.Stdout
@@ -466,7 +511,11 @@ func decideDeployAction(spec componentSourceSpec, flagImageRef, componentName st
 		if !spec.Buildable {
 			return 0, "", fmt.Errorf("component type %q is not buildable, but --image-ref was given; remove --image-ref to promote the latest draft, or use a buildable component definition", componentName)
 		}
-		return deployActionBuild, flagImageRef, nil
+		// buildx/railpack default an untagged ref to :latest when pushing,
+		// but the server requires a fully-qualified repo:tag and 400s on a
+		// bare ref. Normalize here so the image we build, push, and record
+		// are the same string. Done once, before build and TriggerBuild.
+		return deployActionBuild, normalizeImageRef(flagImageRef), nil
 	}
 	if !spec.Buildable {
 		return deployActionPromote, "", nil
@@ -480,6 +529,20 @@ func decideDeployAction(spec componentSourceSpec, flagImageRef, componentName st
 		return 0, "", errors.New("component spec does not set the image (image.repository + image.tag field roles) and no --image-ref was given; cannot build without a target image")
 	}
 	return deployActionBuild, imageRef, nil
+}
+
+// normalizeImageRef appends :latest when ref carries no tag, matching what
+// buildx/railpack push by default. "Has a tag" means a ':' after the last
+// '/' — the same rule the server uses (splitImageRef in builds.go), so the
+// CLI and server agree on whether a ref is fully qualified. A ':' in a
+// registry host:port (before the first '/') is not a tag and is preserved.
+func normalizeImageRef(ref string) string {
+	slash := strings.LastIndex(ref, "/")
+	colon := strings.LastIndex(ref, ":")
+	if colon > slash {
+		return ref // already tagged (or :digest-style ref)
+	}
+	return ref + ":latest"
 }
 
 // ImageRef returns the spec's image as `ociRepository:tag`, or "" when
