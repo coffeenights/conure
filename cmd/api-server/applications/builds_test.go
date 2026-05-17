@@ -2,6 +2,7 @@ package applications
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/coffeenights/conure/cmd/api-server/models"
@@ -457,6 +458,60 @@ func TestShellQuote(t *testing.T) {
 	for in, want := range cases {
 		if got := shellQuote(in); got != want {
 			t.Errorf("shellQuote(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestBuildContainerStarted(t *testing.T) {
+	mk := func(name string, state corev1.ContainerState) corev1.Pod {
+		return corev1.Pod{Status: corev1.PodStatus{
+			ContainerStatuses: []corev1.ContainerStatus{{Name: name, State: state}},
+		}}
+	}
+	waiting := corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "PodInitializing"}}
+	running := corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}
+	terminated := corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{}}
+
+	cases := []struct {
+		name string
+		pod  corev1.Pod
+		want bool
+	}{
+		{"build waiting", mk("build", waiting), false},
+		{"build running", mk("build", running), true},
+		{"build terminated", mk("build", terminated), true},
+		{"no statuses", corev1.Pod{}, false},
+		{"only non-build container", mk("git-clone", running), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := tc.pod
+			if got := buildContainerStarted(&pod); got != tc.want {
+				t.Errorf("buildContainerStarted() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsContainerWaitingErr(t *testing.T) {
+	waiting := []error{
+		errors.New(`container "build" in pod "build-x-y" is waiting to start: PodInitializing`),
+		errors.New(`container "build" in pod "build-x-y" is waiting to start: ContainerCreating`),
+		errors.New("some wrapper: PodInitializing"),
+	}
+	for _, e := range waiting {
+		if !isContainerWaitingErr(e) {
+			t.Errorf("isContainerWaitingErr(%q) = false, want true", e)
+		}
+	}
+	notWaiting := []error{
+		nil,
+		errors.New("connection refused"),
+		errors.New("pods \"build-x\" not found"),
+	}
+	for _, e := range notWaiting {
+		if isContainerWaitingErr(e) {
+			t.Errorf("isContainerWaitingErr(%v) = true, want false", e)
 		}
 	}
 }

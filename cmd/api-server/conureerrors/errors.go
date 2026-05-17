@@ -87,6 +87,11 @@ var (
 	// ErrUnsupportedComponentEngine is returned when the request pins an
 	// engine that no ComponentDefinition implements for the requested type.
 	ErrUnsupportedComponentEngine = &ConureError{Code: "4007", Message: "unsupported_component_engine", StatusCode: http.StatusBadRequest}
+	// ErrBuildLogsNotReady is returned when a build pod exists but its
+	// `build` container has not started yet (init containers still running,
+	// pod PodInitializing). 425 Too Early signals the client to retry —
+	// the CLI's tailRemoteBuild loop polls on this until logs are available.
+	ErrBuildLogsNotReady = &ConureError{Code: "4008", Message: "build_logs_not_ready", StatusCode: http.StatusTooEarly}
 )
 
 func AbortWithError(c *gin.Context, err error) {

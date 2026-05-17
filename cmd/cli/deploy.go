@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -316,15 +317,44 @@ func tailRemoteBuild(cmd *cobra.Command, lc *linkedCtx, buildID string) error {
 	deadline := time.Now().Add(30 * time.Second)
 	for !logsStarted && time.Now().Before(deadline) {
 		body, err := lc.Client.StreamBuildLogs(ctx, lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, buildID, true)
-		if err == nil {
-			go func() {
-				defer body.Close()
-				_, _ = io.Copy(os.Stdout, body)
-			}()
-			logsStarted = true
-			break
+		if err != nil {
+			time.Sleep(2 * time.Second)
+			continue
 		}
-		time.Sleep(2 * time.Second)
+		// Defensive backstop: the server should signal "not ready" with a
+		// non-2xx (handled by the err branch above), but a regression that
+		// returns 200 with an error body would otherwise be indistinguishable
+		// from real logs. Peek the first chunk; if it's the not-started
+		// sentinel, treat it as retryable instead of streaming one error
+		// line and giving up. A single Read (not io.ReadFull) returns as
+		// soon as any data is available, so this never withholds a slow
+		// build's early output; the server writes the sentinel in one
+		// Fprintf, well within the first chunk.
+		head := make([]byte, 512)
+		n, rerr := body.Read(head)
+		head = head[:n]
+		if logsNotReadySentinel(head) {
+			body.Close()
+			time.Sleep(2 * time.Second)
+			continue
+		}
+		first := head
+		stream := body
+		go func() {
+			defer stream.Close()
+			if len(first) > 0 {
+				_, _ = os.Stdout.Write(first)
+			}
+			// rerr is the error from the peek Read: io.EOF means the body
+			// was fully consumed by that one Read; anything else non-nil
+			// means the stream is already broken. Only keep copying if the
+			// stream is still healthy.
+			if rerr == nil {
+				_, _ = io.Copy(os.Stdout, stream)
+			}
+		}()
+		logsStarted = true
+		break
 	}
 
 	// Poll status until terminal. The log stream closes once the pod
@@ -353,6 +383,16 @@ func tailRemoteBuild(cmd *cobra.Command, lc *linkedCtx, buildID string) error {
 		case <-time.After(3 * time.Second):
 		}
 	}
+}
+
+// logsNotReadySentinel reports whether a streamed log chunk is actually the
+// server's "container not started yet" error written into a 200 body. This
+// is a backstop for a server regression — the current server returns 425 for
+// this case (handled by the HTTP error path), but matching the sentinel
+// keeps the retry loop correct if that ever changes. Mirrors the string in
+// cmd/api-server/applications/builds.go.
+func logsNotReadySentinel(chunk []byte) bool {
+	return bytes.Contains(chunk, []byte("[error] opening log stream"))
 }
 
 // componentSourceSpec carries the build-related fields the CLI resolves

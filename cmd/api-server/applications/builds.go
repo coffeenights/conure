@@ -258,11 +258,16 @@ func (a *ApiHandler) StreamBuildLogs(c *gin.Context) {
 
 	pod := podList.Items[0]
 
-	c.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	c.Writer.Header().Set("Cache-Control", "no-cache")
-	c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
-	c.Writer.WriteHeader(http.StatusOK)
-	c.Writer.Flush()
+	// The `build` container only starts once the init containers (git
+	// clone, etc.) finish. While the pod is PodInitializing, the Kubernetes
+	// API rejects a log request for it with "container ... is waiting to
+	// start: PodInitializing". We must detect this *before* committing a
+	// status code: once 200 is written we can no longer signal "retry", and
+	// the client's polling loop would treat the error body as success.
+	if !buildContainerStarted(&pod) {
+		conureerrors.AbortWithError(c, conureerrors.ErrBuildLogsNotReady)
+		return
+	}
 
 	follow := boolQuery(c, "follow")
 	opts := corev1.PodLogOptions{
@@ -272,10 +277,26 @@ func (a *ApiHandler) StreamBuildLogs(c *gin.Context) {
 	req := clientset.K8s.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, &opts)
 	stream, err := req.Stream(c.Request.Context())
 	if err != nil {
-		fmt.Fprintf(c.Writer, "[error] opening log stream: %v\n", err)
+		// Race: the container state read above passed but the kubelet
+		// hasn't surfaced logs yet. Still recoverable — the status code
+		// is uncommitted, so return a retryable error rather than a 200
+		// with an error body the client can't distinguish from success.
+		if isContainerWaitingErr(err) {
+			conureerrors.AbortWithError(c, conureerrors.ErrBuildLogsNotReady)
+			return
+		}
+		conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
 		return
 	}
 	defer stream.Close()
+
+	// Stream is open — only now is it safe to commit 200. From here on any
+	// failure is mid-stream and surfaces as a closed connection.
+	c.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
+	c.Writer.WriteHeader(http.StatusOK)
+	c.Writer.Flush()
 	buf := make([]byte, 4096)
 	for {
 		n, rerr := stream.Read(buf)
@@ -289,6 +310,37 @@ func (a *ApiHandler) StreamBuildLogs(c *gin.Context) {
 			return
 		}
 	}
+}
+
+// buildContainerStarted reports whether the pod's `build` container has
+// progressed past Waiting — i.e. it is Running or has Terminated and
+// therefore has logs to stream. A pod that is still PodInitializing has the
+// build container in Waiting (reason ContainerCreating/PodInitializing), so
+// this returns false and the caller can signal a retry.
+func buildContainerStarted(pod *corev1.Pod) bool {
+	for _, cs := range pod.Status.ContainerStatuses {
+		if cs.Name != "build" {
+			continue
+		}
+		// Running or Terminated both have retrievable logs. Only Waiting
+		// (the zero-progress state) means "not yet".
+		return cs.State.Waiting == nil
+	}
+	return false
+}
+
+// isContainerWaitingErr matches the Kubernetes API error returned when logs
+// are requested for a container that hasn't started. The message is stable
+// across kubelet versions: `... is waiting to start: PodInitializing` (or
+// ContainerCreating). Used as a race backstop after the status check passes.
+func isContainerWaitingErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "is waiting to start") ||
+		strings.Contains(msg, "ContainerCreating") ||
+		strings.Contains(msg, "PodInitializing")
 }
 
 // validate enforces the shape rules the API can't express via binding tags.
