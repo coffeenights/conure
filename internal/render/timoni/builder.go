@@ -25,7 +25,11 @@ func NewBuilder(cacheDir string) *Builder {
 // the caller (handler) before this call — see Builder.buildValues for the
 // helper exported below.
 func (b *Builder) Build(ctx context.Context, def *conurev1alpha1.ComponentDefinition, comp *conurev1alpha1.Component, creds string) (render.Engine, error) {
-	values, err := timoniValues(comp)
+	// timoniValues strips the conure-internal credential field roles (git/image
+	// credentialRef) the API build path consumes — the rendering module's
+	// closed #config has no schema for them, so leaving them in fails
+	// unification with "field not allowed". See stripCredentialRoles.
+	values, err := timoniValues(comp, def.Spec.FieldRoles)
 	if err != nil {
 		return nil, err
 	}

@@ -6,12 +6,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 
+	cueerrors "cuelang.org/go/cue/errors"
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/internal/controller/core/common"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
@@ -110,7 +112,11 @@ func (c *ComponentHandler) renderComponent() error {
 
 	sets, err := c.engine.Render(c.Ctx)
 	if err != nil {
-		c.Logger.Error(err, "failed to render apply sets")
+		// CUE's error.Error() truncates to the first failure plus
+		// "(and N more errors)". When the render error is (or wraps) a
+		// cue/errors error, log the full expanded list so schema
+		// mismatches against the module's #config are debuggable.
+		c.Logger.Error(err, "failed to render apply sets", "cueDetails", expandCUEError(err))
 		return err
 	}
 
@@ -145,6 +151,21 @@ func (c *ComponentHandler) renderComponent() error {
 		return err
 	}
 	return nil
+}
+
+// expandCUEError returns the full, multi-line list of validation failures
+// when err is (or wraps, via %w) a cue/errors error. CUE's own Error()
+// collapses to the first failure plus "(and N more errors)", which hides
+// the rest of a closed-struct / field-not-allowed mismatch against the
+// module's #config. Returns "" when there is no CUE error in the chain so
+// the log key is simply absent for non-CUE failures.
+func expandCUEError(err error) string {
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		if ce, ok := e.(cueerrors.Error); ok {
+			return cueerrors.Details(ce, nil)
+		}
+	}
+	return ""
 }
 
 // lookupComponentDefinition finds the ComponentDefinition matching the
