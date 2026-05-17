@@ -185,3 +185,23 @@ func TestPickValues_NoRevisionsReturnsNil(t *testing.T) {
 		t.Errorf("expected nil for empty view, got %v", got)
 	}
 }
+
+func TestLogsNotReadySentinel(t *testing.T) {
+	cases := []struct {
+		name  string
+		chunk string
+		want  bool
+	}{
+		{"exact sentinel", "[error] opening log stream: container \"build\" is waiting to start: PodInitializing\n", true},
+		{"sentinel after some bytes", "noise\n[error] opening log stream: x", true},
+		{"real build log", "#16 1.549  + pyjwt==2.12.1\n", false},
+		{"empty", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := logsNotReadySentinel([]byte(tc.chunk)); got != tc.want {
+				t.Errorf("logsNotReadySentinel(%q) = %v, want %v", tc.chunk, got, tc.want)
+			}
+		})
+	}
+}

@@ -48,8 +48,8 @@ func runStatus(cmd *cobra.Command, _ []string) error {
 			fmt.Println()
 		}
 		if resp.LatestDraft != nil {
-			ui.HeaderLn("Latest draft")
-			fmt.Printf("  v%d  (%s)\n\n", resp.LatestDraft.Version, resp.LatestDraft.ID)
+			ui.HeaderLn("Pending draft")
+			fmt.Printf("  (%s)\n\n", resp.LatestDraft.ID)
 		}
 
 		ui.HeaderLn("Health")

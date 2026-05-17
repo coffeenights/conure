@@ -198,7 +198,13 @@ func runRevisionList(cmd *cobra.Command, _ []string) error {
 			if comment == "" {
 				comment = "-"
 			}
-			rows[i] = []string{fmt.Sprintf("v%d", r.Version), r.Status, deployedAt, r.ID, comment}
+			// A draft is the pending edit, not a numbered version — it has
+			// no vN. Only deployed history is numbered.
+			version := "-"
+			if r.Status == "deployed" {
+				version = fmt.Sprintf("v%d", r.Version)
+			}
+			rows[i] = []string{version, r.Status, deployedAt, r.ID, comment}
 		}
 		ui.RenderTable([]string{"VERSION", "STATUS", "DEPLOYED AT", "REVISION ID", "COMMENT"}, rows, nil)
 		return nil
@@ -223,7 +229,7 @@ func runRevisionRollback(cmd *cobra.Command, args []string) error {
 	}
 	var revID string
 	for _, r := range revs {
-		if r.Version == version {
+		if r.Status == "deployed" && r.Version == version {
 			revID = r.ID
 			break
 		}
@@ -256,12 +262,12 @@ func runRevisionPromote(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("--from and --to must differ (got %q)", from)
 	}
 	sp := ui.StartSpinner(fmt.Sprintf("Promoting %s → %s…", from, to))
-	rev, err := lc.Client.Promote(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Link.ComponentID, from, to)
+	_, err = lc.Client.Promote(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Link.ComponentID, from, to)
 	ui.StopSpinner(sp)
 	if err != nil {
 		return err
 	}
-	ui.Success("✓ Created draft v%d in `%s` from latest deployed in `%s`\n", rev.Version, to, from)
+	ui.Success("✓ Created draft in `%s` from latest deployed in `%s`\n", to, from)
 	ui.InfoLn("  Run `conure deploy --env " + to + "` to apply.")
 	return nil
 }
@@ -324,17 +330,15 @@ func runRevisionDraftEdit(cmd *cobra.Command, _ []string) error {
 
 	comment, _ := cmd.Flags().GetString("comment")
 	if draftRevID != "" {
-		rev, err := lc.Client.UpdateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, draftRevID, newValues, comment)
-		if err != nil {
+		if _, err := lc.Client.UpdateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, draftRevID, newValues, comment); err != nil {
 			return err
 		}
-		ui.Success("✓ Updated draft v%d\n", rev.Version)
+		ui.Success("✓ Updated draft\n")
 	} else {
-		rev, err := lc.Client.CreateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, newValues, comment)
-		if err != nil {
+		if _, err := lc.Client.CreateRevision(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID, newValues, comment); err != nil {
 			return err
 		}
-		ui.Success("✓ Created draft v%d\n", rev.Version)
+		ui.Success("✓ Created draft\n")
 	}
 	ui.InfoLn("  Run `conure deploy` to apply.")
 	return nil
@@ -368,7 +372,11 @@ func runRevisionShow(cmd *cobra.Command, args []string) error {
 		if rev.DeployedAt != nil {
 			deployedAt = rev.DeployedAt.Format("2006-01-02 15:04:05")
 		}
-		ui.HeaderLn(fmt.Sprintf("v%d  [%s]  %s  (%s)", rev.Version, rev.Status, deployedAt, rev.ID))
+		label := "draft"
+		if rev.Status == "deployed" {
+			label = fmt.Sprintf("v%d", rev.Version)
+		}
+		ui.HeaderLn(fmt.Sprintf("%s  [%s]  %s  (%s)", label, rev.Status, deployedAt, rev.ID))
 		body, err := json.MarshalIndent(payload, "", "  ")
 		if err != nil {
 			return err
@@ -394,11 +402,11 @@ func pickRevision(cmd *cobra.Command, lc *linkedCtx, args []string) (*api.Compon
 			return nil, err
 		}
 		for i, r := range revs {
-			if r.Version == version {
+			if r.Status == "deployed" && r.Version == version {
 				return &revs[i], nil
 			}
 		}
-		return nil, fmt.Errorf("no revision v%d found in env %s", version, lc.Env)
+		return nil, fmt.Errorf("no deployed revision v%d found in env %s", version, lc.Env)
 	}
 
 	resp, err := lc.Client.GetComponentInEnv(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
@@ -435,7 +443,7 @@ func runRevisionCreate(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	return ui.Render(rev, func() error {
-		ui.Success("✓ Created draft v%d\n", rev.Version)
+		ui.Success("✓ Created draft\n")
 		ui.InfoLn("  Run `conure deploy` to apply.")
 		return nil
 	})

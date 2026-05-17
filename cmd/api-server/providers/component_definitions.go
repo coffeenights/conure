@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"log"
 
+	"go.mongodb.org/mongo-driver/bson/primitive"
+
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
-	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -32,11 +33,12 @@ func componentDefinitionName(orgID, compType, engine string) string {
 // is the source of truth; this is a per-cluster projection re-applied on every
 // deploy, which is also what makes multi-cluster work (each target cluster
 // converges to whatever Mongo currently says).
-func toCRD(orgID string, def *models.ComponentDefinition) *conurev1alpha1.ComponentDefinition {
-	var registryRef *corev1.LocalObjectReference
-	if def.RegistrySecretName != "" {
-		registryRef = &corev1.LocalObjectReference{Name: def.RegistrySecretName}
-	}
+//
+// registrySecretName is the CONCRETE Secret name the caller has already
+// resolved from the definition's logical CredentialRef (and projected into
+// the cluster). toCRD does no resolution itself — it is a pure projection —
+// so the controller only ever sees a concrete name.
+func toCRD(orgID string, def *models.ComponentDefinition, registrySecretName string) *conurev1alpha1.ComponentDefinition {
 	var helm *conurev1alpha1.HelmEngineSpec
 	if def.Helm != nil {
 		helm = &conurev1alpha1.HelmEngineSpec{
@@ -59,17 +61,17 @@ func toCRD(orgID string, def *models.ComponentDefinition) *conurev1alpha1.Compon
 			},
 		},
 		Spec: conurev1alpha1.ComponentDefinitionSpec{
-			ComponentType:     def.Type,
-			Description:       def.Description,
-			Engine:            conurev1alpha1.ComponentEngine(def.Engine),
-			OCIRepository:     def.OCIRepository,
-			OCITag:            def.OCITag,
-			OCIDigest:         def.OCIDigest,
-			OCIRegistry:       def.OCIRegistry,
-			RegistrySecretRef: registryRef,
-			Helm:              helm,
-			Buildable:         def.Buildable,
-			FieldRoles:        def.FieldRoles,
+			ComponentType:      def.Type,
+			Description:        def.Description,
+			Engine:             conurev1alpha1.ComponentEngine(def.Engine),
+			OCIRepository:      def.OCIRepository,
+			OCITag:             def.OCITag,
+			OCIDigest:          def.OCIDigest,
+			OCIRegistry:        def.OCIRegistry,
+			RegistrySecretName: registrySecretName,
+			Helm:               helm,
+			Buildable:          def.Buildable,
+			FieldRoles:         def.FieldRoles,
 		},
 	}
 }
@@ -85,12 +87,26 @@ func toCRD(orgID string, def *models.ComponentDefinition) *conurev1alpha1.Compon
 // the OrganizationIDLabel, matching the label the API already puts on the
 // Component — so the controller's label-scoped lookup pairs them up without
 // ever knowing what an organization is.
-func (p *ProviderDispatcherConure) EnsureComponentDefinition(ctx context.Context, def *models.ComponentDefinition) error {
+func (p *ProviderDispatcherConure) EnsureComponentDefinition(ctx context.Context, cr *CredentialResolver, def *models.ComponentDefinition) error {
 	clientset, err := k8sUtils.GetClientset()
 	if err != nil {
 		return err
 	}
-	desired := toCRD(p.OrganizationID, def)
+
+	// Resolve the definition's logical registry credential to a concrete
+	// projected Secret and stamp THAT name on the CRD. The controller only
+	// ever sees a concrete Secret name and never resolves credentials
+	// itself. Empty ref → empty name → anonymous pull (public registry).
+	orgID, err := primitive.ObjectIDFromHex(p.OrganizationID)
+	if err != nil {
+		return fmt.Errorf("invalid organization id %q: %w", p.OrganizationID, err)
+	}
+	registrySecretName, err := cr.projectRegistryCredential(ctx, clientset, orgID, def.CredentialRef)
+	if err != nil {
+		return err
+	}
+
+	desired := toCRD(p.OrganizationID, def, registrySecretName)
 	defs := clientset.Conure.CoreV1alpha1().ComponentDefinitions()
 
 	existing, err := defs.Get(ctx, desired.Name, metav1.GetOptions{})

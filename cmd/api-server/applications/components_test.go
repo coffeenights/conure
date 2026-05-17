@@ -134,8 +134,8 @@ func TestCreateComponent_AppWide(t *testing.T) {
 	if raw.Component == nil || raw.Component.Name != "test-component" {
 		t.Fatalf("unexpected component: %+v", raw.Component)
 	}
-	if raw.Revision == nil || raw.Revision.Status != models.RevisionStatusDraft || raw.Revision.Version != 1 {
-		t.Fatalf("expected v1 draft, got %+v", raw.Revision)
+	if raw.Revision == nil || raw.Revision.Status != models.RevisionStatusDraft || raw.Revision.Version != 0 {
+		t.Fatalf("expected unnumbered draft (version 0), got %+v", raw.Revision)
 	}
 	cleanupComponent(t, raw.Component)
 }
@@ -332,8 +332,8 @@ func TestGetComponent_AppWide(t *testing.T) {
 	if len(got.Environments) != 1 {
 		t.Fatalf("expected 1 env presence, got %d", len(got.Environments))
 	}
-	if !got.Environments[0].HasDraft || got.Environments[0].LatestDraftVersion != 1 {
-		t.Errorf("expected v1 draft presence, got %+v", got.Environments[0])
+	if !got.Environments[0].HasDraft {
+		t.Errorf("expected draft presence, got %+v", got.Environments[0])
 	}
 }
 
@@ -392,7 +392,7 @@ func TestPromoteComponent(t *testing.T) {
 	if err := json.Unmarshal(resp.Body.Bytes(), &rev); err != nil {
 		t.Fatal(err)
 	}
-	if rev.EnvironmentID != prod.ID || rev.Status != models.RevisionStatusDraft || rev.Version != 1 {
+	if rev.EnvironmentID != prod.ID || rev.Status != models.RevisionStatusDraft || rev.Version != 0 {
 		t.Fatalf("unexpected promoted rev: %+v", rev)
 	}
 	if got, ok := rev.Values["replicas"].(float64); !ok || got != 2 {
@@ -421,7 +421,7 @@ func TestPromoteComponent_NoDeployedSource(t *testing.T) {
 		ComponentID:   component.ID,
 		EnvironmentID: staging.ID,
 	}
-	if err := draft.CreateDraft(context.Background(), testConf.app.MongoDB); err != nil {
+	if err := draft.UpsertDraft(context.Background(), testConf.app.MongoDB); err != nil {
 		t.Fatal(err)
 	}
 
@@ -454,7 +454,7 @@ func TestCreateAndUpdateDraftRevision(t *testing.T) {
 	if err := json.Unmarshal(resp.Body.Bytes(), &rev); err != nil {
 		t.Fatal(err)
 	}
-	if rev.Version != 1 || rev.Status != models.RevisionStatusDraft {
+	if rev.Version != 0 || rev.Status != models.RevisionStatusDraft {
 		t.Fatalf("unexpected rev: %+v", rev)
 	}
 

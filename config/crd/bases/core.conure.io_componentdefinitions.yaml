@@ -120,23 +120,16 @@ spec:
                 type: string
               ociTag:
                 type: string
-              registrySecretRef:
+              registrySecretName:
                 description: |-
-                  RegistrySecretRef references a Secret of type kubernetes.io/dockerconfigjson
-                  in the controller's namespace, used to authenticate with the OCI registry
-                  when pulling the module artifact. Optional; omit for public registries.
-                properties:
-                  name:
-                    default: ""
-                    description: |-
-                      Name of the referent.
-                      This field is effectively required, but due to backwards compatibility is
-                      allowed to be empty. Instances of this type with an empty value here are
-                      almost certainly wrong.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                    type: string
-                type: object
-                x-kubernetes-map-type: atomic
+                  RegistrySecretName is the name of a kubernetes.io/dockerconfigjson
+                  Secret in the controller's namespace used to authenticate the OCI
+                  module pull. It is NOT user-authored: the API server resolves the
+                  org-scoped logical credential (models.ComponentDefinition.CredentialRef)
+                  to a concrete projected Secret and stamps that name here at deploy time.
+                  Empty means anonymous pull (public registry). The controller consumes
+                  this plain name and never resolves credentials itself.
+                type: string
               type:
                 type: string
             required:

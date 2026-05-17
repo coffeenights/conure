@@ -24,17 +24,17 @@ import (
 // catalog from any directory.
 
 var (
-	cdSetFile           string
-	cdSetEngine         string
-	cdSetDescription    string
-	cdSetOCIRepository  string
-	cdSetOCITag         string
-	cdSetOCIDigest      string
-	cdSetOCIRegistry    string
-	cdSetRegistrySecret string
-	cdSetBuildable      bool
-	cdSetIconURL        string
-	cdHideEngine        string
+	cdSetFile          string
+	cdSetEngine        string
+	cdSetDescription   string
+	cdSetOCIRepository string
+	cdSetOCITag        string
+	cdSetOCIDigest     string
+	cdSetOCIRegistry   string
+	cdSetCredentialRef string
+	cdSetBuildable     bool
+	cdSetIconURL       string
+	cdHideEngine       string
 )
 
 var componentDefCmd = &cobra.Command{
@@ -112,7 +112,7 @@ func init() {
 	componentDefSetCmd.Flags().StringVar(&cdSetOCITag, "oci-tag", "", "OCI tag")
 	componentDefSetCmd.Flags().StringVar(&cdSetOCIDigest, "oci-digest", "", "OCI digest (pins over tag)")
 	componentDefSetCmd.Flags().StringVar(&cdSetOCIRegistry, "oci-registry", "", "OCI registry host")
-	componentDefSetCmd.Flags().StringVar(&cdSetRegistrySecret, "registry-secret", "", "Name of a dockerconfigjson Secret in the controller namespace")
+	componentDefSetCmd.Flags().StringVar(&cdSetCredentialRef, "credential-ref", "", "Logical name of an org registry credential (conure credential set) used to pull a private OCI module")
 	componentDefSetCmd.Flags().BoolVar(&cdSetBuildable, "buildable", false, "Whether conure can build this component's image")
 	componentDefSetCmd.Flags().StringVar(&cdSetIconURL, "icon-url", "", "Icon URL surfaced in the UI")
 
@@ -217,8 +217,8 @@ func runComponentDefSet(cmd *cobra.Command, args []string) error {
 		if f.Changed("oci-registry") {
 			req.OCIRegistry = &cdSetOCIRegistry
 		}
-		if f.Changed("registry-secret") {
-			req.RegistrySecretName = &cdSetRegistrySecret
+		if f.Changed("credential-ref") {
+			req.CredentialRef = &cdSetCredentialRef
 		}
 		if f.Changed("buildable") {
 			req.Buildable = &cdSetBuildable
@@ -315,10 +315,7 @@ func componentDefRequestFromFile(path string) (api.ComponentDefinitionRequest, e
 	if crd.Spec.ComponentType == "" {
 		return api.ComponentDefinitionRequest{}, fmt.Errorf("%s has no spec.type", path)
 	}
-	registrySecret := ""
-	if crd.Spec.RegistrySecretRef != nil {
-		registrySecret = crd.Spec.RegistrySecretRef.Name
-	}
+	credentialRef := crd.Spec.RegistrySecretName
 	desc := crd.Spec.Description
 	ociRepo := crd.Spec.OCIRepository
 	ociTag := crd.Spec.OCITag
@@ -327,15 +324,15 @@ func componentDefRequestFromFile(path string) (api.ComponentDefinitionRequest, e
 	buildable := crd.Spec.Buildable
 	fieldRoles := crd.Spec.FieldRoles
 	return api.ComponentDefinitionRequest{
-		Type:               crd.Spec.ComponentType,
-		Engine:             string(crd.Spec.Engine),
-		Description:        &desc,
-		OCIRepository:      &ociRepo,
-		OCITag:             &ociTag,
-		OCIDigest:          &ociDigest,
-		OCIRegistry:        &ociRegistry,
-		RegistrySecretName: &registrySecret,
-		Buildable:          &buildable,
-		FieldRoles:         &fieldRoles,
+		Type:          crd.Spec.ComponentType,
+		Engine:        string(crd.Spec.Engine),
+		Description:   &desc,
+		OCIRepository: &ociRepo,
+		OCITag:        &ociTag,
+		OCIDigest:     &ociDigest,
+		OCIRegistry:   &ociRegistry,
+		CredentialRef: &credentialRef,
+		Buildable:     &buildable,
+		FieldRoles:    &fieldRoles,
 	}, nil
 }

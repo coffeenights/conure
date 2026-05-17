@@ -7,8 +7,8 @@ spec:
   engine: timoni
   description: "A web service component that deploys a container with network exposure"
   ociRepository: "ghcr.io/coffeenights/conure-templates/components/webservice"
-  ociTag: "0.2.1"
-  ociDigest: "sha256:ce53da1c24aa96b68f3c927c92e46eabd52b35d450358fd5111c01d2c9db8f41"
+  ociTag: "0.2.2"
+  ociDigest: "sha256:0e8565f702296856f567446706173646b4984663e7ea88d52742e941df700946"
   # conure can build this component's image. The per-component
   # source.sourceType discriminator ("git" -> build, "oci" -> deploy a
   # prebuilt image) decides whether a given instance actually builds.
@@ -26,3 +26,7 @@ spec:
     build.tool: "source.buildTool"
     build.location: "source.buildLocation"
     build.dockerfile: "source.dockerfilePath"
+    # Optional: logical names of org credentials (conure credential set).
+    # Absent on a component -> public/no-auth clone & push (unchanged).
+    git.credentialRef: "source.gitCredentialRef"
+    image.credentialRef: "source.imagePullSecrets"

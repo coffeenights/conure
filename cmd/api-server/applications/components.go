@@ -239,7 +239,7 @@ func (a *ApiHandler) CreateComponent(c *gin.Context) {
 		Values:        request.Values,
 		CreatedBy:     uID,
 	}
-	if err := rev.CreateDraft(c.Request.Context(), a.MongoDB); err != nil {
+	if err := rev.UpsertDraft(c.Request.Context(), a.MongoDB); err != nil {
 		log.Printf("Error creating draft revision: %v\n", err)
 		// Roll back identity to avoid orphan rows. The user will see the error
 		// and the slate is clean for a retry.
@@ -371,7 +371,7 @@ func (a *ApiHandler) PromoteComponent(c *gin.Context) {
 		Values:        source.Values,
 		CreatedBy:     uID,
 	}
-	if err := rev.CreateDraft(ctx, a.MongoDB); err != nil {
+	if err := rev.UpsertDraft(ctx, a.MongoDB); err != nil {
 		log.Printf("Error creating promoted draft: %v\n", err)
 		conureerrors.AbortWithError(c, err)
 		return
@@ -404,7 +404,6 @@ func buildPresenceForComponent(ctx context.Context, a *ApiHandler, component *mo
 		}
 		if draft != nil {
 			presence.HasDraft = true
-			presence.LatestDraftVersion = draft.Version
 		}
 
 		live, err := liveComponentAndAbsorb(ctx, a, component, &env)

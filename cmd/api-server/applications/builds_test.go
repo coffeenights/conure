@@ -2,11 +2,13 @@ package applications
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/internal/fieldroles"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	corev1 "k8s.io/api/core/v1"
 )
 
 func TestTriggerBuildRequest_Validate(t *testing.T) {
@@ -172,7 +174,7 @@ func TestMergeImageIntoValues_UndeclaredRoleErrors(t *testing.T) {
 	}
 }
 
-func TestBaseValuesForBuild_DraftIsReturnedForPromotion(t *testing.T) {
+func TestBaseValuesForBuild_PrefersDraftValues(t *testing.T) {
 	_, app, env := orgWithApp(t, "TestBaseValuesForBuild_Draft", "staging")
 
 	component := &models.Component{
@@ -185,28 +187,35 @@ func TestBaseValuesForBuild_DraftIsReturnedForPromotion(t *testing.T) {
 	}
 	cleanupComponent(t, component)
 
+	// A deployed baseline plus a newer draft: the build must layer the image
+	// onto the draft's values (the user's prepped non-image edits win).
+	deployed := &models.ComponentRevision{
+		ComponentID:   component.ID,
+		EnvironmentID: env.ID,
+		Values:        map[string]interface{}{"replicas": float64(1)},
+	}
+	if err := deployed.CreateDeployed(context.Background(), testConf.app.MongoDB); err != nil {
+		t.Fatal(err)
+	}
 	draft := &models.ComponentRevision{
 		ComponentID:   component.ID,
 		EnvironmentID: env.ID,
 		Values:        map[string]interface{}{"replicas": float64(3)},
 	}
-	if err := draft.CreateDraft(context.Background(), testConf.app.MongoDB); err != nil {
+	if err := draft.UpsertDraft(context.Background(), testConf.app.MongoDB); err != nil {
 		t.Fatal(err)
 	}
 
-	values, returnedDraft, err := baseValuesForBuild(context.Background(), testConf.app, component, env)
+	values, err := baseValuesForBuild(context.Background(), testConf.app, component, env)
 	if err != nil {
 		t.Fatalf("baseValuesForBuild err: %v", err)
 	}
-	if returnedDraft == nil || returnedDraft.ID != draft.ID {
-		t.Fatalf("expected draft to be returned for caller-side promotion, got %v", returnedDraft)
-	}
 	if got, ok := values["replicas"].(float64); !ok || got != 3 {
-		t.Errorf("draft values not copied: %+v", values)
+		t.Errorf("expected draft values to be preferred, got %+v", values)
 	}
 }
 
-func TestBaseValuesForBuild_DeployedFallback_NoDraftReturned(t *testing.T) {
+func TestBaseValuesForBuild_DeployedFallback(t *testing.T) {
 	_, app, env := orgWithApp(t, "TestBaseValuesForBuild_Deployed", "staging")
 
 	component := &models.Component{
@@ -228,12 +237,9 @@ func TestBaseValuesForBuild_DeployedFallback_NoDraftReturned(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	values, returnedDraft, err := baseValuesForBuild(context.Background(), testConf.app, component, env)
+	values, err := baseValuesForBuild(context.Background(), testConf.app, component, env)
 	if err != nil {
 		t.Fatalf("baseValuesForBuild err: %v", err)
-	}
-	if returnedDraft != nil {
-		t.Errorf("expected nil draft when only a deployed revision exists, got %v", returnedDraft)
 	}
 	if got, ok := values["replicas"].(float64); !ok || got != 5 {
 		t.Errorf("deployed values not copied: %+v", values)
@@ -268,7 +274,8 @@ func TestRenderBuildJob_LabelsAndStructure(t *testing.T) {
 	}
 	b.ID = primitive.NewObjectID()
 
-	job := renderBuildJob(b)
+	// Public path: no projected credentials.
+	job := renderBuildJob(b, "", "")
 	if job.Namespace != SystemNamespace {
 		t.Errorf("namespace: got %s want %s", job.Namespace, SystemNamespace)
 	}
@@ -301,6 +308,120 @@ func TestRenderBuildJob_LabelsAndStructure(t *testing.T) {
 		if !contains(script, want) {
 			t.Errorf("script missing %q: %s", want, script)
 		}
+	}
+
+	// Public path invariants: no registry-creds volume/mount, and the
+	// clone is a plain `git clone` via Args (no token rewrite, no Env).
+	if hasVolume(job.Spec.Template.Spec.Volumes, "registry-creds") {
+		t.Error("public build must not mount a registry-creds volume (no hardcoded fallback)")
+	}
+	for _, vm := range bc.VolumeMounts {
+		if vm.Name == "registry-creds" {
+			t.Error("public build container must not mount registry-creds")
+		}
+	}
+	if len(ic.Args) == 0 || ic.Args[0] != "clone" {
+		t.Errorf("public clone should use plain `clone` Args, got Args=%v Command=%v", ic.Args, ic.Command)
+	}
+	if len(ic.Env) != 0 {
+		t.Errorf("public clone must not inject git credential env, got %v", ic.Env)
+	}
+}
+
+func hasVolume(volumes []corev1.Volume, name string) bool {
+	for _, v := range volumes {
+		if v.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func TestRenderBuildJob_RegistryCredentialMountedWhenResolved(t *testing.T) {
+	b := &models.Build{
+		ComponentID: primitive.NewObjectID(), ApplicationID: primitive.NewObjectID(),
+		BuildLocation: models.BuildLocationRemote,
+		GitRepository: "https://github.com/org/repo", GitBranch: "main",
+		ImageRef: "ghcr.io/org/app:tag",
+	}
+	b.ID = primitive.NewObjectID()
+
+	job := renderBuildJob(b, "cred-org1-ghcr", "")
+	if !hasVolume(job.Spec.Template.Spec.Volumes, "registry-creds") {
+		t.Fatal("expected registry-creds volume when a registry Secret is resolved")
+	}
+	// The volume must reference the CONCRETE projected Secret name, not a
+	// hardcoded one.
+	for _, v := range job.Spec.Template.Spec.Volumes {
+		if v.Name == "registry-creds" {
+			if v.Secret == nil || v.Secret.SecretName != "cred-org1-ghcr" {
+				t.Fatalf("registry-creds must point at the projected Secret, got %+v", v.Secret)
+			}
+		}
+	}
+	bc := job.Spec.Template.Spec.Containers[0]
+	var mounted, hasDockerConfig bool
+	for _, vm := range bc.VolumeMounts {
+		if vm.Name == "registry-creds" && vm.MountPath == "/root/.docker" {
+			mounted = true
+		}
+	}
+	for _, e := range bc.Env {
+		if e.Name == "DOCKER_CONFIG" {
+			hasDockerConfig = true
+		}
+	}
+	if !mounted || !hasDockerConfig {
+		t.Fatalf("build container must mount the cred at /root/.docker with DOCKER_CONFIG set (mounted=%v env=%v)", mounted, hasDockerConfig)
+	}
+	// The git side was not requested → still a plain clone.
+	if ic := job.Spec.Template.Spec.InitContainers[0]; len(ic.Args) == 0 || ic.Args[0] != "clone" {
+		t.Errorf("git unaffected when only registry cred set; got Args=%v", ic.Args)
+	}
+}
+
+func TestRenderBuildJob_GitCredentialRewritesCloneViaSecretEnv(t *testing.T) {
+	b := &models.Build{
+		ComponentID: primitive.NewObjectID(), ApplicationID: primitive.NewObjectID(),
+		BuildLocation: models.BuildLocationRemote,
+		GitRepository: "https://github.com/org/private", GitBranch: "main",
+		ImageRef: "ghcr.io/org/app:tag",
+	}
+	b.ID = primitive.NewObjectID()
+
+	job := renderBuildJob(b, "", "cred-org1-gh")
+	ic := job.Spec.Template.Spec.InitContainers[0]
+
+	// Private clone is script-based, not Args-based.
+	if len(ic.Command) < 3 {
+		t.Fatalf("private clone should be an sh -c script, got Command=%v Args=%v", ic.Command, ic.Args)
+	}
+	script := ic.Command[2]
+	if !contains(script, "git clone") || !contains(script, "${GIT_USERNAME}:${GIT_TOKEN}@") {
+		t.Errorf("clone script must rewrite the URL with token auth, got: %s", script)
+	}
+	// Token/username come from the projected git Secret via secretKeyRef,
+	// never from plain values (so they don't leak into the Job spec).
+	var sawUser, sawToken bool
+	for _, e := range ic.Env {
+		if e.Name == "GIT_USERNAME" && e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil {
+			if e.ValueFrom.SecretKeyRef.Name != "cred-org1-gh" || e.ValueFrom.SecretKeyRef.Key != "username" {
+				t.Errorf("GIT_USERNAME secretKeyRef wrong: %+v", e.ValueFrom.SecretKeyRef)
+			}
+			sawUser = true
+		}
+		if e.Name == "GIT_TOKEN" && e.ValueFrom != nil && e.ValueFrom.SecretKeyRef != nil {
+			if e.ValueFrom.SecretKeyRef.Name != "cred-org1-gh" || e.ValueFrom.SecretKeyRef.Key != "token" {
+				t.Errorf("GIT_TOKEN secretKeyRef wrong: %+v", e.ValueFrom.SecretKeyRef)
+			}
+			sawToken = true
+		}
+		if e.Name == "GIT_TOKEN" && e.Value != "" {
+			t.Error("git token must not be a literal env value")
+		}
+	}
+	if !sawUser || !sawToken {
+		t.Fatalf("expected GIT_USERNAME and GIT_TOKEN from secretKeyRef (user=%v token=%v)", sawUser, sawToken)
 	}
 }
 
@@ -341,6 +462,60 @@ func TestShellQuote(t *testing.T) {
 	for in, want := range cases {
 		if got := shellQuote(in); got != want {
 			t.Errorf("shellQuote(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestBuildContainerStarted(t *testing.T) {
+	mk := func(name string, state corev1.ContainerState) corev1.Pod {
+		return corev1.Pod{Status: corev1.PodStatus{
+			ContainerStatuses: []corev1.ContainerStatus{{Name: name, State: state}},
+		}}
+	}
+	waiting := corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: "PodInitializing"}}
+	running := corev1.ContainerState{Running: &corev1.ContainerStateRunning{}}
+	terminated := corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{}}
+
+	cases := []struct {
+		name string
+		pod  corev1.Pod
+		want bool
+	}{
+		{"build waiting", mk("build", waiting), false},
+		{"build running", mk("build", running), true},
+		{"build terminated", mk("build", terminated), true},
+		{"no statuses", corev1.Pod{}, false},
+		{"only non-build container", mk("git-clone", running), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			pod := tc.pod
+			if got := buildContainerStarted(&pod); got != tc.want {
+				t.Errorf("buildContainerStarted() = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestIsContainerWaitingErr(t *testing.T) {
+	waiting := []error{
+		errors.New(`container "build" in pod "build-x-y" is waiting to start: PodInitializing`),
+		errors.New(`container "build" in pod "build-x-y" is waiting to start: ContainerCreating`),
+		errors.New("some wrapper: PodInitializing"),
+	}
+	for _, e := range waiting {
+		if !isContainerWaitingErr(e) {
+			t.Errorf("isContainerWaitingErr(%q) = false, want true", e)
+		}
+	}
+	notWaiting := []error{
+		nil,
+		errors.New("connection refused"),
+		errors.New("pods \"build-x\" not found"),
+	}
+	for _, e := range notWaiting {
+		if isContainerWaitingErr(e) {
+			t.Errorf("isContainerWaitingErr(%v) = true, want false", e)
 		}
 	}
 }

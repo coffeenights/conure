@@ -22,6 +22,11 @@ type ComponentDefinitionResponse struct {
 	IconURL       *string           `json:"icon_url"`
 	Buildable     bool              `json:"buildable"`
 	FieldRoles    map[string]string `json:"field_roles,omitempty"`
+	// CredentialRef is the logical name of the org registry credential used
+	// to pull this definition's private OCI module. It is a name, not
+	// material — safe to surface so the CLI can show which credential a
+	// definition expects.
+	CredentialRef string `json:"credential_ref,omitempty"`
 	// Source distinguishes a row inherited from the shipped defaults
 	// ("default") from one the org created or overrode ("organization"), so
 	// the UI can show which definitions are customizable vs. inherited.
@@ -46,16 +51,16 @@ type componentDefinitionRequest struct {
 	Type   string `json:"type" binding:"required"`
 	Engine string `json:"engine"`
 
-	Description        *string                  `json:"description"`
-	OCIRepository      *string                  `json:"oci_repository"`
-	OCITag             *string                  `json:"oci_tag"`
-	OCIDigest          *string                  `json:"oci_digest"`
-	OCIRegistry        *string                  `json:"oci_registry"`
-	RegistrySecretName *string                  `json:"registry_secret_name"`
-	Helm               *models.ComponentDefHelm `json:"helm"`
-	Buildable          *bool                    `json:"buildable"`
-	FieldRoles         *map[string]string       `json:"field_roles"`
-	IconURL            *string                  `json:"icon_url"`
+	Description   *string                  `json:"description"`
+	OCIRepository *string                  `json:"oci_repository"`
+	OCITag        *string                  `json:"oci_tag"`
+	OCIDigest     *string                  `json:"oci_digest"`
+	OCIRegistry   *string                  `json:"oci_registry"`
+	CredentialRef *string                  `json:"credential_ref"`
+	Helm          *models.ComponentDefHelm `json:"helm"`
+	Buildable     *bool                    `json:"buildable"`
+	FieldRoles    *map[string]string       `json:"field_roles"`
+	IconURL       *string                  `json:"icon_url"`
 }
 
 func toComponentDefinitionResponse(cd *models.ComponentDefinition) ComponentDefinitionResponse {
@@ -74,6 +79,7 @@ func toComponentDefinitionResponse(cd *models.ComponentDefinition) ComponentDefi
 		IconURL:       cd.IconURL,
 		Buildable:     cd.Buildable,
 		FieldRoles:    cd.FieldRoles,
+		CredentialRef: cd.CredentialRef,
 		Source:        source,
 	}
 }
@@ -294,8 +300,8 @@ func applyRequest(cd *models.ComponentDefinition, req *componentDefinitionReques
 	if req.OCIRegistry != nil {
 		cd.OCIRegistry = *req.OCIRegistry
 	}
-	if req.RegistrySecretName != nil {
-		cd.RegistrySecretName = *req.RegistrySecretName
+	if req.CredentialRef != nil {
+		cd.CredentialRef = *req.CredentialRef
 	}
 	if req.Helm != nil {
 		cd.Helm = req.Helm

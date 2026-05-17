@@ -108,9 +108,10 @@ func crdToModel(crd *conurev1alpha1.ComponentDefinition) *models.ComponentDefini
 		Buildable:     crd.Spec.Buildable,
 		FieldRoles:    crd.Spec.FieldRoles,
 	}
-	if crd.Spec.RegistrySecretRef != nil {
-		def.RegistrySecretName = crd.Spec.RegistrySecretRef.Name
-	}
+	// Shipped defaults target public registries, so this is normally empty.
+	// If a shipped YAML does set it, the value is treated as a logical
+	// credential name (resolved per-org at deploy time like any other).
+	def.CredentialRef = crd.Spec.RegistrySecretName
 	if crd.Spec.Helm != nil {
 		def.Helm = &models.ComponentDefHelm{
 			ReleaseName: crd.Spec.Helm.ReleaseName,

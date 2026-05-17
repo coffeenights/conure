@@ -10,7 +10,10 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 )
 
-func TestComponentRevision_AutoIncrementsVersion(t *testing.T) {
+// Deployed revisions form a dense 1,2,3… trail. Drafts carry version 0 and
+// do NOT consume a number, so interleaving an upserted draft must not
+// perturb the deployed sequence.
+func TestComponentRevision_DeployedVersionsAreDenseAndDraftFree(t *testing.T) {
 	db, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
@@ -19,23 +22,61 @@ func TestComponentRevision_AutoIncrementsVersion(t *testing.T) {
 
 	componentID := primitive.NewObjectID()
 	envID := "env-aaaa"
+	t.Cleanup(func() { _, _ = DeleteAllRevisionsForComponent(ctx, db, componentID) })
 
 	for i := 1; i <= 3; i++ {
-		rev := &ComponentRevision{
-			ComponentID:   componentID,
-			EnvironmentID: envID,
+		dep := &ComponentRevision{ComponentID: componentID, EnvironmentID: envID}
+		if err := dep.CreateDeployed(ctx, db); err != nil {
+			t.Fatalf("create deployed #%d: %v", i, err)
 		}
-		if err := rev.CreateDraft(ctx, db); err != nil {
-			t.Fatalf("create v%d: %v", i, err)
+		if dep.Version != i {
+			t.Errorf("expected deployed version %d, got %d", i, dep.Version)
 		}
-		if rev.Version != i {
-			t.Errorf("expected version %d, got %d", i, rev.Version)
+		// An interleaved draft must not advance the deployed counter.
+		dr := &ComponentRevision{ComponentID: componentID, EnvironmentID: envID}
+		if err := dr.UpsertDraft(ctx, db); err != nil {
+			t.Fatalf("upsert draft after deployed #%d: %v", i, err)
+		}
+		if dr.Version != 0 {
+			t.Errorf("draft must have version 0, got %d", dr.Version)
 		}
 	}
+}
 
-	t.Cleanup(func() {
-		_, _ = DeleteAllRevisionsForComponent(ctx, db, componentID)
-	})
+// UpsertDraft enforces at most one draft per (component, env): a second
+// upsert updates the same row in place rather than creating another.
+func TestComponentRevision_UpsertDraftIsSingle(t *testing.T) {
+	db, err := SetupDB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	componentID := primitive.NewObjectID()
+	envID := "env-aaab"
+	t.Cleanup(func() { _, _ = DeleteAllRevisionsForComponent(ctx, db, componentID) })
+
+	first := &ComponentRevision{ComponentID: componentID, EnvironmentID: envID, Values: map[string]interface{}{"n": float64(1)}}
+	if err := first.UpsertDraft(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	second := &ComponentRevision{ComponentID: componentID, EnvironmentID: envID, Values: map[string]interface{}{"n": float64(2)}, Comment: "edited"}
+	if err := second.UpsertDraft(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	if second.ID != first.ID {
+		t.Errorf("expected upsert to reuse the single draft row %v, got %v", first.ID, second.ID)
+	}
+
+	revs, err := ListRevisions(ctx, db, componentID, envID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(revs) != 1 {
+		t.Fatalf("expected exactly 1 draft row, got %d: %+v", len(revs), revs)
+	}
+	if got := revs[0].Values["n"]; got != float64(2) || revs[0].Comment != "edited" {
+		t.Errorf("draft not updated in place: %+v", revs[0])
+	}
 }
 
 func TestComponentRevision_LatestDraftAndDeployed(t *testing.T) {
@@ -53,8 +94,11 @@ func TestComponentRevision_LatestDraftAndDeployed(t *testing.T) {
 		t.Fatal(err)
 	}
 	draft := &ComponentRevision{ComponentID: componentID, EnvironmentID: envID}
-	if err := draft.CreateDraft(ctx, db); err != nil {
+	if err := draft.UpsertDraft(ctx, db); err != nil {
 		t.Fatal(err)
+	}
+	if draft.Version != 0 {
+		t.Errorf("draft must have version 0, got %d", draft.Version)
 	}
 
 	gotDraft, err := LatestDraft(ctx, db, componentID, envID)
@@ -73,7 +117,7 @@ func TestComponentRevision_LatestDraftAndDeployed(t *testing.T) {
 	}
 }
 
-func TestComponentRevision_MarkDeployedIsImmutable(t *testing.T) {
+func TestComponentRevision_DeployedHistoryIsImmutable(t *testing.T) {
 	db, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
@@ -83,20 +127,14 @@ func TestComponentRevision_MarkDeployedIsImmutable(t *testing.T) {
 	envID := "env-cccc"
 	t.Cleanup(func() { _, _ = DeleteAllRevisionsForComponent(ctx, db, componentID) })
 
+	// Deployed revisions are born deployed and never mutated in place — the
+	// deploy paths CreateDeployed a fresh row and SupersedeDrafts the rest.
 	rev := &ComponentRevision{ComponentID: componentID, EnvironmentID: envID}
-	if err := rev.CreateDraft(ctx, db); err != nil {
-		t.Fatal(err)
-	}
-	if err := rev.MarkDeployed(ctx, db); err != nil {
+	if err := rev.CreateDeployed(ctx, db); err != nil {
 		t.Fatal(err)
 	}
 	if rev.Status != RevisionStatusDeployed {
 		t.Fatalf("expected deployed, got %s", rev.Status)
-	}
-	// MarkDeployed twice must not succeed (it filters by status=draft).
-	err = rev.MarkDeployed(ctx, db)
-	if !errors.Is(err, conureerrors.ErrObjectNotFound) {
-		t.Errorf("expected ErrObjectNotFound on second MarkDeployed, got %v", err)
 	}
 	// UpdateDraft on a deployed rev must be rejected.
 	err = rev.UpdateDraft(ctx, db, map[string]interface{}{"x": 1}, "")
@@ -105,7 +143,7 @@ func TestComponentRevision_MarkDeployedIsImmutable(t *testing.T) {
 	}
 }
 
-func TestComponentRevision_DeleteDraftsForPair(t *testing.T) {
+func TestComponentRevision_SupersedeDrafts(t *testing.T) {
 	db, err := SetupDB()
 	if err != nil {
 		t.Fatal(err)
@@ -119,19 +157,19 @@ func TestComponentRevision_DeleteDraftsForPair(t *testing.T) {
 	if err := deployed.CreateDeployed(ctx, db); err != nil {
 		t.Fatal(err)
 	}
-	for i := 0; i < 2; i++ {
-		draft := &ComponentRevision{ComponentID: componentID, EnvironmentID: envID}
-		if err := draft.CreateDraft(ctx, db); err != nil {
-			t.Fatal(err)
-		}
+	// At most one draft can exist; SupersedeDrafts must clear it and leave
+	// the deployed history intact.
+	draft := &ComponentRevision{ComponentID: componentID, EnvironmentID: envID}
+	if err := draft.UpsertDraft(ctx, db); err != nil {
+		t.Fatal(err)
 	}
 
-	deleted, err := DeleteDraftsForPair(ctx, db, componentID, envID)
+	deleted, err := SupersedeDrafts(ctx, db, componentID, envID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if deleted != 2 {
-		t.Errorf("expected to delete 2 drafts, got %d", deleted)
+	if deleted != 1 {
+		t.Errorf("expected to delete 1 draft, got %d", deleted)
 	}
 	revisions, err := ListRevisions(ctx, db, componentID, envID)
 	if err != nil {
@@ -154,7 +192,7 @@ func TestComponentRevision_EnvironmentsWithRevisions(t *testing.T) {
 	envs := []string{"env-1111", "env-2222"}
 	for _, envID := range envs {
 		rev := &ComponentRevision{ComponentID: componentID, EnvironmentID: envID}
-		if err := rev.CreateDraft(ctx, db); err != nil {
+		if err := rev.UpsertDraft(ctx, db); err != nil {
 			t.Fatal(err)
 		}
 	}
