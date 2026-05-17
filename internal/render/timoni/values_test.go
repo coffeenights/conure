@@ -57,18 +57,29 @@ func TestStripCredentialRoles(t *testing.T) {
 			want: map[string]interface{}{},
 		},
 		{
-			name: "strips both git and image credential roles at distinct paths",
+			// git.credentialRef is conure-internal plumbing and is stripped.
+			// image.credentialRef is mapped onto a REAL module field
+			// (source.imagePullSecrets, a credential-name string the template
+			// consumes) and MUST survive — Conure resolves it into a cluster
+			// Secret on the deploy path but never removes it from values.
+			name: "strips git credentialRef but preserves image.credentialRef mapped to real module field",
 			values: map[string]interface{}{
-				"git":   map[string]interface{}{"credentialRef": "g", "repository": "r"},
-				"image": map[string]interface{}{"credentialRef": "i", "repository": "ir"},
+				"git": map[string]interface{}{"credentialRef": "g", "repository": "r"},
+				"source": map[string]interface{}{
+					"imagePullSecrets": "mredvard-registry",
+					"gitRepository":    "https://github.com/me/app",
+				},
 			},
 			fieldRoles: map[string]string{
 				fieldroles.RoleGitCredentialRef:   "git.credentialRef",
-				fieldroles.RoleImageCredentialRef: "image.credentialRef",
+				fieldroles.RoleImageCredentialRef: "source.imagePullSecrets",
 			},
 			want: map[string]interface{}{
-				"git":   map[string]interface{}{"repository": "r"},
-				"image": map[string]interface{}{"repository": "ir"},
+				"git": map[string]interface{}{"repository": "r"},
+				"source": map[string]interface{}{
+					"imagePullSecrets": "mredvard-registry",
+					"gitRepository":    "https://github.com/me/app",
+				},
 			},
 		},
 		{
@@ -93,6 +104,28 @@ func TestStripCredentialRoles(t *testing.T) {
 			},
 			want: map[string]interface{}{
 				"source": map[string]interface{}{"gitCredentialRef": "should-stay"},
+			},
+		},
+		{
+			// The exact mapping the user set: image.credentialRef ->
+			// source.imagePullSecrets, value is a credential-name string the
+			// Timoni template consumes. It is real module config and must pass
+			// through untouched even though it is the image credential role.
+			name: "image.credentialRef mapped to source.imagePullSecrets is NOT stripped",
+			values: map[string]interface{}{
+				"source": map[string]interface{}{
+					"imagePullSecrets": "mredvard-registry",
+					"image":            "ghcr.io/trivor-ai/mcp-sources:latest",
+				},
+			},
+			fieldRoles: map[string]string{
+				fieldroles.RoleImageCredentialRef: "source.imagePullSecrets",
+			},
+			want: map[string]interface{}{
+				"source": map[string]interface{}{
+					"imagePullSecrets": "mredvard-registry",
+					"image":            "ghcr.io/trivor-ai/mcp-sources:latest",
+				},
 			},
 		},
 		{

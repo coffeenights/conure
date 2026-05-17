@@ -191,3 +191,111 @@ func TestProjectRegistryCredential_RotationUpdatesInPlace(t *testing.T) {
 		t.Fatal("rotated Secret should carry the new token")
 	}
 }
+
+const pullNS = "943bf3ac-development"
+
+func TestEnsurePullSecret_EmptyRefIsPublicNoSecret(t *testing.T) {
+	db, ks := setupProvidersDB(t)
+	cs := &k8sUtils.GenericClientset{K8s: fake.NewSimpleClientset()}
+	cr := &CredentialResolver{DB: db, KeyStorage: ks}
+
+	if err := cr.EnsurePullSecret(context.Background(), cs, primitive.NewObjectID(), "", pullNS); err != nil {
+		t.Fatalf("empty ref must not error (public image), got %v", err)
+	}
+	secrets, _ := cs.K8s.CoreV1().Secrets(pullNS).List(context.Background(), metav1.ListOptions{})
+	if len(secrets.Items) != 0 {
+		t.Fatalf("empty ref must not project a pull Secret, found %d", len(secrets.Items))
+	}
+}
+
+func TestEnsurePullSecret_MissingCredentialIsHardError(t *testing.T) {
+	db, ks := setupProvidersDB(t)
+	org := primitive.NewObjectID()
+	t.Cleanup(func() { clearCreds(context.Background(), db, org) })
+	cs := &k8sUtils.GenericClientset{K8s: fake.NewSimpleClientset()}
+	cr := &CredentialResolver{DB: db, KeyStorage: ks}
+
+	err := cr.EnsurePullSecret(context.Background(), cs, org, "mredvard-registry", pullNS)
+	if err == nil {
+		t.Fatal("a referenced-but-missing credential must fail the deploy (no fallback)")
+	}
+	if !strings.Contains(err.Error(), "conure credential set") {
+		t.Fatalf("error must tell the operator how to fix it, got: %v", err)
+	}
+}
+
+func TestEnsurePullSecret_WrongKindErrors(t *testing.T) {
+	db, ks := setupProvidersDB(t)
+	org := primitive.NewObjectID()
+	t.Cleanup(func() { clearCreds(context.Background(), db, org) })
+
+	gc := &models.Credential{OrganizationID: org, Name: "mredvard-registry", Kind: models.CredentialKindGit, Secret: "x"}
+	if _, err := gc.Create(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	cs := &k8sUtils.GenericClientset{K8s: fake.NewSimpleClientset()}
+	cr := &CredentialResolver{DB: db, KeyStorage: ks}
+
+	if err := cr.EnsurePullSecret(context.Background(), cs, org, "mredvard-registry", pullNS); err == nil {
+		t.Fatal("a git credential used where a registry pull credential is required must error")
+	}
+}
+
+func TestEnsurePullSecret_InvalidCredentialNameRejected(t *testing.T) {
+	db, ks := setupProvidersDB(t)
+	org := primitive.NewObjectID()
+	t.Cleanup(func() { clearCreds(context.Background(), db, org) })
+	// The credential name doubles as the Secret name; an upper/underscore
+	// name is not a legal RFC1123 object name and must fail the deploy
+	// with an actionable message rather than emit a rejected Secret.
+	seedRegistryCred(t, context.Background(), db, ks, org, "My_Registry", "tok")
+
+	cs := &k8sUtils.GenericClientset{K8s: fake.NewSimpleClientset()}
+	cr := &CredentialResolver{DB: db, KeyStorage: ks}
+
+	err := cr.EnsurePullSecret(context.Background(), cs, org, "My_Registry", pullNS)
+	if err == nil {
+		t.Fatal("an invalid credential name must fail the deploy")
+	}
+	if !strings.Contains(err.Error(), "rename the credential") {
+		t.Fatalf("error must tell the operator to rename, got: %v", err)
+	}
+	secrets, _ := cs.K8s.CoreV1().Secrets(pullNS).List(context.Background(), metav1.ListOptions{})
+	if len(secrets.Items) != 0 {
+		t.Fatalf("no Secret must be created for an invalid name, found %d", len(secrets.Items))
+	}
+}
+
+func TestEnsurePullSecret_HappyPathSecretNamedAfterCredentialInWorkloadNS(t *testing.T) {
+	db, ks := setupProvidersDB(t)
+	org := primitive.NewObjectID()
+	t.Cleanup(func() { clearCreds(context.Background(), db, org) })
+	seedRegistryCred(t, context.Background(), db, ks, org, "mredvard-registry", "s3cr3t-token")
+
+	cs := &k8sUtils.GenericClientset{K8s: fake.NewSimpleClientset()}
+	cr := &CredentialResolver{DB: db, KeyStorage: ks}
+
+	if err := cr.EnsurePullSecret(context.Background(), cs, org, "mredvard-registry", pullNS); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Named after the credential itself, in the WORKLOAD namespace — that is
+	// the contract the Timoni template's imagePullSecrets relies on.
+	sec, err := cs.K8s.CoreV1().Secrets(pullNS).Get(context.Background(), "mredvard-registry", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("pull Secret not projected into workload namespace: %v", err)
+	}
+	if sec.Type != corev1.SecretTypeDockerConfigJson {
+		t.Fatalf("type = %s, want dockerconfigjson", sec.Type)
+	}
+	if sec.Labels[k8sUtils.OrganizationIDLabel] != org.Hex() {
+		t.Fatalf("org label = %q, want %q", sec.Labels[k8sUtils.OrganizationIDLabel], org.Hex())
+	}
+	if !strings.Contains(string(sec.Data[corev1.DockerConfigJsonKey]), "s3cr3t-token") {
+		t.Fatal("projected dockerconfigjson missing decrypted password")
+	}
+	// It must NOT have landed in conure-system (that's the build path).
+	if sysSecrets, _ := cs.K8s.CoreV1().Secrets(credentials.SystemNamespace).List(context.Background(), metav1.ListOptions{}); len(sysSecrets.Items) != 0 {
+		t.Fatalf("pull Secret must go to the workload ns, not %s", credentials.SystemNamespace)
+	}
+}

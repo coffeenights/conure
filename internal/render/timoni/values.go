@@ -32,15 +32,21 @@ func timoniValues(comp *conurev1alpha1.Component, fieldRoles map[string]string) 
 	return values.Get(), nil
 }
 
-// credentialRoles are the field roles that name a conure org credential the
-// developer put in the component's values. They are conure-internal: the API
-// build path reads them to mount git/registry Secrets and they have no meaning
-// to a rendering module. They MUST NOT reach the Timoni module — its closed
-// #config schema rejects undeclared fields ("field not allowed"). Every other
-// role is genuine module config and stays.
+// credentialRoles are the field roles whose value is a conure-internal logical
+// credential name that the rendering module has NO schema for and must never
+// see — its closed #config rejects undeclared fields ("field not allowed").
+// The API build path reads these to mount git Secrets in the build Job; the
+// value is plumbing, not module config, so it is stripped before render.
+//
+// Only git.credentialRef qualifies. image.credentialRef is intentionally NOT
+// here: a definition maps it onto a real module field (e.g.
+// source.imagePullSecrets) whose value — the credential/Secret name — the
+// template legitimately consumes. Conure resolves that name into a cluster
+// Secret on the deploy path (EnsurePullSecret) but must leave the value in
+// place so Timoni's rendered Deployment can reference it. Stripping it would
+// silently drop the workload's imagePullSecrets.
 var credentialRoles = []string{
 	fieldroles.RoleGitCredentialRef,
-	fieldroles.RoleImageCredentialRef,
 }
 
 // stripCredentialRoles removes, from values, the dotted paths that fieldRoles

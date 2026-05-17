@@ -144,6 +144,31 @@ func RegistrySecret(orgID, credName, registry, username, password string) (*core
 	}, nil
 }
 
+// RegistrySecretNamed is RegistrySecret with a caller-chosen Secret name. The
+// deploy-time pull-secret projection names the Secret after the credential
+// itself (cred.Name) so a workload's imagePullSecrets can reference it by the
+// same logical name the developer set in image.credentialRef — unlike the
+// SecretName(orgID, credName) scheme used for build/system-namespace secrets,
+// which is internal and never referenced by user-authored templates. The
+// org/kind labels are still attached so org isolation and traceability are
+// unchanged. name must already be a valid RFC1123 object name (the caller
+// validates and surfaces an actionable error; this builder does not sanitize,
+// because the whole point is a predictable, user-referencable name).
+func RegistrySecretNamed(name, orgID, credName, registry, username, password string) (*corev1.Secret, error) {
+	dcj, err := DockerConfigJSON(registry, username, password)
+	if err != nil {
+		return nil, err
+	}
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: labels(orgID, credName, "registry"),
+		},
+		Type: corev1.SecretTypeDockerConfigJson,
+		Data: map[string][]byte{corev1.DockerConfigJsonKey: dcj},
+	}, nil
+}
+
 // GitSecret builds the projected Opaque Secret for a git credential. The
 // build Job's git-clone step reads "token" (and "username", defaulting to
 // x-access-token) to rewrite the clone URL for a private HTTPS source.

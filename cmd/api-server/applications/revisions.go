@@ -17,6 +17,7 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/cmd/api-server/providers"
+	"github.com/coffeenights/conure/internal/fieldroles"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 )
 
@@ -556,6 +557,24 @@ func applyRevisionToK8sWithAnnotations(ctx context.Context, a *ApiHandler, appli
 	credResolver := &providers.CredentialResolver{DB: a.MongoDB, KeyStorage: a.KeyStorage}
 	if err = provider.EnsureComponentDefinition(ctx, credResolver, def); err != nil {
 		return fmt.Errorf("materializing component definition for type %q: %w", component.Type, err)
+	}
+
+	// Ensure the workload's image pull Secret exists in the env namespace
+	// BEFORE applying the Component — otherwise the pod is created first and
+	// ImagePullBackOffs while the Secret races in. Driven by the component's
+	// optional image.credentialRef field role; empty → public image, no-op.
+	pullRef, err := fieldroles.New(def.Buildable, def.FieldRoles).GetOptional(values, fieldroles.RoleImageCredentialRef)
+	if err != nil {
+		return fmt.Errorf("reading %s for pull secret: %w", fieldroles.RoleImageCredentialRef, err)
+	}
+	if pullRef != "" {
+		clientset, kerr := a.kubeClient()
+		if kerr != nil {
+			return fmt.Errorf("getting kube client for pull secret projection: %w", kerr)
+		}
+		if perr := credResolver.EnsurePullSecret(ctx, clientset, application.OrganizationID, pullRef, env.GetNamespace()); perr != nil {
+			return perr
+		}
 	}
 
 	return provider.ApplyComponent(ctx, app, componentCRD, cv)
