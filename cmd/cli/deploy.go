@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 
 	"github.com/coffeenights/conure/internal/cli/apiclient"
@@ -60,6 +61,7 @@ func init() {
 	deployCmd.Flags().String("git-repository", "", "Override component's source.gitRepository (remote builds only).")
 	deployCmd.Flags().String("git-branch", "", "Override component's source.gitBranch (remote builds only).")
 	deployCmd.Flags().String("context", ".", "Local build context directory (for local builds).")
+	deployCmd.Flags().Bool("approve", false, "Skip the confirmation prompt")
 	rootCmd.AddCommand(deployCmd)
 }
 
@@ -94,6 +96,31 @@ func runDeploy(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+
+	approve, _ := cmd.Flags().GetBool("approve")
+	if !approve {
+		var summary string
+		switch action {
+		case deployActionBuild:
+			summary = fmt.Sprintf("build and deploy `%s` (image %s)", lc.Link.ComponentName, imageRef)
+		default:
+			summary = fmt.Sprintf("deploy the latest draft of `%s`", lc.Link.ComponentName)
+		}
+		ui.Error("This will %s to `%s`.\n", summary, lc.Env)
+		var ok bool
+		if err := huh.NewConfirm().
+			Title(fmt.Sprintf("Deploy %s to %s?", lc.Link.ComponentName, lc.Env)).
+			Affirmative("Deploy").
+			Negative("Cancel").
+			Value(&ok).
+			Run(); err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("aborted")
+		}
+	}
+
 	if action == deployActionPromote {
 		// Promote-only: push the latest draft to deployed. Correct for
 		// non-buildable components and prebuilt-image (sourceType=oci)
