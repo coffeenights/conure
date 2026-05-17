@@ -160,6 +160,46 @@ func TestCreateCredential_RotatesInPlace(t *testing.T) {
 	assert.Equal(t, "new", dec)
 }
 
+// Regression for the omitempty+$set bug: creating a credential as `registry`
+// (with a RegistryURL) then re-setting the SAME name as `git` (no registry)
+// must fully replace the row — the stale registryUrl must NOT survive the
+// rotation. Before the fix, `bson:"registryUrl,omitempty"` dropped the empty
+// value from the $set doc and Mongo kept the old "ghcr.io".
+func TestCreateCredential_CrossKindRotationClearsStaleRegistry(t *testing.T) {
+	e := setup(t)
+	org := e.ownedOrg.Hex()
+
+	// First: a registry credential carrying a registry URL + username.
+	require.Equal(t, http.StatusCreated, e.do(t, http.MethodPost, "/credentials/"+org+"/c",
+		CreateCredentialRequest{
+			Name: "dup", Kind: "registry", RegistryURL: "ghcr.io", Username: "octocat", Secret: "old",
+		}).Code)
+
+	// Rotate the same name to a git credential with no registry URL.
+	require.Equal(t, http.StatusOK, e.do(t, http.MethodPost, "/credentials/"+org+"/c",
+		CreateCredentialRequest{
+			Name: "dup", Kind: "git", Secret: "tok",
+		}).Code)
+
+	stored := &models.Credential{}
+	require.NoError(t, stored.GetByOrgAndName(context.Background(), e.mongo, e.ownedOrg, "dup"))
+	assert.Equal(t, models.CredentialKindGit, stored.Kind)
+	assert.Empty(t, stored.RegistryURL, "stale registryUrl must be cleared on cross-kind rotation")
+	// git applies its username default at projection time, not on store, so
+	// an unset username must persist as empty (also proves the field cleared).
+	assert.Empty(t, stored.Username, "stale username must be cleared on cross-kind rotation")
+	dec, _ := variables.DecryptValue(e.keyStore, stored.Secret)
+	assert.Equal(t, "tok", dec)
+
+	// And it must not leak through the metadata list either.
+	listResp := e.do(t, http.MethodGet, "/credentials/"+org+"/c", nil)
+	var list []CredentialResponse
+	require.NoError(t, json.Unmarshal(listResp.Body.Bytes(), &list))
+	require.Len(t, list, 1)
+	assert.Equal(t, "git", list[0].Kind)
+	assert.Empty(t, list[0].RegistryURL)
+}
+
 func TestCreateCredential_Validation(t *testing.T) {
 	e := setup(t)
 	org := e.ownedOrg.Hex()

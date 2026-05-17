@@ -133,28 +133,35 @@ func normalizeSecret(raw string) (string, error) {
 
 // resolveCredInput validates the kind and normalizes the username (applying
 // the git default), independent of any I/O. Pure so the flag contract is
-// unit-testable. Returns the effective kind and username.
-func resolveCredInput(kindFlag, registry, username string) (kind, user string, err error) {
+// unit-testable. Returns the effective kind, username, and registry.
+//
+// reg is the registry to actually send: the flag value for a registry
+// credential, but always "" for git — a git credential has no registry, and
+// sending one would persist a misleading registryUrl (it shows up in
+// `credential list` and survives a cross-kind rotation). Keeping the
+// kind→effective-fields rule here means callers never re-derive it.
+func resolveCredInput(kindFlag, registry, username string) (kind, user, reg string, err error) {
 	kind = strings.ToLower(strings.TrimSpace(kindFlag))
 	switch kind {
 	case "registry":
 		if registry == "" || username == "" {
-			return "", "", fmt.Errorf("registry credentials require --registry and --username")
+			return "", "", "", fmt.Errorf("registry credentials require --registry and --username")
 		}
-		return kind, username, nil
+		return kind, username, registry, nil
 	case "git":
 		if username == "" {
 			username = "x-access-token"
 		}
-		return kind, username, nil
+		// git has no registry; drop any --registry the user passed.
+		return kind, username, "", nil
 	default:
-		return "", "", fmt.Errorf("--kind must be registry or git, got %q", kind)
+		return "", "", "", fmt.Errorf("--kind must be registry or git, got %q", kind)
 	}
 }
 
 func runCredSet(cmd *cobra.Command, args []string) error {
 	name := args[0]
-	kind, username, err := resolveCredInput(credKindFlag, credRegistryFlag, credUsernameFlag)
+	kind, username, registry, err := resolveCredInput(credKindFlag, credRegistryFlag, credUsernameFlag)
 	if err != nil {
 		return err
 	}
@@ -172,7 +179,7 @@ func runCredSet(cmd *cobra.Command, args []string) error {
 	cred, err := client.SetCredential(cmd.Context(), orgID, api.CreateCredentialRequest{
 		Name:        name,
 		Kind:        kind,
-		RegistryURL: credRegistryFlag,
+		RegistryURL: registry,
 		Username:    username,
 		Secret:      secret,
 	})

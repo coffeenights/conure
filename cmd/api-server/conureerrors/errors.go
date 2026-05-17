@@ -20,6 +20,36 @@ func (e *ConureError) Error() string {
 	return fmt.Sprintf("Error %s: %s", e.Code, e.Message)
 }
 
+// ConureErrorWithDetail wraps a *ConureError with a human-readable,
+// situation-specific explanation. The base error keeps the stable
+// code/message enum (clients can still switch on it); Detail carries the
+// actionable "here is exactly what went wrong and how to fix it" string that
+// otherwise only reached the server log. AbortWithError surfaces Detail in
+// the response body so the CLI can show it instead of a bare
+// "invalid_request (code 2001)".
+type ConureErrorWithDetail struct {
+	Base   *ConureError
+	Detail string
+}
+
+func (e *ConureErrorWithDetail) Error() string {
+	if e.Detail == "" {
+		return e.Base.Error()
+	}
+	return fmt.Sprintf("%s: %s", e.Base.Error(), e.Detail)
+}
+
+// Unwrap lets errors.As(err, &*ConureError) keep matching, so existing
+// callers that branch on the base error are unaffected.
+func (e *ConureErrorWithDetail) Unwrap() error { return e.Base }
+
+// WithDetail attaches an actionable explanation to a base ConureError. Use it
+// where the handler knows something the fixed message enum can't express
+// (e.g. which credential name is missing and the exact command to create it).
+func WithDetail(base *ConureError, format string, args ...any) error {
+	return &ConureErrorWithDetail{Base: base, Detail: fmt.Sprintf(format, args...)}
+}
+
 var (
 	ErrUnauthorized              = &ConureError{Code: "1000", Message: "unauthorized", StatusCode: http.StatusUnauthorized}
 	ErrInvalidToken              = &ConureError{Code: "1001", Message: "invalid_token", StatusCode: http.StatusUnauthorized}
@@ -60,10 +90,19 @@ var (
 )
 
 func AbortWithError(c *gin.Context, err error) {
+	var detailErr *ConureErrorWithDetail
 	var conureErr *ConureError
 	var validationErr validator.ValidationErrors
 
-	if errors.As(err, &conureErr) {
+	// Check the detail wrapper first: it Unwraps to *ConureError, so the
+	// plain branch below would also match it and silently drop Detail.
+	if errors.As(err, &detailErr) {
+		c.AbortWithStatusJSON(detailErr.Base.StatusCode, gin.H{
+			"code":   detailErr.Base.Code,
+			"error":  detailErr.Base.Message,
+			"detail": detailErr.Detail,
+		})
+	} else if errors.As(err, &conureErr) {
 		c.AbortWithStatusJSON(conureErr.StatusCode, gin.H{
 			"code":  conureErr.Code,
 			"error": conureErr.Message,

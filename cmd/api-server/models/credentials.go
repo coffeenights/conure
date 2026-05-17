@@ -60,8 +60,15 @@ type Credential struct {
 	Kind           CredentialKind     `bson:"kind" json:"kind"`
 
 	// --- material ---
-	RegistryURL string `bson:"registryUrl,omitempty" json:"registry_url,omitempty"`
-	Username    string `bson:"username,omitempty" json:"username,omitempty"`
+	// NB: bson tags must NOT be `omitempty`. Update() does
+	// `$set: <whole struct>` (cmd/api-server/models/model.go), so an
+	// omitempty bson tag would drop an empty field from the $set doc and
+	// Mongo would never clear it. That silently preserves stale values
+	// across a cross-kind rotation (e.g. a registry cred re-`set` as git by
+	// the same name would keep its old registryUrl). The json tags keep
+	// `omitempty` so empty metadata still stays out of API responses.
+	RegistryURL string `bson:"registryUrl" json:"registry_url,omitempty"`
+	Username    string `bson:"username" json:"username,omitempty"`
 	// Secret is the encrypted password/token. It is intentionally NOT
 	// serialized to JSON: list/get responses must never leak credential
 	// material, and the value is ciphertext anyway.

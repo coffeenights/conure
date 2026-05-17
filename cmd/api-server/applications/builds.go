@@ -135,7 +135,10 @@ func (a *ApiHandler) TriggerBuild(c *gin.Context) {
 			// than spawn a Job that 403s on clone/push with no API signal.
 			_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", credErr.Error())
 			log.Printf("resolving build credentials: %v", credErr)
-			conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+			// Surface the actionable reason (which credential, how to fix)
+			// to the client, not just the bare invalid_request code.
+			conureerrors.AbortWithError(c, conureerrors.WithDetail(
+				conureerrors.ErrInvalidRequest, "%s", credErr.Error()))
 			return
 		}
 		job := renderBuildJob(build, registrySecretName, gitSecretName)

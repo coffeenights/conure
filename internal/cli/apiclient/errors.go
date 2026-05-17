@@ -11,7 +11,10 @@ import (
 //
 //	{"code":"1004","error":"invalid_credentials"}
 //
-// (sometimes "message" instead of "error"). Falling back to the raw body
+// (sometimes "message" instead of "error"). When the server attaches a
+// "detail" string (an actionable, situation-specific explanation — e.g. which
+// credential is missing and the command to create it), it is appended so the
+// user sees the fix, not just the bare code. Falling back to the raw body
 // keeps non-JSON responses (proxy 502s, blank bodies) from disappearing.
 func ParseServerError(body []byte) string {
 	trimmed := strings.TrimSpace(string(body))
@@ -22,6 +25,7 @@ func ParseServerError(body []byte) string {
 		Code    string `json:"code"`
 		Error   string `json:"error"`
 		Message string `json:"message"`
+		Detail  string `json:"detail"`
 	}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return trimmed
@@ -34,7 +38,10 @@ func ParseServerError(body []byte) string {
 		return trimmed
 	}
 	if payload.Code != "" {
-		return fmt.Sprintf("%s (code %s)", msg, payload.Code)
+		msg = fmt.Sprintf("%s (code %s)", msg, payload.Code)
+	}
+	if payload.Detail != "" {
+		msg = fmt.Sprintf("%s: %s", msg, payload.Detail)
 	}
 	return msg
 }

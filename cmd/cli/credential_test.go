@@ -4,36 +4,39 @@ import "testing"
 
 func TestResolveCredInput(t *testing.T) {
 	cases := []struct {
-		name             string
-		kind, reg, user  string
-		wantKind, wantUs string
-		wantErr          bool
+		name                      string
+		kind, reg, user           string
+		wantKind, wantUs, wantReg string
+		wantErr                   bool
 	}{
-		{"registry ok", "registry", "ghcr.io", "octocat", "registry", "octocat", false},
-		{"registry case-insensitive", "Registry", "ghcr.io", "u", "registry", "u", false},
-		{"registry missing url", "registry", "", "u", "", "", true},
-		{"registry missing user", "registry", "ghcr.io", "", "", "", true},
-		{"git defaults username", "git", "", "", "git", "x-access-token", false},
-		{"git keeps explicit username", "git", "", "deploy-bot", "git", "deploy-bot", false},
-		{"git ignores registry", "git", "ghcr.io", "", "git", "x-access-token", false},
-		{"unknown kind", "ssh", "", "", "", "", true},
-		{"empty kind", "", "", "", "", "", true},
-		{"whitespace trimmed", "  git  ", "", "", "git", "x-access-token", false},
+		{"registry ok", "registry", "ghcr.io", "octocat", "registry", "octocat", "ghcr.io", false},
+		{"registry case-insensitive", "Registry", "ghcr.io", "u", "registry", "u", "ghcr.io", false},
+		{"registry missing url", "registry", "", "u", "", "", "", true},
+		{"registry missing user", "registry", "ghcr.io", "", "", "", "", true},
+		{"git defaults username", "git", "", "", "git", "x-access-token", "", false},
+		{"git keeps explicit username", "git", "", "deploy-bot", "git", "deploy-bot", "", false},
+		// Regression: git must NOT carry a registry even when --registry is
+		// passed (it would persist a misleading registryUrl).
+		{"git drops registry", "git", "ghcr.io", "", "git", "x-access-token", "", false},
+		{"unknown kind", "ssh", "", "", "", "", "", true},
+		{"empty kind", "", "", "", "", "", "", true},
+		{"whitespace trimmed", "  git  ", "", "", "git", "x-access-token", "", false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			k, u, err := resolveCredInput(tc.kind, tc.reg, tc.user)
+			k, u, reg, err := resolveCredInput(tc.kind, tc.reg, tc.user)
 			if tc.wantErr {
 				if err == nil {
-					t.Fatalf("expected error, got kind=%q user=%q", k, u)
+					t.Fatalf("expected error, got kind=%q user=%q reg=%q", k, u, reg)
 				}
 				return
 			}
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if k != tc.wantKind || u != tc.wantUs {
-				t.Errorf("got (kind=%q,user=%q), want (kind=%q,user=%q)", k, u, tc.wantKind, tc.wantUs)
+			if k != tc.wantKind || u != tc.wantUs || reg != tc.wantReg {
+				t.Errorf("got (kind=%q,user=%q,reg=%q), want (kind=%q,user=%q,reg=%q)",
+					k, u, reg, tc.wantKind, tc.wantUs, tc.wantReg)
 			}
 		})
 	}

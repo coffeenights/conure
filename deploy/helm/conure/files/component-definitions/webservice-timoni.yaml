@@ -26,3 +26,7 @@ spec:
     build.tool: "source.buildTool"
     build.location: "source.buildLocation"
     build.dockerfile: "source.dockerfilePath"
+    # Optional: logical names of org credentials (conure credential set).
+    # Absent on a component -> public/no-auth clone & push (unchanged).
+    git.credentialRef: "source.gitCredentialRef"
+    image.credentialRef: "source.imageCredentialRef"
