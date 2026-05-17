@@ -16,6 +16,7 @@ import (
 	conurev1alpha1 "github.com/coffeenights/conure/apis/core/v1alpha1"
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/cmd/api-server/providers"
 	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 )
 
@@ -552,7 +553,8 @@ func applyRevisionToK8sWithAnnotations(ctx context.Context, a *ApiHandler, appli
 	if err != nil {
 		return err
 	}
-	if err = provider.EnsureComponentDefinition(ctx, def); err != nil {
+	credResolver := &providers.CredentialResolver{DB: a.MongoDB, KeyStorage: a.KeyStorage}
+	if err = provider.EnsureComponentDefinition(ctx, credResolver, def); err != nil {
 		return fmt.Errorf("materializing component definition for type %q: %w", component.Type, err)
 	}
 

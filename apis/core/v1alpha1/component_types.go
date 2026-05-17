@@ -1,7 +1,6 @@
 package v1alpha1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -166,10 +165,15 @@ type ComponentDefinitionSpec struct {
 	OCITag        string          `json:"ociTag"`
 	OCIDigest     string          `json:"ociDigest"`
 	OCIRegistry   string          `json:"ociRegistry,omitempty"`
-	// RegistrySecretRef references a Secret of type kubernetes.io/dockerconfigjson
-	// in the controller's namespace, used to authenticate with the OCI registry
-	// when pulling the module artifact. Optional; omit for public registries.
-	RegistrySecretRef *corev1.LocalObjectReference `json:"registrySecretRef,omitempty"`
+	// RegistrySecretName is the name of a kubernetes.io/dockerconfigjson
+	// Secret in the controller's namespace used to authenticate the OCI
+	// module pull. It is NOT user-authored: the API server resolves the
+	// org-scoped logical credential (models.ComponentDefinition.CredentialRef)
+	// to a concrete projected Secret and stamps that name here at deploy time.
+	// Empty means anonymous pull (public registry). The controller consumes
+	// this plain name and never resolves credentials itself.
+	// +optional
+	RegistrySecretName string `json:"registrySecretName,omitempty"`
 	// Helm carries engine-specific configuration when Engine=helm. Ignored
 	// otherwise. Helm charts do not have CUE-style schema validation, so
 	// values typing falls back to whatever values.schema.json the chart ships.

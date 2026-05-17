@@ -223,6 +223,9 @@ type ComponentDefinition struct {
 	// component's values. The CLI and server resolve image/build fields
 	// through this instead of hardcoding the schema; there is no fallback.
 	FieldRoles map[string]string `json:"field_roles,omitempty"`
+	// CredentialRef is the logical name of the org registry credential used
+	// to pull this definition's private OCI module (a name, not material).
+	CredentialRef string `json:"credential_ref,omitempty"`
 	// Source is "default" for a row inherited from the platform's shipped
 	// defaults and "organization" for one this org created or overrode. The
 	// admin CLI surfaces it so operators can tell inherited from customized.
@@ -248,15 +251,15 @@ type ComponentDefinitionRequest struct {
 	Type   string `json:"type"`
 	Engine string `json:"engine,omitempty"`
 
-	Description        *string            `json:"description,omitempty"`
-	OCIRepository      *string            `json:"oci_repository,omitempty"`
-	OCITag             *string            `json:"oci_tag,omitempty"`
-	OCIDigest          *string            `json:"oci_digest,omitempty"`
-	OCIRegistry        *string            `json:"oci_registry,omitempty"`
-	RegistrySecretName *string            `json:"registry_secret_name,omitempty"`
-	Buildable          *bool              `json:"buildable,omitempty"`
-	FieldRoles         *map[string]string `json:"field_roles,omitempty"`
-	IconURL            *string            `json:"icon_url,omitempty"`
+	Description   *string            `json:"description,omitempty"`
+	OCIRepository *string            `json:"oci_repository,omitempty"`
+	OCITag        *string            `json:"oci_tag,omitempty"`
+	OCIDigest     *string            `json:"oci_digest,omitempty"`
+	OCIRegistry   *string            `json:"oci_registry,omitempty"`
+	CredentialRef *string            `json:"credential_ref,omitempty"`
+	Buildable     *bool              `json:"buildable,omitempty"`
+	FieldRoles    *map[string]string `json:"field_roles,omitempty"`
+	IconURL       *string            `json:"icon_url,omitempty"`
 }
 
 // HideComponentDefinitionRequest is the tombstone body (POST
@@ -292,6 +295,38 @@ type CreateVariableRequest struct {
 	Name        string `json:"name" binding:"required"`
 	Value       string `json:"value" binding:"required"`
 	IsEncrypted bool   `json:"is_encrypted"`
+}
+
+// ----- Credentials --------------------------------------------------------
+//
+// Credentials are the org-scoped, AES-encrypted source of truth for registry
+// and git auth. The server stores ciphertext; a deploy projects the resolved
+// credential into a Kubernetes Secret. The secret material is write-only over
+// the API: it is accepted on create but NEVER returned, so Credential (the
+// read shape) has no secret field.
+
+// Credential is the metadata-only read view. There is intentionally no field
+// for the password/token: list/get can never leak material.
+type Credential struct {
+	ID             string    `json:"id"`
+	OrganizationID string    `json:"organization_id"`
+	Name           string    `json:"name"`
+	Kind           string    `json:"kind"`
+	RegistryURL    string    `json:"registry_url,omitempty"`
+	Username       string    `json:"username,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
+// CreateCredentialRequest is the write shape. Kind is "registry" or "git".
+// Secret is the raw password/token; the CLI reads it from stdin so it never
+// enters shell history. Posting an existing Name rotates it in place.
+type CreateCredentialRequest struct {
+	Name        string `json:"name" binding:"required"`
+	Kind        string `json:"kind" binding:"required"`
+	RegistryURL string `json:"registry_url,omitempty"`
+	Username    string `json:"username,omitempty"`
+	Secret      string `json:"secret" binding:"required"`
 }
 
 // ----- System info --------------------------------------------------------

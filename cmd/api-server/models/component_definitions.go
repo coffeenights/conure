@@ -60,14 +60,18 @@ type ComponentDefinition struct {
 	OCITag        string `bson:"ociTag,omitempty" json:"oci_tag,omitempty"`
 	OCIDigest     string `bson:"ociDigest,omitempty" json:"oci_digest,omitempty"`
 	OCIRegistry   string `bson:"ociRegistry,omitempty" json:"oci_registry,omitempty"`
-	// RegistrySecretName is the name of a dockerconfigjson Secret in the
-	// controller's namespace (mirrors the CRD's RegistrySecretRef.Name).
-	RegistrySecretName string                 `bson:"registrySecretName,omitempty" json:"registry_secret_name,omitempty"`
-	Helm               *ComponentDefHelm      `bson:"helm,omitempty" json:"helm,omitempty"`
-	Buildable          bool                   `bson:"buildable,omitempty" json:"buildable,omitempty"`
-	FieldRoles         map[string]string      `bson:"fieldRoles,omitempty" json:"field_roles,omitempty"`
-	IconURL            *string                `bson:"iconUrl,omitempty" json:"icon_url,omitempty"`
-	Extra              map[string]interface{} `bson:"extra,omitempty" json:"extra,omitempty"`
+	// CredentialRef is the logical name of an org-scoped registry Credential
+	// (models.Credential, kind "registry") used to pull this definition's
+	// private OCI module. Empty means anonymous pull. The deploy-time
+	// projection resolves this logical name to a concrete K8s Secret and
+	// stamps that concrete name onto the CRD's RegistrySecretName; the
+	// controller only ever sees the concrete name.
+	CredentialRef string                 `bson:"credentialRef,omitempty" json:"credential_ref,omitempty"`
+	Helm          *ComponentDefHelm      `bson:"helm,omitempty" json:"helm,omitempty"`
+	Buildable     bool                   `bson:"buildable,omitempty" json:"buildable,omitempty"`
+	FieldRoles    map[string]string      `bson:"fieldRoles,omitempty" json:"field_roles,omitempty"`
+	IconURL       *string                `bson:"iconUrl,omitempty" json:"icon_url,omitempty"`
+	Extra         map[string]interface{} `bson:"extra,omitempty" json:"extra,omitempty"`
 }
 
 // ComponentDefHelm mirrors conurev1alpha1.HelmEngineSpec.
@@ -273,22 +277,22 @@ func (cd *ComponentDefinition) UpsertSeed(ctx context.Context, db *database.Mong
 	}
 	now := time.Now()
 	set := bson.M{
-		"organizationId":     DefaultComponentDefinitionOwner,
-		"hidden":             false,
-		"type":               cd.Type,
-		"description":        cd.Description,
-		"engine":             cd.Engine,
-		"ociRepository":      cd.OCIRepository,
-		"ociTag":             cd.OCITag,
-		"ociDigest":          cd.OCIDigest,
-		"ociRegistry":        cd.OCIRegistry,
-		"registrySecretName": cd.RegistrySecretName,
-		"helm":               cd.Helm,
-		"buildable":          cd.Buildable,
-		"fieldRoles":         cd.FieldRoles,
-		"iconUrl":            cd.IconURL,
-		"extra":              cd.Extra,
-		"updatedAt":          now,
+		"organizationId": DefaultComponentDefinitionOwner,
+		"hidden":         false,
+		"type":           cd.Type,
+		"description":    cd.Description,
+		"engine":         cd.Engine,
+		"ociRepository":  cd.OCIRepository,
+		"ociTag":         cd.OCITag,
+		"ociDigest":      cd.OCIDigest,
+		"ociRegistry":    cd.OCIRegistry,
+		"credentialRef":  cd.CredentialRef,
+		"helm":           cd.Helm,
+		"buildable":      cd.Buildable,
+		"fieldRoles":     cd.FieldRoles,
+		"iconUrl":        cd.IconURL,
+		"extra":          cd.Extra,
+		"updatedAt":      now,
 	}
 	update := bson.M{
 		"$set":         set,

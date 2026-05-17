@@ -30,12 +30,14 @@ type dockerConfigAuth struct {
 	Auth     string `json:"auth,omitempty"`
 }
 
-// resolveRegistryCredentials fetches the referenced dockerconfigjson Secret
-// from the controller's namespace and returns a "username:password" string for
-// the registry hosting ociRepository. Returns ("", nil) when no secret is
-// referenced (public registry path).
-func resolveRegistryCredentials(ctx context.Context, c client.Client, secretRef *corev1.LocalObjectReference, ociRepository string) (string, error) {
-	if secretRef == nil || secretRef.Name == "" {
+// resolveRegistryCredentials fetches the named dockerconfigjson Secret from
+// the controller's namespace and returns a "username:password" string for the
+// registry hosting ociRepository. Returns ("", nil) when secretName is empty
+// (public registry path). secretName is the concrete Secret name the API
+// server stamped on the ComponentDefinition after resolving the org's logical
+// credential; the controller never resolves credentials itself.
+func resolveRegistryCredentials(ctx context.Context, c client.Client, secretName, ociRepository string) (string, error) {
+	if secretName == "" {
 		return "", nil
 	}
 	if RegistrySecretNamespace == "" {
@@ -43,7 +45,7 @@ func resolveRegistryCredentials(ctx context.Context, c client.Client, secretRef 
 	}
 
 	secret := &corev1.Secret{}
-	key := types.NamespacedName{Namespace: RegistrySecretNamespace, Name: secretRef.Name}
+	key := types.NamespacedName{Namespace: RegistrySecretNamespace, Name: secretName}
 	if err := c.Get(ctx, key, secret); err != nil {
 		return "", fmt.Errorf("failed to get registry secret %s/%s: %w", key.Namespace, key.Name, err)
 	}

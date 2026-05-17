@@ -92,13 +92,13 @@ func (c *ComponentHandler) renderComponent() error {
 		return err
 	}
 
-	creds, err := resolveRegistryCredentials(c.Ctx, c.Reconciler.Client, compDef.Spec.RegistrySecretRef, compDef.Spec.OCIRepository)
+	creds, err := resolveRegistryCredentials(c.Ctx, c.Reconciler.Client, compDef.Spec.RegistrySecretName, compDef.Spec.OCIRepository)
 	if err != nil {
 		c.Logger.Error(err, "failed to resolve registry credentials", "ociRepository", compDef.Spec.OCIRepository)
 		return err
 	}
 	if creds == "" {
-		c.Logger.V(1).Info("no registrySecretRef set on ComponentDefinition, attempting anonymous pull", "componentDefinition", compDef.Name, "ociRepository", compDef.Spec.OCIRepository)
+		c.Logger.V(1).Info("no registry secret stamped on ComponentDefinition, attempting anonymous pull", "componentDefinition", compDef.Name, "ociRepository", compDef.Spec.OCIRepository)
 	}
 
 	eng, err := builder.Build(c.Ctx, compDef, c.Component, creds)

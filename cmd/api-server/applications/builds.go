@@ -21,19 +21,15 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/conureerrors"
 	"github.com/coffeenights/conure/cmd/api-server/database"
 	"github.com/coffeenights/conure/cmd/api-server/models"
+	"github.com/coffeenights/conure/cmd/api-server/providers"
 	"github.com/coffeenights/conure/internal/fieldroles"
+	k8sUtils "github.com/coffeenights/conure/internal/k8s"
 )
 
 // SystemNamespace is the namespace BuildKit Jobs run in. Mirrors the const
 // used by cmd/api-server/main.go for key generation; duplicated here to
 // avoid an import cycle (the applications package can't depend on main).
 const SystemNamespace = "conure-system"
-
-// RegistryCredentialsSecret is the docker-config secret name expected to
-// exist (pre-created by the operator) in SystemNamespace. Mounted into the
-// BuildKit container at /root/.docker so `buildctl ... --push` can
-// authenticate.
-const RegistryCredentialsSecret = "registry-credentials"
 
 // Build job/lease tuning. These are intentionally short — the worst-case
 // adoption latency for an orphaned remote build is leaseTTL + scanInterval
@@ -132,7 +128,17 @@ func (a *ApiHandler) TriggerBuild(c *gin.Context) {
 			conureerrors.AbortWithError(c, conureerrors.ErrInternalError)
 			return
 		}
-		job := renderBuildJob(build)
+		registrySecretName, gitSecretName, credErr := resolveBuildCredentialSecrets(ctx, a, clientset, handler.Model, env, component)
+		if credErr != nil {
+			// A referenced-but-missing/wrong-kind credential is a hard
+			// error: fail the build now with an actionable message rather
+			// than spawn a Job that 403s on clone/push with no API signal.
+			_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", credErr.Error())
+			log.Printf("resolving build credentials: %v", credErr)
+			conureerrors.AbortWithError(c, conureerrors.ErrInvalidRequest)
+			return
+		}
+		job := renderBuildJob(build, registrySecretName, gitSecretName)
 		created, err := clientset.K8s.BatchV1().Jobs(SystemNamespace).Create(ctx, job, metav1.CreateOptions{})
 		if err != nil {
 			_ = build.MarkTerminal(ctx, a.MongoDB, models.BuildStatusFailed, "", fmt.Sprintf("creating Job: %v", err))
@@ -411,6 +417,48 @@ func cloneValues(in map[string]interface{}) map[string]interface{} {
 	return out
 }
 
+// resolveBuildCredentialSecrets reads the component's optional
+// image.credentialRef / git.credentialRef field roles from the values a
+// build would deploy, resolves each to the org's Credential, and projects
+// them into the system namespace. It returns the CONCRETE projected Secret
+// names to mount in the build Job (registry for push, git for clone).
+//
+// Both roles are OPTIONAL (GetOptional): a definition that never declares
+// them, or a component that never sets them, yields "" — the public,
+// no-auth path, where renderBuildJob mounts nothing and clones/pushes
+// anonymously. A referenced-but-missing or wrong-kind credential is a hard
+// error with no fallback, surfaced before the Job is created.
+func resolveBuildCredentialSecrets(ctx context.Context, a *ApiHandler, clientset *k8sUtils.GenericClientset, app *models.Application, env *models.Environment, component *models.Component) (registrySecretName, gitSecretName string, err error) {
+	resolver, err := a.resolveFieldRoles(ctx, app.OrganizationID, component)
+	if err != nil {
+		return "", "", err
+	}
+	baseValues, _, err := baseValuesForBuild(ctx, a, component, env)
+	if err != nil {
+		return "", "", err
+	}
+
+	imageRef, err := resolver.GetOptional(baseValues, fieldroles.RoleImageCredentialRef)
+	if err != nil {
+		return "", "", fmt.Errorf("reading %s: %w", fieldroles.RoleImageCredentialRef, err)
+	}
+	gitRef, err := resolver.GetOptional(baseValues, fieldroles.RoleGitCredentialRef)
+	if err != nil {
+		return "", "", fmt.Errorf("reading %s: %w", fieldroles.RoleGitCredentialRef, err)
+	}
+
+	cr := &providers.CredentialResolver{DB: a.MongoDB, KeyStorage: a.KeyStorage}
+	registrySecretName, err = cr.ProjectBuildCredential(ctx, clientset, app.OrganizationID, imageRef, models.CredentialKindRegistry)
+	if err != nil {
+		return "", "", err
+	}
+	gitSecretName, err = cr.ProjectBuildCredential(ctx, clientset, app.OrganizationID, gitRef, models.CredentialKindGit)
+	if err != nil {
+		return "", "", err
+	}
+	return registrySecretName, gitSecretName, nil
+}
+
 // mergeImageIntoValues writes the pushed image into the paths the
 // component's ComponentDefinition declares for the image.repository and
 // image.tag field roles. The definition owns where the image lives in its
@@ -453,10 +501,18 @@ func isFullyQualifiedImageRef(ref string) bool {
 // git_repository@git_branch into /workspace; the build container starts
 // buildkitd, waits for it to be ready, and runs `buildctl build ... --push`.
 //
+// registrySecretName / gitSecretName are CONCRETE projected Secret names
+// (resolved org-side from the component's image.credentialRef /
+// git.credentialRef field roles) or "" when the component declares no
+// credential. Empty == public, no auth: the push Secret is simply not
+// mounted and the clone is anonymous, exactly as before credentials existed.
+// There is no hardcoded fallback Secret — a private push with no resolvable
+// credential fails fast upstream in TriggerBuild, not silently here.
+//
 // Privileged is required for rootful buildkitd. Cluster operators that
 // can't grant privileged should deploy a pre-baked buildkitd Service and
 // have this Job talk to it via BUILDKIT_HOST (future work).
-func renderBuildJob(b *models.Build) *batchv1.Job {
+func renderBuildJob(b *models.Build, registrySecretName, gitSecretName string) *batchv1.Job {
 	name := fmt.Sprintf("build-%s", b.ID.Hex())
 	privileged := true
 	backoffLimit := int32(0)
@@ -496,6 +552,103 @@ buildctl --addr unix:///run/buildkit/buildkitd.sock build \
   --output type=image,name=%s,push=true
 `, frontendArgs, platformArg, shellQuote(b.ImageRef))
 
+	volumes := []corev1.Volume{
+		{
+			Name:         "workspace",
+			VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+		},
+	}
+
+	// git-clone init container. Public source: a plain `clone`. Private
+	// source (a projected git Secret was resolved from git.credentialRef):
+	// mount the Secret and rewrite the URL to embed the token so HTTPS
+	// auth works without a credential helper. The token is passed via env
+	// (secretKeyRef), not the args, so it does not show up in the Job spec
+	// or `kubectl describe`.
+	gitContainer := corev1.Container{
+		Name:  "git-clone",
+		Image: "alpine/git:latest",
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "workspace", MountPath: "/workspace"},
+		},
+	}
+	if gitSecretName == "" {
+		gitContainer.Args = []string{
+			"clone", "--branch", b.GitBranch, "--depth", "1", b.GitRepository, "/workspace",
+		}
+	} else {
+		// Rewrite https://host/path -> https://user:token@host/path. Only
+		// https is supported (SSH is out of scope); a non-https URL with a
+		// credential is a misconfiguration and fails the clone clearly.
+		gitContainer.Command = []string{"sh", "-c", `
+set -eu
+case "$GIT_REPO" in
+  https://*) ;;
+  *) echo "git.credentialRef is set but the repository URL is not https://; token auth only supports HTTPS" >&2; exit 1 ;;
+esac
+AUTH_URL=$(printf '%s' "$GIT_REPO" | sed -E "s#^https://#https://${GIT_USERNAME}:${GIT_TOKEN}@#")
+git clone --branch "$GIT_BRANCH" --depth 1 "$AUTH_URL" /workspace
+`}
+		gitContainer.Env = []corev1.EnvVar{
+			{Name: "GIT_REPO", Value: b.GitRepository},
+			{Name: "GIT_BRANCH", Value: b.GitBranch},
+			{Name: "GIT_USERNAME", ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: gitSecretName},
+					Key:                  "username",
+				},
+			}},
+			{Name: "GIT_TOKEN", ValueFrom: &corev1.EnvVarSource{
+				SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: gitSecretName},
+					Key:                  "token",
+				},
+			}},
+		}
+	}
+
+	buildContainer := corev1.Container{
+		Name:    "build",
+		Image:   "moby/buildkit:latest",
+		Command: []string{"sh", "-c", buildScript},
+		SecurityContext: &corev1.SecurityContext{
+			Privileged: &privileged,
+		},
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: "workspace", MountPath: "/workspace"},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("250m"),
+				corev1.ResourceMemory: resource.MustParse("512Mi"),
+			},
+		},
+	}
+	// Push auth. Only mount a docker config when a registry credential was
+	// resolved (image.credentialRef). No credential -> no mount -> an
+	// anonymous push (works for public registries; a private push with no
+	// credential is rejected up front in TriggerBuild, so we never silently
+	// fall back to a shared Secret here).
+	if registrySecretName != "" {
+		buildContainer.Env = []corev1.EnvVar{
+			{Name: "DOCKER_CONFIG", Value: "/root/.docker"},
+		}
+		buildContainer.VolumeMounts = append(buildContainer.VolumeMounts,
+			corev1.VolumeMount{Name: "registry-creds", MountPath: "/root/.docker", ReadOnly: true})
+		volumes = append(volumes, corev1.Volume{
+			Name: "registry-creds",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: registrySecretName,
+					Items: []corev1.KeyToPath{
+						{Key: ".dockerconfigjson", Path: "config.json"},
+					},
+					Optional: ptrBool(false),
+				},
+			},
+		})
+	}
+
 	return &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
@@ -519,64 +672,10 @@ buildctl --addr unix:///run/buildkit/buildkitd.sock build \
 					},
 				},
 				Spec: corev1.PodSpec{
-					RestartPolicy: corev1.RestartPolicyNever,
-					InitContainers: []corev1.Container{
-						{
-							Name:  "git-clone",
-							Image: "alpine/git:latest",
-							Args: []string{
-								"clone",
-								"--branch", b.GitBranch,
-								"--depth", "1",
-								b.GitRepository,
-								"/workspace",
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "workspace", MountPath: "/workspace"},
-							},
-						},
-					},
-					Containers: []corev1.Container{
-						{
-							Name:    "build",
-							Image:   "moby/buildkit:latest",
-							Command: []string{"sh", "-c", buildScript},
-							SecurityContext: &corev1.SecurityContext{
-								Privileged: &privileged,
-							},
-							Env: []corev1.EnvVar{
-								{Name: "DOCKER_CONFIG", Value: "/root/.docker"},
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "workspace", MountPath: "/workspace"},
-								{Name: "registry-creds", MountPath: "/root/.docker", ReadOnly: true},
-							},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resource.MustParse("250m"),
-									corev1.ResourceMemory: resource.MustParse("512Mi"),
-								},
-							},
-						},
-					},
-					Volumes: []corev1.Volume{
-						{
-							Name:         "workspace",
-							VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
-						},
-						{
-							Name: "registry-creds",
-							VolumeSource: corev1.VolumeSource{
-								Secret: &corev1.SecretVolumeSource{
-									SecretName: RegistryCredentialsSecret,
-									Items: []corev1.KeyToPath{
-										{Key: ".dockerconfigjson", Path: "config.json"},
-									},
-									Optional: ptrBool(false),
-								},
-							},
-						},
-					},
+					RestartPolicy:  corev1.RestartPolicyNever,
+					InitContainers: []corev1.Container{gitContainer},
+					Containers:     []corev1.Container{buildContainer},
+					Volumes:        volumes,
 				},
 			},
 		},

@@ -167,3 +167,57 @@ func TestNew_CopiesRolesMap(t *testing.T) {
 		t.Fatalf("resolver must snapshot the roles map; got %q, err=%v", p, err)
 	}
 }
+
+func TestGetOptional_UndeclaredRoleIsNotAnError(t *testing.T) {
+	// A definition that never declares the credential role: absence must
+	// read as "public, no auth", not the hard error Get would give.
+	r := New(true, webserviceRoles())
+	got, err := r.GetOptional(map[string]interface{}{}, RoleGitCredentialRef)
+	if err != nil {
+		t.Fatalf("undeclared optional role must not error, got %v", err)
+	}
+	if got != "" {
+		t.Fatalf("undeclared optional role: want \"\", got %q", got)
+	}
+}
+
+func TestGetOptional_DeclaredButUnsetIsEmpty(t *testing.T) {
+	r := New(true, map[string]string{RoleGitCredentialRef: "source.gitCredentialRef"})
+	got, err := r.GetOptional(map[string]interface{}{"source": map[string]interface{}{}}, RoleGitCredentialRef)
+	if err != nil {
+		t.Fatalf("declared-but-unset optional role must not error, got %v", err)
+	}
+	if got != "" {
+		t.Fatalf("declared-but-unset: want \"\", got %q", got)
+	}
+}
+
+func TestGetOptional_DeclaredAndSetReturnsValue(t *testing.T) {
+	r := New(true, map[string]string{RoleImageCredentialRef: "source.imageCredentialRef"})
+	values := map[string]interface{}{"source": map[string]interface{}{"imageCredentialRef": "my-ghcr"}}
+	got, err := r.GetOptional(values, RoleImageCredentialRef)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "my-ghcr" {
+		t.Fatalf("want %q, got %q", "my-ghcr", got)
+	}
+}
+
+func TestGetOptional_StructuralErrorStillPropagates(t *testing.T) {
+	// Declared role whose path traverses a non-object: this is a real
+	// misdeclaration, not "absent" — it must still error even though the
+	// role is optional.
+	r := New(true, map[string]string{RoleGitCredentialRef: "source.gitCredentialRef"})
+	values := map[string]interface{}{"source": "not-a-map"}
+	if _, err := r.GetOptional(values, RoleGitCredentialRef); err == nil {
+		t.Fatal("optional role with a non-object intermediate must still error")
+	}
+
+	// Declared role whose leaf is the wrong type must still error.
+	r2 := New(true, map[string]string{RoleImageCredentialRef: "source.ref"})
+	v2 := map[string]interface{}{"source": map[string]interface{}{"ref": 7}}
+	if _, err := r2.GetOptional(v2, RoleImageCredentialRef); err == nil {
+		t.Fatal("optional role with a non-string leaf must still error")
+	}
+}

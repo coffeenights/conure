@@ -45,6 +45,17 @@ const (
 	RoleBuildTool       = "build.tool"
 	RoleBuildLocation   = "build.location"
 	RoleBuildDockerfile = "build.dockerfile"
+
+	// RoleGitCredentialRef / RoleImageCredentialRef locate the logical name
+	// of an org credential (conure credential set) the developer put in the
+	// component's values for, respectively, cloning a private git source and
+	// pushing the built image to a private registry. Unlike the roles above
+	// these are OPTIONAL: a definition need not declare them and a component
+	// need not set them — absence means "no auth" (public), exactly like a
+	// repo with no credentials today. They are read via GetOptional, never
+	// Get/Path, so an undeclared role is not an error here.
+	RoleGitCredentialRef   = "git.credentialRef"
+	RoleImageCredentialRef = "image.credentialRef"
 )
 
 // Discriminator values for RoleSourceType. conure owns this vocabulary;
@@ -122,6 +133,25 @@ func (r *Resolver) Get(values map[string]interface{}, role string) (string, bool
 		return "", false, fmt.Errorf("role %q: value at %q is %T, want string", role, path, cur)
 	}
 	return s, true, nil
+}
+
+// GetOptional reads an OPTIONAL role's string value. It differs from Get in
+// exactly one way: an undeclared role is not an error — it returns ("", nil),
+// the same as a declared-but-unset role. This is the contract the credential
+// roles need: a definition that never mentions git.credentialRef, and a
+// component that never sets it, both mean "public, no auth", not
+// "misconfigured". Genuine structural problems (an intermediate segment that
+// is not an object, or a non-string leaf) still error — those are real
+// misdeclarations, not "absent".
+//
+// Use this only for roles documented as optional. Required roles must use Get
+// so a missing declaration stays a hard error.
+func (r *Resolver) GetOptional(values map[string]interface{}, role string) (string, error) {
+	if p, ok := r.roles[role]; !ok || p == "" {
+		return "", nil
+	}
+	v, _, err := r.Get(values, role)
+	return v, err
 }
 
 // Set writes val at role's declared path, creating intermediate maps as
