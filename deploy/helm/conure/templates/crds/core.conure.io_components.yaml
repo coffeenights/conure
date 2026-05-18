@@ -40,6 +40,17 @@ spec:
             type: object
           spec:
             properties:
+              engine:
+                description: |-
+                  Engine optionally narrows ComponentDefinition lookup to a specific
+                  rendering backend. Required only when more than one ComponentDefinition
+                  shares the same spec.type (e.g. a Timoni and a Helm implementation of
+                  "webservice" deployed side-by-side). When empty, the lookup expects a
+                  single matching ComponentDefinition for the type.
+                enum:
+                - timoni
+                - helm
+                type: string
               type:
                 type: string
               values:
@@ -107,6 +118,22 @@ spec:
                   - type
                   type: object
                 type: array
+              observedGeneration:
+                description: |-
+                  ObservedGeneration is the spec generation that was last successfully
+                  rendered and deployed. The reconciler skips re-rendering when
+                  metadata.generation matches this value and the component is in a
+                  terminal-success condition.
+                format: int64
+                type: integer
+              observedRestartedAt:
+                description: |-
+                  ObservedRestartedAt is the value of the conure.io/restartedAt
+                  annotation at the time of the last successful render. A restart is a
+                  metadata-only change (no spec/generation bump), so the reconciler
+                  uses this field to detect that the annotation has moved and a fresh
+                  render is needed to propagate it into pod templates.
+                type: string
             required:
             - conditions
             type: object

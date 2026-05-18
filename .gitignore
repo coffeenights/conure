@@ -27,3 +27,4 @@ secret.key
 .timoni/
 test
 __debug*
+.claude

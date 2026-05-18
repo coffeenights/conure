@@ -101,8 +101,16 @@ docker-build: ## Build docker image with the manager.
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
 
+.PHONY: helm-crds
+helm-crds: manifests ## Regenerate the chart-bundled CRDs from config/crd/bases (keeps the .Values.crds.install guard).
+	./scripts/sync-helm-crds.sh
+
+.PHONY: helm-crds-check
+helm-crds-check: manifests ## Fail if the chart-bundled CRDs are stale (no writes); for CI / pre-push.
+	./scripts/sync-helm-crds.sh --check
+
 .PHONY: helm-push
-helm-push: ## Package the Helm chart and push it to ghcr.io/coffeenights/charts (reuses existing docker/helm login; set GHCR_USERNAME+GHCR_TOKEN for CI; FORCE=1 to overwrite an existing version).
+helm-push: helm-crds ## Sync chart CRDs, then package the Helm chart and push it to ghcr.io/coffeenights/charts (reuses existing docker/helm login; set GHCR_USERNAME+GHCR_TOKEN for CI; FORCE=1 to overwrite an existing version).
 	./scripts/helm-push.sh
 
 # PLATFORMS defines the target platforms for  the manager image be build to provide support to multiple
