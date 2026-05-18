@@ -198,8 +198,9 @@ tagging are BuildKit/buildx's job by design.
 ### The supported build-and-push path
 
 ```bash
-# 1. Generate the build plan the frontend consumes
-railpack prepare <dir> --plan-out plan.json --info-out info.json
+# 1. Generate the build plan the frontend consumes (--info-out is
+#    optional and unused by the buildx step, so it is omitted)
+railpack prepare <dir> --plan-out plan.json
 
 # 2. Build & push via buildx using Railpack's gateway frontend
 docker buildx build \

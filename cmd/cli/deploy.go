@@ -331,19 +331,20 @@ func runLocalBuild(cmd *cobra.Command, tool, ctxDir, imageRef, platform string) 
 	switch tool {
 	case "dockerfile":
 		args := []string{"buildx", "build", "--platform", platform, "--push", "-t", imageRef, ctxDir}
-		return streamCmd(cmd, "docker", args...)
+		return streamCmd(cmd, "build", "docker", args...)
 	case "railpack":
 		// 1. Generate the build plan railpack's frontend consumes. Keep
 		//    the plan next to a temp dir so we don't litter the context.
+		//    Only --plan-out is needed: the buildx step consumes the plan,
+		//    not the info file, so we don't ask railpack to write one.
 		planDir, err := os.MkdirTemp("", "conure-railpack-")
 		if err != nil {
 			return fmt.Errorf("local build failed: cannot create temp dir for railpack plan: %w", err)
 		}
 		defer os.RemoveAll(planDir)
 		planPath := filepath.Join(planDir, "railpack-plan.json")
-		infoPath := filepath.Join(planDir, "railpack-info.json")
-		if err := streamCmd(cmd, "railpack", "prepare", ctxDir,
-			"--plan-out", planPath, "--info-out", infoPath); err != nil {
+		if err := streamCmd(cmd, "railpack prepare", "railpack", "prepare", ctxDir,
+			"--plan-out", planPath); err != nil {
 			return err
 		}
 		// 2. Build & push via buildx using the railpack frontend. This is
@@ -357,22 +358,24 @@ func runLocalBuild(cmd *cobra.Command, tool, ctxDir, imageRef, platform string) 
 			"--push", "-t", imageRef,
 			ctxDir,
 		}
-		return streamCmd(cmd, "docker", args...)
+		return streamCmd(cmd, "railpack build", "docker", args...)
 	default:
 		return fmt.Errorf("unknown build tool %q", tool)
 	}
 }
 
 // streamCmd runs bin with args, streaming combined output to the user's
-// terminal so build progress is visible live. Errors are wrapped so the
-// caller can surface a single "local build failed" message.
-func streamCmd(cmd *cobra.Command, bin string, args ...string) error {
+// terminal so build progress is visible live. step names the internal
+// build step (e.g. "railpack prepare" vs. "railpack build") so a failure
+// tells the user which step failed — the railpack path runs two commands
+// behind one `conure deploy`, and a bare "local build failed" hides which.
+func streamCmd(cmd *cobra.Command, step, bin string, args ...string) error {
 	ui.Info("Running: %s %s\n", bin, strings.Join(args, " "))
 	c := exec.CommandContext(cmd.Context(), bin, args...)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
 	if err := c.Run(); err != nil {
-		return fmt.Errorf("local build failed: %w", err)
+		return fmt.Errorf("local build failed (%s): %w", step, err)
 	}
 	return nil
 }
