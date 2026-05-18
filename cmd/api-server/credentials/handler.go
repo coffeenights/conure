@@ -98,6 +98,20 @@ func toResponse(c *models.Credential) CredentialResponse {
 	}
 }
 
+// orgNotFound wraps the bare ErrObjectNotFound with which object was missing
+// and the exact recovery commands. Every credential endpoint resolves the org
+// first, so a stale `active_org` in the CLI profile makes all of them 404
+// identically with no hint that the org — not the credential — is the
+// unresolved object. The detail rides through AbortWithError into the
+// response "detail" and the CLI surfaces it instead of "object_not_found".
+func orgNotFound(orgID string) error {
+	return conureerrors.WithDetail(conureerrors.ErrObjectNotFound,
+		"organization %q was not found (it may not exist on this server or "+
+			"not be visible to your account). Run `conure org list` to see "+
+			"your organizations and `conure org use <name>` to select one.",
+		orgID)
+}
+
 // loadOrgForWrite resolves the org from the route and enforces write access.
 // Returns the loaded org and true on success; on failure it has already
 // written the error response and the caller must return.
@@ -108,7 +122,7 @@ func (a *ApiHandler) loadOrgForWrite(c *gin.Context) (*models.Organization, bool
 	}
 	org := &models.Organization{}
 	if _, err := org.GetById(a.MongoDB, c.Param("organizationID")); err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
+		conureerrors.AbortWithError(c, orgNotFound(c.Param("organizationID")))
 		return nil, false
 	}
 	user := c.MustGet("currentUser").(models.User)
@@ -184,7 +198,7 @@ func (a *ApiHandler) ListCredentials(c *gin.Context) {
 	}
 	org := &models.Organization{}
 	if _, err := org.GetById(a.MongoDB, c.Param("organizationID")); err != nil {
-		conureerrors.AbortWithError(c, conureerrors.ErrObjectNotFound)
+		conureerrors.AbortWithError(c, orgNotFound(c.Param("organizationID")))
 		return
 	}
 	if !middlewares.CanReadOrg(c.MustGet("currentUser").(models.User), org) {

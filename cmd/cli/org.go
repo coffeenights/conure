@@ -22,6 +22,20 @@ var orgListCmd = &cobra.Command{
 	RunE:  runOrgList,
 }
 
+var orgCreateUseFlag bool
+
+var orgCreateCmd = &cobra.Command{
+	Use:   "create <name>",
+	Short: "Create an organization owned by your account",
+	Long: `Create a new organization. You become its owner.
+
+By default the new org is also set as the active org in
+~/.conure/config.json (it's almost always what you want right after
+creating one); pass --use=false to leave the active org unchanged.`,
+	Args: cobra.ExactArgs(1),
+	RunE: runOrgCreate,
+}
+
 var orgUseCmd = &cobra.Command{
 	Use:   "use <name-or-id>",
 	Short: "Set the active organization in ~/.conure/config.json",
@@ -52,7 +66,10 @@ var switchOrgCmd = &cobra.Command{
 }
 
 func init() {
+	orgCreateCmd.Flags().BoolVar(&orgCreateUseFlag, "use", true,
+		"Set the new org as the active org after creating it")
 	orgCmd.AddCommand(orgListCmd)
+	orgCmd.AddCommand(orgCreateCmd)
 	orgCmd.AddCommand(orgUseCmd)
 	orgCmd.AddCommand(orgCurrentCmd)
 	switchCmd.AddCommand(switchOrgCmd)
@@ -93,6 +110,33 @@ func runOrgList(cmd *cobra.Command, _ []string) error {
 				return nil
 			},
 		)
+		return nil
+	})
+}
+
+func runOrgCreate(cmd *cobra.Command, args []string) error {
+	cfg, prof, client, err := requireAuthClient()
+	if err != nil {
+		return err
+	}
+	name := args[0]
+	org, err := client.CreateOrganization(cmd.Context(), name)
+	if err != nil {
+		return err
+	}
+	// Persist as active before rendering so a --output=json scripted run
+	// still gets the side effect; mirrors resolveOrg/init sticky behavior.
+	if orgCreateUseFlag {
+		prof.ActiveOrg = org.ID
+		if err := config.Save(cfg); err != nil {
+			return fmt.Errorf("org created but saving active org failed: %w", err)
+		}
+	}
+	return ui.Render(org, func() error {
+		ui.Success("✓ Created org: %s (%s)\n", org.Name, org.ID)
+		if orgCreateUseFlag {
+			ui.Info("Set active org (%s) — change with `conure org use <name>`\n", org.ID)
+		}
 		return nil
 	})
 }

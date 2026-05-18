@@ -281,8 +281,19 @@ func TestCredentials_OrgIsolationAndRBAC(t *testing.T) {
 	// Bad org id → 400; valid-but-missing org → 404.
 	assert.Equal(t, http.StatusBadRequest,
 		e.do(t, http.MethodGet, "/credentials/not-hex/c", nil).Code)
-	assert.Equal(t, http.StatusNotFound,
-		e.do(t, http.MethodGet, "/credentials/"+primitive.NewObjectID().Hex()+"/c", nil).Code)
+	missing := e.do(t, http.MethodGet, "/credentials/"+primitive.NewObjectID().Hex()+"/c", nil)
+	assert.Equal(t, http.StatusNotFound, missing.Code)
+	// The 404 must say it's the *organization* that's missing and point at
+	// the recovery commands — a stale active_org otherwise looks like a
+	// broken credentials endpoint.
+	var body struct {
+		Error  string `json:"error"`
+		Detail string `json:"detail"`
+	}
+	require.NoError(t, json.Unmarshal(missing.Body.Bytes(), &body))
+	assert.Equal(t, "object_not_found", body.Error)
+	assert.Contains(t, body.Detail, "organization")
+	assert.Contains(t, body.Detail, "conure org use")
 }
 
 func TestDeleteCredential(t *testing.T) {
