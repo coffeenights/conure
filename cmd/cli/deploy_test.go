@@ -21,6 +21,26 @@ func TestNormalizePlatform(t *testing.T) {
 	}
 }
 
+func TestNormalizeImageRef(t *testing.T) {
+	cases := map[string]string{
+		// Untagged: gets :latest, matching what buildx/railpack push.
+		"ghcr.io/trivor-ai/mcp-sources-railpack": "ghcr.io/trivor-ai/mcp-sources-railpack:latest",
+		"alpine":                                 "alpine:latest",
+		// Already tagged: unchanged.
+		"ghcr.io/me/app:sha-abc": "ghcr.io/me/app:sha-abc",
+		"alpine:3.19":            "alpine:3.19",
+		// Registry host:port with no tag — the ':' is the port, not a
+		// tag, so :latest is still appended (regression guard).
+		"localhost:5000/app":    "localhost:5000/app:latest",
+		"localhost:5000/app:v2": "localhost:5000/app:v2",
+	}
+	for in, want := range cases {
+		if got := normalizeImageRef(in); got != want {
+			t.Errorf("normalizeImageRef(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
 func TestPickBuildLocation(t *testing.T) {
 	yes := func() bool { return true }
 	no := func() bool { return false }

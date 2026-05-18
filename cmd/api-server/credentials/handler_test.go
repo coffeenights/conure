@@ -223,6 +223,41 @@ func TestCreateCredential_Validation(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, r3.Code, "body=%s", r3.Body.String())
 }
 
+// TestCreateCredential_NameValidation pins the name-format guard. The two
+// rejected shapes are the structural failure modes: a '/' makes the credential
+// unaddressable on the single-segment delete route, and a '.' (or uppercase)
+// collapses under SecretName's sanitize so distinct names alias one projected
+// Secret. The accepted shapes are the RFC1123-label subset that is both a safe
+// path segment and stable through sanitize.
+func TestCreateCredential_NameValidation(t *testing.T) {
+	e := setup(t)
+	org := e.ownedOrg.Hex()
+
+	rejected := []string{
+		"my/cred", // unaddressable on DELETE .../c/:name
+		"my.cred", // collapses to "my-cred" in SecretName
+		"My-Cred", // uppercase collapses under sanitize
+		"-lead",   // RFC1123: must start alphanumeric
+		"trail-",  // RFC1123: must end alphanumeric
+		"a b",     // space is not a legal Secret-name char
+	}
+	for _, name := range rejected {
+		r := e.do(t, http.MethodPost, "/credentials/"+org+"/c", CreateCredentialRequest{
+			Name: name, Kind: "git", Secret: "s",
+		})
+		assert.Equal(t, http.StatusBadRequest, r.Code, "name %q should be rejected", name)
+	}
+
+	accepted := []string{"ghcr", "my-registry", "a", "reg-1-2"}
+	for _, name := range accepted {
+		r := e.do(t, http.MethodPost, "/credentials/"+org+"/c", CreateCredentialRequest{
+			Name: name, Kind: "git", Secret: "s",
+		})
+		assert.Equal(t, http.StatusCreated, r.Code,
+			"name %q should be accepted, body=%s", name, r.Body.String())
+	}
+}
+
 func TestCredentials_OrgIsolationAndRBAC(t *testing.T) {
 	e := setup(t)
 

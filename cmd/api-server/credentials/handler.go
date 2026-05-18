@@ -11,6 +11,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -22,6 +23,24 @@ import (
 	"github.com/coffeenights/conure/cmd/api-server/models"
 	"github.com/coffeenights/conure/cmd/api-server/variables"
 )
+
+// credentialNameRE is the allowed logical-credential-name format: a single
+// RFC1123 DNS label (lowercase alphanumeric, '-' allowed interior, 1–63
+// chars). It is deliberately stricter than "non-empty" for two structural
+// reasons, both of which are silent corruption otherwise:
+//
+//   - The delete route is DELETE /:organizationID/c/:name, a single Gin path
+//     segment. A name with '/' (or other path metacharacters) creates a
+//     credential that can never be addressed for delete.
+//   - SecretName(orgID, credName) runs the name through sanitize() (maps every
+//     char outside [a-z0-9-] to '-', lowercases). Distinct logical names like
+//     "my.cred" and "my/cred" collapse to the same projected Secret, so one
+//     credential's material overwrites another's in conure-system.
+//
+// Constraining the name to this subset at create/rotate makes it both a safe
+// URL path segment and stable through sanitize() (sanitize is the identity on
+// this set), so neither failure mode is reachable.
+var credentialNameRE = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
 
 type ApiHandler struct {
 	MongoDB    *database.MongoDB
@@ -213,6 +232,14 @@ func (a *ApiHandler) DeleteCredential(c *gin.Context) {
 // with write:packages only) and requires a non-empty username matching the
 // PAT owner.
 func validateCredential(c *gin.Context, req *CreateCredentialRequest) bool {
+	if len(req.Name) > 63 || !credentialNameRE.MatchString(req.Name) {
+		conureerrors.AbortWithError(c, conureerrors.WithDetail(
+			conureerrors.ErrFieldValidation,
+			"credential name %q is invalid: use 1–63 lowercase alphanumeric "+
+				"characters or '-' (must start and end alphanumeric), e.g. "+
+				"\"ghcr\" or \"my-registry\"", req.Name))
+		return false
+	}
 	kind := models.CredentialKind(req.Kind)
 	if !kind.IsValid() {
 		conureerrors.AbortWithError(c, conureerrors.ErrFieldValidation)
