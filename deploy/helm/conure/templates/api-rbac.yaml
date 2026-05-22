@@ -29,12 +29,13 @@ rules:
   - apiGroups: [core.conure.io]
     resources: [applications/status, components/status]
     verbs: [get, update]
-  # componentdefinitions are cluster-scoped and read-only here: the API
-  # server lists them to populate the CLI type picker and resolve a
-  # component's rendering engine on create.
+  # componentdefinitions are cluster-scoped: the API server lists them to
+  # populate the CLI type picker, and on deploy it materializes the resolved
+  # Mongo definition into the cluster (create-or-update) so the controller
+  # never races a missing or stale definition.
   - apiGroups: [core.conure.io]
     resources: [componentdefinitions]
-    verbs: [get, list]
+    verbs: [get, list, create, update]
   - apiGroups: [""]
     resources: [namespaces]
     verbs: [create]

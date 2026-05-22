@@ -1,0 +1,11 @@
+apiVersion: core.conure.io/v1alpha1
+kind: ComponentDefinition
+metadata:
+  name: stackgres-simple-helm
+spec:
+  type: stackgres-simple
+  engine: helm
+  description: "The stackgres component provisions a simple PostgreSQL database on Kubernetes via the StackGres operator."
+  ociRepository: "ghcr.io/coffeenights/conure-templates/helm/components/stackgres"
+  ociTag: "0.1.0"
+  ociDigest: "sha256:171ced4dc25f84924734bce0c45a02e20b1ded6cfc4a59555c1f1f1056752276"
