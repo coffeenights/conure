@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -38,8 +37,8 @@ func New(baseURL, token string) *Client {
 func (c *Client) BaseURL() string { return c.baseURL }
 
 // do issues a request and returns the response body. Non-2xx becomes an
-// error carrying the parsed server message; callers don't need to inspect
-// the body themselves on the error path.
+// *APIError carrying the HTTP status and the server's machine-readable error
+// code so callers can branch on a specific failure without string-matching.
 func (c *Client) do(ctx context.Context, method, path string, body any) ([]byte, int, error) {
 	var reqBody io.Reader
 	if body != nil {
@@ -72,7 +71,7 @@ func (c *Client) do(ctx context.Context, method, path string, body any) ([]byte,
 		return nil, resp.StatusCode, err
 	}
 	if resp.StatusCode >= 400 {
-		return respBody, resp.StatusCode, fmt.Errorf("server returned HTTP %d: %s", resp.StatusCode, ParseServerError(respBody))
+		return respBody, resp.StatusCode, newAPIError(resp.StatusCode, respBody)
 	}
 	return respBody, resp.StatusCode, nil
 }
@@ -115,7 +114,7 @@ func (c *Client) Stream(ctx context.Context, path string, query url.Values) (io.
 	if resp.StatusCode >= 400 {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("server returned HTTP %d: %s", resp.StatusCode, ParseServerError(body))
+		return nil, newAPIError(resp.StatusCode, body)
 	}
 	return resp.Body, nil
 }

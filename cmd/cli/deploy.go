@@ -23,12 +23,12 @@ import (
 
 var deployCmd = &cobra.Command{
 	Use:   "deploy",
-	Short: "Deploy this component — promote latest draft, or build a new image then deploy",
+	Short: "Deploy this component — promote latest draft, restart to re-pull the current image, or build a new image then deploy",
 	Long: `Deploy the linked component.
 
-In its simplest form 'conure deploy' promotes the latest draft revision to
-deployed (the prior behavior, kept for backward compatibility):
-
+In its simplest form 'conure deploy' promotes the latest draft revision. If
+there is no draft, it restarts the component to re-pull the current image
+(picking up new code at a mutable tag like :latest):
     conure deploy
 
 With --image-ref, a new image build is recorded as part of the deploy. The
@@ -123,14 +123,32 @@ func runDeploy(cmd *cobra.Command, _ []string) error {
 	}
 
 	if action == deployActionPromote {
-		// Promote-only: push the latest draft to deployed. Correct for
-		// non-buildable components and prebuilt-image (sourceType=oci)
-		// components with no explicit --image-ref override.
+		// Promote-only: push the latest draft to deployed.
 		sp := ui.StartSpinner(fmt.Sprintf("Deploying `%s` to `%s`…", lc.Link.ComponentName, lc.Env))
 		rev, err := lc.Client.DeployLatestDraft(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
 		ui.StopSpinner(sp)
 		if err != nil {
-			return err
+			if !apiclient.IsObjectNotFound(err) {
+				return err
+			}
+			// No draft to promote — restart instead. A restart re-applies
+			// the latest deployed revision with a fresh restart annotation,
+			// so if imagePullPolicy is Always (the default) the pod re-pulls
+			// the image, picking up new code at the same ref. For OCI
+			// components (:latest / pinned tag) this is the normal "ship new
+			// code" path, equivalent to what a git component's rebuild does.
+			imageRef := spec.ImageRef()
+			if imageRef != "" {
+				ui.Info("No draft to promote; restarting component to re-pull %s\n", imageRef)
+			}
+			sp := ui.StartSpinner(fmt.Sprintf("Restarting `%s` in `%s`…", lc.Link.ComponentName, lc.Env))
+			rev, err = lc.Client.RestartComponent(cmd.Context(), lc.Link.OrgID, lc.Link.AppID, lc.Env, lc.Link.ComponentID)
+			ui.StopSpinner(sp)
+			if err != nil {
+				return err
+			}
+			ui.Success("✓ Restarted v%d (%s) — deployed to %s\n", rev.Version, rev.ID, lc.Env)
+			return nil
 		}
 		ui.Success("✓ Deployed v%d (%s) to %s\n", rev.Version, rev.ID, lc.Env)
 		return nil

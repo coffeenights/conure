@@ -29,3 +29,4 @@ test
 __debug*
 .claude
 .vscode/
+novita_claude_settings.sh
