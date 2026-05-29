@@ -7,8 +7,8 @@ spec:
   engine: timoni
   description: "A web service component that deploys a container with network exposure"
   ociRepository: "ghcr.io/coffeenights/conure-templates/components/webservice"
-  ociTag: "0.2.2"
-  ociDigest: "sha256:0e8565f702296856f567446706173646b4984663e7ea88d52742e941df700946"
+  ociTag: "0.2.3"
+  ociDigest: "sha256:d61b291b6f269350edc2315bfbb635d21cce307517232f764cb33e52969ecf6a"
   # conure can build this component's image. The per-component
   # source.sourceType discriminator ("git" -> build, "oci" -> deploy a
   # prebuilt image) decides whether a given instance actually builds.
