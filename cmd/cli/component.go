@@ -57,11 +57,11 @@ func init() {
 }
 
 func runComponentList(cmd *cobra.Command, _ []string) error {
-	lc, err := resolveTarget(cmd)
+	orgID, app, client, err := resolveAppScope(cmd)
 	if err != nil {
 		return err
 	}
-	comps, err := lc.Client.ListAppComponents(cmd.Context(), lc.Link.OrgID, lc.Link.AppID)
+	comps, err := client.ListAppComponents(cmd.Context(), orgID, app.ID)
 	if err != nil {
 		return err
 	}
@@ -94,19 +94,21 @@ func runComponentList(cmd *cobra.Command, _ []string) error {
 }
 
 func runComponentAdd(cmd *cobra.Command, _ []string) error {
-	lc, err := resolveTarget(cmd)
+	orgID, app, client, err := resolveAppScope(cmd)
 	if err != nil {
 		return err
 	}
 	ctx := cmd.Context()
 
-	app, err := lc.Client.GetApp(ctx, lc.Link.OrgID, lc.Link.AppID)
-	if err != nil {
-		return err
+	// Default the env to the linked one when this directory's link points at
+	// the same app; otherwise the picker (or the single env) decides.
+	envName := ""
+	if l := loadLinkForProfile(); l != nil && l.AppID == app.ID {
+		envName = l.Environment
 	}
-
-	envName := lc.Link.Environment
-	if len(app.Environments) > 1 {
+	if len(app.Environments) == 1 {
+		envName = app.Environments[0].Name
+	} else if len(app.Environments) > 1 {
 		envOpts := make([]huh.Option[string], len(app.Environments))
 		for i, e := range app.Environments {
 			envOpts[i] = huh.NewOption(e.Name, e.Name)
@@ -120,7 +122,7 @@ func runComponentAdd(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	if _, _, err := createComponentFlow(ctx, lc.Client, lc.Link.OrgID, lc.Link.AppID, envName); err != nil {
+	if _, _, err := createComponentFlow(ctx, client, orgID, app.ID, envName); err != nil {
 		return err
 	}
 	ui.InfoLn("  This directory's link is unchanged. Use the UI or another repo to manage this component.")
